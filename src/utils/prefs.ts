@@ -7,6 +7,7 @@ const DEFAULT_LOCAL_API_BASE_URL = "http://127.0.0.1:8000";
 const DEFAULT_LOCAL_API_TIMEOUT_MINUTES = 30;
 const DEFAULT_SYNC_FOLDER = "";
 const DEFAULT_AUTO_PARSE_PAGE_LIMIT = 0;
+const DEFAULT_PDFTK_PATH = "";
 
 export type ParseSource = "online" | "local";
 export type ParseMode = "precise" | "lite";
@@ -200,6 +201,15 @@ export function getAutoParsePageLimit(): number {
 
 export function setAutoParsePageLimit(value: number) {
   return setPref("autoParsePageLimit" as keyof PluginPrefsMap, value);
+}
+
+export function getPdftkPath(): string {
+  const value = getPref("pdftkPath" as keyof PluginPrefsMap);
+  return typeof value === "string" ? value : DEFAULT_PDFTK_PATH;
+}
+
+export function setPdftkPath(value: string) {
+  return setPref("pdftkPath" as keyof PluginPrefsMap, value);
 }
 
 /**

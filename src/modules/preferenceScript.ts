@@ -21,6 +21,8 @@ import {
   setSyncFolder,
   getAutoParsePageLimit,
   setAutoParsePageLimit,
+  getPdftkPath,
+  setPdftkPath,
   type ParseMode,
   type ParseSource,
 } from "../utils/prefs";
@@ -223,16 +225,65 @@ export async function registerPrefsScripts(_window: Window) {
   const testPdftkBtn = document.getElementById(`${config.addonRef}-test-pdftk`);
   if (testPdftkBtn) {
     testPdftkBtn.addEventListener("click", async () => {
+      const statusEl = document.getElementById(
+        `${config.addonRef}-pdftk-status`,
+      ) as HTMLElement | null;
       try {
-        const { runPdftkCommand } = await import("./pdfSplitter");
-        const output = await runPdftkCommand(["--version"]);
-        _window.alert(
-          "pdftk test success! Output:\n" + output.substring(0, 150),
-        );
+        const { testPdftk } = await import("./pdfSplitter");
+        const result = await testPdftk();
+        if (result.success) {
+          _window.alert(
+            `pdftk OK!\n\nPath: ${result.path}\nPlatform: ${result.platform}\n\n${result.output}`,
+          );
+          if (statusEl) {
+            statusEl.textContent = `✓ ${result.path}`;
+            statusEl.style.color = "green";
+          }
+        } else {
+          _window.alert(
+            `pdftk not found\n\nPlatform: ${result.platform}\nError: ${result.error}\n\nSearched:\n${result.searchedPaths.join("\n")}`,
+          );
+          if (statusEl) {
+            statusEl.textContent = `✗ ${result.error}`;
+            statusEl.style.color = "red";
+          }
+        }
       } catch (e: any) {
         _window.alert(
-          "pdftk test failed completely: " + String(e.message || e),
+          "pdftk test failed: " + String(e.message || e),
         );
+      }
+    });
+  }
+
+  // pdftk path input
+  const pdftkPathInput = document.getElementById(
+    `${config.addonRef}-pdftk-path`,
+  ) as HTMLInputElement | null;
+  if (pdftkPathInput) {
+    pdftkPathInput.value = getPdftkPath();
+    pdftkPathInput.addEventListener("change", () => {
+      setPdftkPath(pdftkPathInput.value.trim());
+      // Clear cached path so next test uses the new value
+      import("./pdfSplitter").then((m) => m.clearPdftkPathCache()).catch(() => {
+        // ignore
+      });
+    });
+  }
+
+  // Browse button for pdftk path
+  const browsePdftkBtn = document.getElementById(
+    `${config.addonRef}-browse-pdftk`,
+  );
+  if (browsePdftkBtn) {
+    browsePdftkBtn.addEventListener("click", async () => {
+      const filePath = await pickExecutableAsync(_window, "Select pdftk executable");
+      if (filePath && pdftkPathInput) {
+        pdftkPathInput.value = filePath;
+        setPdftkPath(filePath);
+        import("./pdfSplitter").then((m) => m.clearPdftkPathCache()).catch(() => {
+          // ignore
+        });
       }
     });
   }
@@ -383,6 +434,38 @@ function pickFileAsync(
             path += ".zip";
           }
           resolve(path);
+        } else {
+          resolve(null);
+        }
+      });
+    } catch (e) {
+      ztoolkit.log("Failed to open file picker", e);
+      resolve(null);
+    }
+  });
+}
+
+function pickExecutableAsync(
+  window: Window,
+  title: string,
+): Promise<string | null> {
+  return new Promise((resolve) => {
+    try {
+      const Components = (window as any).Components;
+      const nsIFilePicker = Components.interfaces.nsIFilePicker;
+      const fp =
+        Components.classes["@mozilla.org/filepicker;1"].createInstance(
+          nsIFilePicker,
+        );
+      fp.init(
+        (window as any).browsingContext || window,
+        title,
+        nsIFilePicker.modeOpen,
+      );
+      fp.appendFilters(nsIFilePicker.filterAll);
+      fp.open((result: number) => {
+        if (result === nsIFilePicker.returnOK && fp.file) {
+          resolve(fp.file.path);
         } else {
           resolve(null);
         }

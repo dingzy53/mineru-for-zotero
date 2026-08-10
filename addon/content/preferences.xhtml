@@ -185,6 +185,17 @@
         <html:button id="__addonRef__-restore-data">Restore Data</html:button>
         <html:button id="__addonRef__-test-pdftk">Test pdftk</html:button>
       </hbox>
+      <hbox style="gap: 6px; align-items: center; margin-top: 6px">
+        <html:label style="white-space: nowrap">pdftk path:</html:label>
+        <html:input
+          id="__addonRef__-pdftk-path"
+          type="text"
+          style="flex: 1; min-width: 200px"
+          placeholder="(auto-detect)"
+        />
+        <html:button id="__addonRef__-browse-pdftk">Browse</html:button>
+      </hbox>
+      <html:div id="__addonRef__-pdftk-status" style="color: gray; font-size: 0.9em; margin-top: 2px"></html:div>
       <html:div id="__addonRef__-data-folder-path"></html:div>
       <html:div id="__addonRef__-parsed-count"></html:div>
     </vbox>
