@@ -8,6 +8,9 @@ import type {
 } from "./modules/readerOverlay";
 import type { ReaderToolbarRegistration } from "./modules/readerToolbar";
 import { createZToolkit } from "./utils/ztoolkit";
+import { taskStore, openTaskManagerWindow } from "./modules/taskStore";
+import { syncAllToAgentFolder, updateAllMinerUTags } from "./modules/agentSync";
+import { parseAttachment } from "./modules/parseManager";
 
 class Addon {
   public data: {
@@ -44,7 +47,43 @@ class Addon {
       ztoolkit: createZToolkit(),
     };
     this.hooks = hooks;
-    this.api = {};
+    this.api = { 
+      taskStore, 
+      openTaskManagerWindow, 
+      syncAllToAgentFolder, 
+      updateAllMinerUTags,
+      retryTask: this.retryTask.bind(this),
+      cancelTask: this.cancelTask.bind(this)
+    };
+  }
+
+  public cancelTask(taskId: string): void {
+    const existingTask = taskStore.getTask(taskId);
+    if (existingTask) {
+      taskStore.upsertTask({
+        ...existingTask,
+        status: "failed",
+        error: "Cancelled by user"
+      });
+    }
+  }
+
+  public async retryTask(taskId: string): Promise<void> {
+    const id = parseInt(taskId, 10);
+    if (isNaN(id)) return;
+    const item = await Zotero.Items.getAsync(id);
+    if (item && item.isAttachment()) {
+      const existingTask = taskStore.getTask(taskId);
+      if (existingTask) {
+        taskStore.upsertTask({
+          ...existingTask,
+          error: undefined,
+          detail: "Retrying...",
+          status: "pending"
+        });
+      }
+      await parseAttachment(item, { force: true });
+    }
   }
 }
 
