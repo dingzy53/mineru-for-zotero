@@ -12,13 +12,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Asianfleet/mineru-for-zotero.git"
+    "url": "git+https://github.com/dingzy53/mineru-for-zotero.git"
   },
   "author": "Asianfleet",
   "bugs": {
-    "url": "https://github.com/Asianfleet/mineru-for-zotero/issues"
+    "url": "https://github.com/dingzy53/mineru-for-zotero/issues"
   },
-  "homepage": "https://github.com/Asianfleet/mineru-for-zotero#readme",
+  "homepage": "https://github.com/dingzy53/mineru-for-zotero#readme",
   "license": "AGPL-3.0-or-later",
   "scripts": {
     "start": "zotero-plugin serve",
