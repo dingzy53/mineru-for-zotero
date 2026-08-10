@@ -249,9 +249,7 @@ export async function registerPrefsScripts(_window: Window) {
           }
         }
       } catch (e: any) {
-        _window.alert(
-          "pdftk test failed: " + String(e.message || e),
-        );
+        _window.alert("pdftk test failed: " + String(e.message || e));
       }
     });
   }
@@ -265,9 +263,11 @@ export async function registerPrefsScripts(_window: Window) {
     pdftkPathInput.addEventListener("change", () => {
       setPdftkPath(pdftkPathInput.value.trim());
       // Clear cached path so next test uses the new value
-      import("./pdfSplitter").then((m) => m.clearPdftkPathCache()).catch(() => {
-        // ignore
-      });
+      import("./pdfSplitter")
+        .then((m) => m.clearPdftkPathCache())
+        .catch(() => {
+          // ignore
+        });
     });
   }
 
@@ -277,13 +277,18 @@ export async function registerPrefsScripts(_window: Window) {
   );
   if (browsePdftkBtn) {
     browsePdftkBtn.addEventListener("click", async () => {
-      const filePath = await pickExecutableAsync(_window, "Select pdftk executable");
+      const filePath = await pickExecutableAsync(
+        _window,
+        "Select pdftk executable",
+      );
       if (filePath && pdftkPathInput) {
         pdftkPathInput.value = filePath;
         setPdftkPath(filePath);
-        import("./pdfSplitter").then((m) => m.clearPdftkPathCache()).catch(() => {
-          // ignore
-        });
+        import("./pdfSplitter")
+          .then((m) => m.clearPdftkPathCache())
+          .catch(() => {
+            // ignore
+          });
       }
     });
   }

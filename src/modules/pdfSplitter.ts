@@ -253,6 +253,7 @@ export async function runPdftkCommand(args: string[]): Promise<string> {
   const callOptions: any = {
     command: pdftkPath,
     arguments: args,
+    stderr: "pipe",
   };
 
   // Pass augmented environment if we have extra PATH entries
@@ -262,10 +263,15 @@ export async function runPdftkCommand(args: string[]): Promise<string> {
   }
 
   const proc = await Subprocess.call(callOptions);
-  const [stdout, stderr] = await Promise.all([
-    readAll(proc.stdout),
-    readAll(proc.stderr),
-  ]);
+
+  const stdoutPromise = proc.stdout
+    ? readAll(proc.stdout)
+    : Promise.resolve("");
+  const stderrPromise = proc.stderr
+    ? readAll(proc.stderr)
+    : Promise.resolve("");
+
+  const [stdout, stderr] = await Promise.all([stdoutPromise, stderrPromise]);
   const { exitCode } = await proc.wait();
 
   if (exitCode !== 0) {
