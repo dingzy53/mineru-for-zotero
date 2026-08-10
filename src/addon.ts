@@ -47,13 +47,13 @@ class Addon {
       ztoolkit: createZToolkit(),
     };
     this.hooks = hooks;
-    this.api = { 
-      taskStore, 
-      openTaskManagerWindow, 
-      syncAllToAgentFolder, 
+    this.api = {
+      taskStore,
+      openTaskManagerWindow,
+      syncAllToAgentFolder,
       updateAllMinerUTags,
       retryTask: this.retryTask.bind(this),
-      cancelTask: this.cancelTask.bind(this)
+      cancelTask: this.cancelTask.bind(this),
     };
   }
 
@@ -63,7 +63,7 @@ class Addon {
       taskStore.upsertTask({
         ...existingTask,
         status: "failed",
-        error: "Cancelled by user"
+        error: "Cancelled by user",
       });
     }
   }
@@ -79,7 +79,7 @@ class Addon {
           ...existingTask,
           error: undefined,
           detail: "Retrying...",
-          status: "pending"
+          status: "pending",
         });
       }
       await parseAttachment(item, { force: true });

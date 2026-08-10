@@ -65,18 +65,29 @@ export async function registerPrefsScripts(_window: Window) {
   const backupBtn = document.getElementById(`${config.addonRef}-backup-data`);
   if (backupBtn) {
     backupBtn.addEventListener("click", async () => {
-      const targetZipFile = await pickFileAsync(_window, "Save Backup ZIP", "modeSave");
+      const targetZipFile = await pickFileAsync(
+        _window,
+        "Save Backup ZIP",
+        "modeSave",
+      );
       if (targetZipFile) {
         backupBtn.setAttribute("disabled", "true");
         backupBtn.textContent = "Backing up...";
         try {
           const PathUtils = (globalThis as any).PathUtils;
           const sourceDir = PathUtils.join(PathUtils.profileDir, "mineru-copy");
-          const taskFile = (Zotero as any).DataDirectory.dir + "/mineru_tasks.json";
-          
+          const taskFile =
+            (Zotero as any).DataDirectory.dir + "/mineru_tasks.json";
+
           let copiedSomething = false;
-          const stagingDir = PathUtils.join(PathUtils.tempDir, `mineru_backup_staging_${Date.now()}`);
-          await IOUtils.makeDirectory(stagingDir, { createAncestors: true, ignoreExisting: true });
+          const stagingDir = PathUtils.join(
+            PathUtils.tempDir,
+            `mineru_backup_staging_${Date.now()}`,
+          );
+          await IOUtils.makeDirectory(stagingDir, {
+            createAncestors: true,
+            ignoreExisting: true,
+          });
 
           try {
             if (typeof IOUtils !== "undefined") {
@@ -91,19 +102,31 @@ export async function registerPrefsScripts(_window: Window) {
             }
 
             if (copiedSomething) {
-              await (Zotero as any).File.zipDirectory(stagingDir, targetZipFile, null);
+              await (Zotero as any).File.zipDirectory(
+                stagingDir,
+                targetZipFile,
+                null,
+              );
               backupBtn.textContent = "Backup Complete";
-              _window.alert(`Data successfully backed up to ZIP:\n${targetZipFile}`);
+              _window.alert(
+                `Data successfully backed up to ZIP:\n${targetZipFile}`,
+              );
             } else {
               backupBtn.textContent = "Nothing to Backup";
-              _window.alert("No parsed data or tasks found to backup. Finish a task first.");
+              _window.alert(
+                "No parsed data or tasks found to backup. Finish a task first.",
+              );
             }
           } finally {
-            await IOUtils.remove(stagingDir, { recursive: true, ignoreAbsent: true });
+            await IOUtils.remove(stagingDir, {
+              recursive: true,
+              ignoreAbsent: true,
+            });
           }
         } catch (e: any) {
           ztoolkit.log("Backup failed", e);
-          backupBtn.textContent = "Failed: " + String(e.message || e).substring(0, 20);
+          backupBtn.textContent =
+            "Failed: " + String(e.message || e).substring(0, 20);
         }
         setTimeout(() => {
           backupBtn.removeAttribute("disabled");
@@ -116,18 +139,29 @@ export async function registerPrefsScripts(_window: Window) {
   const restoreBtn = document.getElementById(`${config.addonRef}-restore-data`);
   if (restoreBtn) {
     restoreBtn.addEventListener("click", async () => {
-      const sourceZip = await pickFileAsync(_window, "Select Backup ZIP", "modeOpen");
+      const sourceZip = await pickFileAsync(
+        _window,
+        "Select Backup ZIP",
+        "modeOpen",
+      );
       if (sourceZip) {
         restoreBtn.setAttribute("disabled", "true");
         restoreBtn.textContent = "Restoring...";
         try {
           const PathUtils = (globalThis as any).PathUtils;
           const targetDir = PathUtils.join(PathUtils.profileDir, "mineru-copy");
-          const taskFile = (Zotero as any).DataDirectory.dir + "/mineru_tasks.json";
-          
+          const taskFile =
+            (Zotero as any).DataDirectory.dir + "/mineru_tasks.json";
+
           if (typeof IOUtils !== "undefined") {
-            const stagingDir = PathUtils.join(PathUtils.tempDir, `mineru_restore_staging_${Date.now()}`);
-            await IOUtils.makeDirectory(stagingDir, { createAncestors: true, ignoreExisting: true });
+            const stagingDir = PathUtils.join(
+              PathUtils.tempDir,
+              `mineru_restore_staging_${Date.now()}`,
+            );
+            await IOUtils.makeDirectory(stagingDir, {
+              createAncestors: true,
+              ignoreExisting: true,
+            });
 
             try {
               extractZipToDir(sourceZip, stagingDir);
@@ -140,14 +174,20 @@ export async function registerPrefsScripts(_window: Window) {
                 } else if (name === "mineru-copy") {
                   const subChildren = await IOUtils.getChildren(child);
                   for (const subChild of subChildren) {
-                    const subName = subChild.replace(/\\/g, "/").split("/").pop()!;
+                    const subName = subChild
+                      .replace(/\\/g, "/")
+                      .split("/")
+                      .pop()!;
                     const destChild = targetDir + "/" + subName;
                     const stat = await IOUtils.stat(subChild);
                     if (stat.type === "directory") {
                       await copyDirRecursive(subChild, destChild);
                     } else {
                       if (!(await IOUtils.exists(targetDir))) {
-                        await IOUtils.makeDirectory(targetDir, { createAncestors: true, ignoreExisting: true });
+                        await IOUtils.makeDirectory(targetDir, {
+                          createAncestors: true,
+                          ignoreExisting: true,
+                        });
                       }
                       await IOUtils.copy(subChild, destChild);
                     }
@@ -155,16 +195,22 @@ export async function registerPrefsScripts(_window: Window) {
                 }
               }
             } finally {
-              await IOUtils.remove(stagingDir, { recursive: true, ignoreAbsent: true });
+              await IOUtils.remove(stagingDir, {
+                recursive: true,
+                ignoreAbsent: true,
+              });
             }
           }
-          
+
           restoreBtn.textContent = "Restore Complete";
           void updateParsedCount(_window, storage);
-          _window.alert("Data restored successfully. Please restart Zotero or reload the Task Manager if necessary.");
+          _window.alert(
+            "Data restored successfully. Please restart Zotero or reload the Task Manager if necessary.",
+          );
         } catch (e: any) {
           ztoolkit.log("Restore failed", e);
-          restoreBtn.textContent = "Failed: " + String(e.message || e).substring(0, 20);
+          restoreBtn.textContent =
+            "Failed: " + String(e.message || e).substring(0, 20);
         }
         setTimeout(() => {
           restoreBtn.removeAttribute("disabled");
@@ -180,9 +226,13 @@ export async function registerPrefsScripts(_window: Window) {
       try {
         const { runPdftkCommand } = await import("./pdfSplitter");
         const output = await runPdftkCommand(["--version"]);
-        _window.alert("pdftk test success! Output:\n" + output.substring(0, 150));
+        _window.alert(
+          "pdftk test success! Output:\n" + output.substring(0, 150),
+        );
       } catch (e: any) {
-        _window.alert("pdftk test failed completely: " + String(e.message || e));
+        _window.alert(
+          "pdftk test failed completely: " + String(e.message || e),
+        );
       }
     });
   }
@@ -190,10 +240,10 @@ export async function registerPrefsScripts(_window: Window) {
   document
     .getElementById(`${config.addonRef}-open-task-manager`)
     ?.addEventListener("click", () => {
-       const addonObj = (Zotero as any).MinerUForZotero;
-       if (addonObj?.api?.openTaskManagerWindow) {
-          addonObj.api.openTaskManagerWindow();
-       }
+      const addonObj = (Zotero as any).MinerUForZotero;
+      if (addonObj?.api?.openTaskManagerWindow) {
+        addonObj.api.openTaskManagerWindow();
+      }
     });
 
   document
@@ -215,7 +265,7 @@ export async function registerPrefsScripts(_window: Window) {
             storage,
             (synced: number, total: number) => {
               syncAllButton.textContent = `Syncing... (${synced}/${total})`;
-            }
+            },
           );
           syncAllButton.textContent = `Done (${syncedCount})`;
         }
@@ -230,7 +280,9 @@ export async function registerPrefsScripts(_window: Window) {
     });
   }
 
-  const updateTagsBtn = document.getElementById(`${config.addonRef}-update-tags`);
+  const updateTagsBtn = document.getElementById(
+    `${config.addonRef}-update-tags`,
+  );
   if (updateTagsBtn) {
     updateTagsBtn.addEventListener("click", async () => {
       updateTagsBtn.setAttribute("disabled", "true");
@@ -242,7 +294,7 @@ export async function registerPrefsScripts(_window: Window) {
             storage,
             (processed: number, total: number) => {
               updateTagsBtn.textContent = `Updating... (${processed}/${total})`;
-            }
+            },
           );
           updateTagsBtn.textContent = `Done (${updatedCount})`;
         }
@@ -267,13 +319,23 @@ export async function registerPrefsScripts(_window: Window) {
   );
 }
 
-function pickDirectoryAsync(window: Window, title: string): Promise<string | null> {
-  return new Promise(resolve => {
+function pickDirectoryAsync(
+  window: Window,
+  title: string,
+): Promise<string | null> {
+  return new Promise((resolve) => {
     try {
       const Components = (window as any).Components;
       const nsIFilePicker = Components.interfaces.nsIFilePicker;
-      const fp = Components.classes["@mozilla.org/filepicker;1"].createInstance(nsIFilePicker);
-      fp.init((window as any).browsingContext || window, title, nsIFilePicker.modeGetFolder);
+      const fp =
+        Components.classes["@mozilla.org/filepicker;1"].createInstance(
+          nsIFilePicker,
+        );
+      fp.init(
+        (window as any).browsingContext || window,
+        title,
+        nsIFilePicker.modeGetFolder,
+      );
       fp.open((result: number) => {
         if (result === nsIFilePicker.returnOK && fp.file) {
           resolve(fp.file.path);
@@ -288,22 +350,37 @@ function pickDirectoryAsync(window: Window, title: string): Promise<string | nul
   });
 }
 
-function pickFileAsync(window: Window, title: string, mode: "modeSave" | "modeOpen"): Promise<string | null> {
-  return new Promise(resolve => {
+function pickFileAsync(
+  window: Window,
+  title: string,
+  mode: "modeSave" | "modeOpen",
+): Promise<string | null> {
+  return new Promise((resolve) => {
     try {
       const Components = (window as any).Components;
       const nsIFilePicker = Components.interfaces.nsIFilePicker;
-      const fp = Components.classes["@mozilla.org/filepicker;1"].createInstance(nsIFilePicker);
-      fp.init((window as any).browsingContext || window, title, nsIFilePicker[mode]);
+      const fp =
+        Components.classes["@mozilla.org/filepicker;1"].createInstance(
+          nsIFilePicker,
+        );
+      fp.init(
+        (window as any).browsingContext || window,
+        title,
+        nsIFilePicker[mode],
+      );
       fp.appendFilter("ZIP Archive", "*.zip");
       if (mode === "modeSave") {
         fp.defaultString = "mineru_backup.zip";
       }
       fp.open((result: number) => {
-        if ((result === nsIFilePicker.returnOK || result === nsIFilePicker.returnReplace) && fp.file) {
+        if (
+          (result === nsIFilePicker.returnOK ||
+            result === nsIFilePicker.returnReplace) &&
+          fp.file
+        ) {
           let path = fp.file.path;
           if (mode === "modeSave" && !path.toLowerCase().endsWith(".zip")) {
-             path += ".zip";
+            path += ".zip";
           }
           resolve(path);
         } else {
@@ -319,19 +396,25 @@ function pickFileAsync(window: Window, title: string, mode: "modeSave" | "modeOp
 
 function extractZipToDir(zipFilePath: string, destDir: string) {
   const Components = (globalThis as any).Components;
-  const reader = Components.classes["@mozilla.org/libjar/zip-reader;1"].createInstance(Components.interfaces.nsIZipReader);
-  const zipFile = Components.classes["@mozilla.org/file/local;1"].createInstance(Components.interfaces.nsIFile);
+  const reader = Components.classes[
+    "@mozilla.org/libjar/zip-reader;1"
+  ].createInstance(Components.interfaces.nsIZipReader);
+  const zipFile = Components.classes[
+    "@mozilla.org/file/local;1"
+  ].createInstance(Components.interfaces.nsIFile);
   zipFile.initWithPath(zipFilePath);
-  
+
   reader.open(zipFile);
   try {
     const entries = reader.findEntries("*");
     while (entries.hasMore()) {
       const name = entries.getNext();
-      const destFile = Components.classes["@mozilla.org/file/local;1"].createInstance(Components.interfaces.nsIFile);
+      const destFile = Components.classes[
+        "@mozilla.org/file/local;1"
+      ].createInstance(Components.interfaces.nsIFile);
       destFile.initWithPath(destDir);
       name.split("/").forEach((part: string) => destFile.append(part));
-      
+
       const entry = reader.getEntry(name);
       if (entry.isDirectory) {
         if (!destFile.exists()) {
@@ -354,7 +437,10 @@ async function copyDirRecursive(src: string, dest: string) {
   if (typeof IOUtils === "undefined") return;
   if (!(await IOUtils.exists(src))) return;
   if (!(await IOUtils.exists(dest))) {
-    await IOUtils.makeDirectory(dest, { createAncestors: true, ignoreExisting: true });
+    await IOUtils.makeDirectory(dest, {
+      createAncestors: true,
+      ignoreExisting: true,
+    });
   }
   const children = await IOUtils.getChildren(src);
   for (const child of children) {

@@ -122,7 +122,7 @@ The result folder contains the parsed Markdown, box data used by the reader, and
     <img src="assets/settings-page.png" alt="settings page" width=80%/>
 </p>
 
-For AI workflows, you can configure an **Agent-friendly Sync Folder** in the settings. When enabled, MinerU for Zotero will automatically copy parsed results (Markdown + images) into a clean, flat directory structure named after the citation key and title (`[CitationKey] - Title/`). 
+For AI workflows, you can configure an **Agent-friendly Sync Folder** in the settings. When enabled, MinerU for Zotero will automatically copy parsed results (Markdown + images) into a clean, flat directory structure named after the citation key and title (`[CitationKey] - Title/`).
 It will also automatically generate a `metadata.bib` file containing the BibTeX metadata for each item. You can click `Sync All Results Now` in the settings to bulk-export all existing historical results to this folder.
 
 This enables you to use AI Agents (like Cursor, Claude Desktop, etc.) to read the high-quality Markdown output directly. You can even equip your agent with the included CLI script (see below) to dynamically search and read files directly from the Zotero database!
@@ -224,6 +224,7 @@ Common error codes:
 The repository includes a companion Skill in the `mineru-for-zotero-cli/` folder, which is designed to teach AI Agents (like Cursor, Claude Desktop, or local LLMs) how to query your local Zotero database directly.
 
 To equip your Agent with this skill:
+
 1. Direct your Agent to read the `mineru-for-zotero-cli/SKILL.md` file. This file contains the complete system prompt, context, and command workflows the Agent needs to interact with the local API.
 2. The Agent can then use the bundled Node.js script (`query-markdown.mjs`) to autonomously execute commands (e.g., `search`, `headings`, `section`) directly against your running Zotero client.
 
@@ -231,9 +232,9 @@ This integration abstracts away HTTP parameters, port detection, and error handl
 
 ### Example Agent Workflow
 
-Because the CLI output is heavily optimized for LLM consumption, external agents can autonomously traverse complex academic documents. 
+Because the CLI output is heavily optimized for LLM consumption, external agents can autonomously traverse complex academic documents.
 
-For example, when an AI Agent is tasked to analyze the paper *Attention Is All You Need* using this CLI, it successfully executes the following steps completely autonomously:
+For example, when an AI Agent is tasked to analyze the paper _Attention Is All You Need_ using this CLI, it successfully executes the following steps completely autonomously:
 
 <details>
 <summary>Click to view the Agent's autonomous test report</summary>

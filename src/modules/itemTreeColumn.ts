@@ -289,7 +289,9 @@ function createBadge(
   if (token === "unparsed") {
     badge.classList.add("mineru-parse-column-badge-unparsed");
     // We cast to any because "item-tree-column-mineru-parse-unparsed" isn't in FluentMessageId type yet
-    badge.textContent = resolveString("item-tree-column-mineru-parse-unparsed" as any) || "Unparsed";
+    badge.textContent =
+      resolveString("item-tree-column-mineru-parse-unparsed" as any) ||
+      "Unparsed";
     return badge;
   }
   if (token.endsWith("-running")) {

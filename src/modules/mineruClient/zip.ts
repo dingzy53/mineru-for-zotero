@@ -222,8 +222,7 @@ export function decodeText(bytes: Uint8Array): string {
  * 在系统临时目录下创建 ZIP 回退读取使用的临时文件路径。
  */
 async function createTemporaryPath(fileName: string): Promise<string> {
-  const baseDir =
-    PathUtils.tempDir;
+  const baseDir = PathUtils.tempDir;
   const name = `${Date.now()}-${Math.random().toString(16).slice(2)}-${fileName}`;
   return PathUtils.join(baseDir, name);
 }

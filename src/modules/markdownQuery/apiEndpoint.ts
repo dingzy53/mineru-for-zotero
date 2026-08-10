@@ -70,7 +70,12 @@ export function createMarkdownQueryEndpoint(service: MarkdownQueryService) {
             tag: optionalString(query.tag),
           });
         } else if (options.pathname === "/mineru-for-zotero/parse") {
-          if (options.method !== "POST") throw new MarkdownQueryError("invalid-request", 405, "Method not allowed");
+          if (options.method !== "POST")
+            throw new MarkdownQueryError(
+              "invalid-request",
+              405,
+              "Method not allowed",
+            );
           payload = await service.triggerParse({
             libraryID: requireInteger(query.libraryID, "libraryID"),
             key: requireString(query.key, "key"),
@@ -91,9 +96,7 @@ export function createMarkdownQueryEndpoint(service: MarkdownQueryService) {
               | undefined,
             sectionPath: parseSectionPath(query.sectionPath),
             q: optionalString(query.q),
-            contextParagraphs: parseOptionalInteger(
-              query.contextParagraphs,
-            ),
+            contextParagraphs: parseOptionalInteger(query.contextParagraphs),
           });
         }
 

@@ -79,7 +79,7 @@
         border-radius: 4px;
         border: 1px solid #ffcdd2;
       }
-      
+
       .task-detail {
         font-size: 0.85rem;
         color: #555;
@@ -101,7 +101,7 @@
         padding: 20px;
         font-size: 0.9rem;
       }
-      
+
       .top-bar {
         display: flex;
         justify-content: space-between;
@@ -111,7 +111,7 @@
       .top-bar h1 {
         margin: 0;
       }
-      
+
       .clear-btn {
         background: transparent;
         border: 1px solid #ccc;
@@ -124,7 +124,7 @@
       .clear-btn:hover {
         background: #eee;
       }
-      
+
       .group-header {
         font-weight: 600;
         margin-top: 16px;
@@ -136,7 +136,7 @@
         color: #555;
       }
       .group-header::before {
-        content: '▼';
+        content: "▼";
         font-size: 0.7rem;
         margin-right: 6px;
         transition: transform 0.2s;
@@ -228,7 +228,9 @@
               taskStore = args.Zotero.MinerUForZotero.api.taskStore;
             }
           }
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+          /* ignore */
+        }
 
         // === Strategy 2: globalThis.Zotero (same chrome sandbox) ===
         if (!taskStore) {
@@ -237,7 +239,9 @@
             if (z && z.MinerUForZotero && z.MinerUForZotero.api) {
               taskStore = z.MinerUForZotero.api.taskStore;
             }
-          } catch (e) { /* ignore */ }
+          } catch (e) {
+            /* ignore */
+          }
         }
 
         // === Strategy 3: opener.Zotero ===
@@ -249,20 +253,29 @@
                 taskStore = oz.MinerUForZotero.api.taskStore;
               }
             }
-          } catch (e) { /* ignore — cross-origin on Wayland */ }
+          } catch (e) {
+            /* ignore — cross-origin on Wayland */
+          }
         }
 
         // === Strategy 4: ChromeUtils.importESModule (Zotero 7) ===
         if (!taskStore) {
           try {
-            if (typeof ChromeUtils !== "undefined" && ChromeUtils.importESModule) {
-              var mod = ChromeUtils.importESModule("chrome://zotero/content/zotero.mjs");
+            if (
+              typeof ChromeUtils !== "undefined" &&
+              ChromeUtils.importESModule
+            ) {
+              var mod = ChromeUtils.importESModule(
+                "chrome://zotero/content/zotero.mjs",
+              );
               var z2 = mod.Zotero;
               if (z2 && z2.MinerUForZotero && z2.MinerUForZotero.api) {
                 taskStore = z2.MinerUForZotero.api.taskStore;
               }
             }
-          } catch (e) { /* ignore */ }
+          } catch (e) {
+            /* ignore */
+          }
         }
 
         function renderTasks() {
@@ -270,7 +283,8 @@
           listEl.innerHTML = "";
 
           if (!taskStore) {
-            listEl.innerHTML = '<div class="error-state">TaskStore not found. Please restart Zotero and try again.</div>';
+            listEl.innerHTML =
+              '<div class="error-state">TaskStore not found. Please restart Zotero and try again.</div>';
             return;
           }
 
@@ -278,19 +292,23 @@
           try {
             tasks = taskStore.getTasks();
           } catch (e) {
-            listEl.innerHTML = '<div class="error-state">Error reading tasks: ' + e.message + '</div>';
+            listEl.innerHTML =
+              '<div class="error-state">Error reading tasks: ' +
+              e.message +
+              "</div>";
             return;
           }
 
           if (tasks.length === 0) {
-            listEl.innerHTML = '<div class="empty-state">No tasks yet.<br><small>Parse a PDF and tasks will appear here.</small></div>';
+            listEl.innerHTML =
+              '<div class="empty-state">No tasks yet.<br><small>Parse a PDF and tasks will appear here.</small></div>';
             return;
           }
 
           var groups = {
-            "Running": [],
-            "Failed": [],
-            "Succeeded": []
+            Running: [],
+            Failed: [],
+            Succeeded: [],
           };
 
           for (var i = 0; i < tasks.length; i++) {
@@ -305,7 +323,7 @@
           }
 
           var groupOrder = ["Running", "Failed", "Succeeded"];
-          
+
           for (var g = 0; g < groupOrder.length; g++) {
             var groupName = groupOrder[g];
             var groupTasks = groups[groupName];
@@ -313,13 +331,14 @@
 
             var groupHeader = document.createElement("div");
             groupHeader.className = "group-header";
-            groupHeader.textContent = groupName + " (" + groupTasks.length + ")";
-            
+            groupHeader.textContent =
+              groupName + " (" + groupTasks.length + ")";
+
             var groupContent = document.createElement("div");
             groupContent.className = "group-content task-list";
-            
-            (function(header, content) {
-              header.addEventListener("click", function() {
+
+            (function (header, content) {
+              header.addEventListener("click", function () {
                 header.classList.toggle("collapsed");
                 content.classList.toggle("collapsed");
               });
@@ -350,20 +369,35 @@
                 retryBtn.className = "clear-btn"; // reuse styling
                 retryBtn.style.padding = "2px 8px";
                 retryBtn.style.fontSize = "0.75rem";
-                (function(taskId) {
-                  retryBtn.addEventListener("click", function(e) {
+                (function (taskId) {
+                  retryBtn.addEventListener("click", function (e) {
                     e.stopPropagation();
                     if (taskStore && taskStore.getTask) {
                       try {
                         var addonApi = null;
-                        if (window.arguments && window.arguments[0] && window.arguments[0].Zotero) {
-                          addonApi = window.arguments[0].Zotero.MinerUForZotero.api;
-                        } else if (globalThis.Zotero && globalThis.Zotero.MinerUForZotero) {
+                        if (
+                          window.arguments &&
+                          window.arguments[0] &&
+                          window.arguments[0].Zotero
+                        ) {
+                          addonApi =
+                            window.arguments[0].Zotero.MinerUForZotero.api;
+                        } else if (
+                          globalThis.Zotero &&
+                          globalThis.Zotero.MinerUForZotero
+                        ) {
                           addonApi = globalThis.Zotero.MinerUForZotero.api;
-                        } else if (globalThis.opener && globalThis.opener.Zotero) {
-                          addonApi = globalThis.opener.Zotero.MinerUForZotero.api;
+                        } else if (
+                          globalThis.opener &&
+                          globalThis.opener.Zotero
+                        ) {
+                          addonApi =
+                            globalThis.opener.Zotero.MinerUForZotero.api;
                         }
-                        if (addonApi && typeof addonApi.retryTask === "function") {
+                        if (
+                          addonApi &&
+                          typeof addonApi.retryTask === "function"
+                        ) {
                           addonApi.retryTask(taskId);
                         }
                       } catch (err) {}
@@ -371,26 +405,44 @@
                   });
                 })(task.id);
                 statusContainer.appendChild(retryBtn);
-              } else if (task.status === "running" || task.status === "pending") {
+              } else if (
+                task.status === "running" ||
+                task.status === "pending"
+              ) {
                 var cancelBtn = document.createElement("button");
                 cancelBtn.textContent = "Stop";
                 cancelBtn.className = "clear-btn"; // reuse styling
                 cancelBtn.style.padding = "2px 8px";
                 cancelBtn.style.fontSize = "0.75rem";
-                (function(taskId) {
-                  cancelBtn.addEventListener("click", function(e) {
+                (function (taskId) {
+                  cancelBtn.addEventListener("click", function (e) {
                     e.stopPropagation();
                     if (taskStore && taskStore.getTask) {
                       try {
                         var addonApi = null;
-                        if (window.arguments && window.arguments[0] && window.arguments[0].Zotero) {
-                          addonApi = window.arguments[0].Zotero.MinerUForZotero.api;
-                        } else if (globalThis.Zotero && globalThis.Zotero.MinerUForZotero) {
+                        if (
+                          window.arguments &&
+                          window.arguments[0] &&
+                          window.arguments[0].Zotero
+                        ) {
+                          addonApi =
+                            window.arguments[0].Zotero.MinerUForZotero.api;
+                        } else if (
+                          globalThis.Zotero &&
+                          globalThis.Zotero.MinerUForZotero
+                        ) {
                           addonApi = globalThis.Zotero.MinerUForZotero.api;
-                        } else if (globalThis.opener && globalThis.opener.Zotero) {
-                          addonApi = globalThis.opener.Zotero.MinerUForZotero.api;
+                        } else if (
+                          globalThis.opener &&
+                          globalThis.opener.Zotero
+                        ) {
+                          addonApi =
+                            globalThis.opener.Zotero.MinerUForZotero.api;
                         }
-                        if (addonApi && typeof addonApi.cancelTask === "function") {
+                        if (
+                          addonApi &&
+                          typeof addonApi.cancelTask === "function"
+                        ) {
                           addonApi.cancelTask(taskId);
                         }
                       } catch (err) {}
@@ -403,7 +455,7 @@
               var status = document.createElement("div");
               status.className = "task-status status-" + task.status;
               status.textContent = task.status.toUpperCase();
-              
+
               statusContainer.appendChild(status);
 
               header.appendChild(title);
@@ -426,7 +478,7 @@
 
               groupContent.appendChild(item);
             }
-            
+
             listEl.appendChild(groupHeader);
             listEl.appendChild(groupContent);
           }
@@ -437,7 +489,7 @@
 
         var clearBtn = document.getElementById("clearBtn");
         if (clearBtn) {
-          clearBtn.addEventListener("click", function() {
+          clearBtn.addEventListener("click", function () {
             if (taskStore && typeof taskStore.clearHistory === "function") {
               taskStore.clearHistory();
               renderTasks();

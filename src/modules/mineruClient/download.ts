@@ -254,10 +254,7 @@ export function getRuntimePlatform(): "win" | "mac" | "linux" | "unknown" {
     return appPlatform === "macosx" ? "mac" : "linux";
   }
   // Fallback to OS info
-  const value = [
-    runtime.Services?.appinfo?.OS,
-    runtime.navigator?.platform,
-  ]
+  const value = [runtime.Services?.appinfo?.OS, runtime.navigator?.platform]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
@@ -345,7 +342,7 @@ export async function fileExists(path: string): Promise<boolean> {
 export async function fileSize(path: string): Promise<number> {
   try {
     const stat = await IOUtils.stat(path);
-      return stat.size ?? 0;
+    return stat.size ?? 0;
   } catch {
     return 0;
   }
@@ -355,8 +352,7 @@ export async function fileSize(path: string): Promise<number> {
  * 在系统临时目录下创建唯一临时文件路径。
  */
 export async function createTemporaryPath(fileName: string): Promise<string> {
-  const baseDir =
-    PathUtils.tempDir;
+  const baseDir = PathUtils.tempDir;
   const name = `${Date.now()}-${Math.random().toString(16).slice(2)}-${fileName}`;
   return PathUtils.join(baseDir, name);
 }

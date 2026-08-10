@@ -4,10 +4,14 @@ import { PDFDocument } from "pdf-lib";
 export async function runPdftkCommand(args: string[]): Promise<string> {
   let Subprocess: any;
   try {
-    Subprocess = (globalThis as any).ChromeUtils.importESModule("resource://gre/modules/Subprocess.sys.mjs").Subprocess;
+    Subprocess = (globalThis as any).ChromeUtils.importESModule(
+      "resource://gre/modules/Subprocess.sys.mjs",
+    ).Subprocess;
   } catch (e) {
     try {
-      Subprocess = (globalThis as any).ChromeUtils.import("resource://gre/modules/Subprocess.jsm").Subprocess;
+      Subprocess = (globalThis as any).ChromeUtils.import(
+        "resource://gre/modules/Subprocess.jsm",
+      ).Subprocess;
     } catch (e2) {
       throw new Error("Subprocess not available");
     }
@@ -35,15 +39,23 @@ export async function runPdftkCommand(args: string[]): Promise<string> {
     } catch (e) {
       // On macOS/Linux, retry via shell to resolve PATH overrides (like flatpak)
       // On Windows, /bin/sh doesn't exist so just re-throw
-      const isWindows = (globalThis as any).AppConstants?.platform === "win" ||
-        ((globalThis as any).Services?.appinfo?.OS || "").toLowerCase().includes("win");
+      const isWindows =
+        (globalThis as any).AppConstants?.platform === "win" ||
+        ((globalThis as any).Services?.appinfo?.OS || "")
+          .toLowerCase()
+          .includes("win");
       if (isWindows) {
         throw e;
       }
       ztoolkit.log("Direct pdftk failed, trying /bin/sh to resolve PATH", e);
       const proc = await Subprocess.call({
         command: "/bin/sh",
-        arguments: ["-c", 'PATH="$PATH:/usr/local/bin:/opt/homebrew/bin" pdftk "$@"', "sh", ...args],
+        arguments: [
+          "-c",
+          'PATH="$PATH:/usr/local/bin:/opt/homebrew/bin" pdftk "$@"',
+          "sh",
+          ...args,
+        ],
       });
       const output = await readAll(proc.stdout);
       await proc.wait();
@@ -55,11 +67,13 @@ export async function runPdftkCommand(args: string[]): Promise<string> {
 
 export async function getPdfPageCount(filePath: string): Promise<number> {
   const nativePath = toNativePath(filePath);
-  
+
   try {
     let uint8Array: Uint8Array;
     uint8Array = await IOUtils.read(nativePath);
-    const pdfDoc = await PDFDocument.load(uint8Array, { ignoreEncryption: true });
+    const pdfDoc = await PDFDocument.load(uint8Array, {
+      ignoreEncryption: true,
+    });
     return pdfDoc.getPageCount();
   } catch (e) {
     ztoolkit.log("Failed to get pdf page count via pdf-lib, trying pdftk", e);
@@ -83,7 +97,7 @@ export async function splitPdf(
   filePath: string,
   targetPath: string,
   startPage: number, // 1-indexed
-  endPage: number,   // 1-indexed
+  endPage: number, // 1-indexed
 ): Promise<boolean> {
   const nativePath = toNativePath(filePath);
   const nativeTarget = toNativePath(targetPath);
@@ -91,20 +105,22 @@ export async function splitPdf(
   try {
     let uint8Array: Uint8Array;
     uint8Array = await IOUtils.read(nativePath);
-    
-    const pdfDoc = await PDFDocument.load(uint8Array, { ignoreEncryption: true });
+
+    const pdfDoc = await PDFDocument.load(uint8Array, {
+      ignoreEncryption: true,
+    });
     const newPdfDoc = await PDFDocument.create();
-    
+
     const pageIndices = [];
     for (let i = startPage - 1; i < endPage; i++) {
       pageIndices.push(i);
     }
-    
+
     const copiedPages = await newPdfDoc.copyPages(pdfDoc, pageIndices);
     for (const page of copiedPages) {
       newPdfDoc.addPage(page);
     }
-    
+
     const pdfBytes = await newPdfDoc.save();
     await IOUtils.write(nativeTarget, pdfBytes);
     return true;
@@ -114,7 +130,13 @@ export async function splitPdf(
 
   // Fallback to pdftk
   try {
-    await runPdftkCommand([nativePath, "cat", `${startPage}-${endPage}`, "output", nativeTarget]);
+    await runPdftkCommand([
+      nativePath,
+      "cat",
+      `${startPage}-${endPage}`,
+      "output",
+      nativeTarget,
+    ]);
     return true;
   } catch (e) {
     ztoolkit.log("Failed to split pdf via pdftk", e);
@@ -122,4 +144,3 @@ export async function splitPdf(
 
   return false;
 }
-

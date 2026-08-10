@@ -52,7 +52,6 @@ class TaskManagerStore {
     }
   }
 
-
   public getTasks(): TaskRecord[] {
     return Array.from(this.tasks.values()).sort(
       (a, b) => b.createdAt - a.createdAt,
@@ -113,8 +112,9 @@ export function openTaskManagerWindow(_callerWindow?: Window) {
 
     // Check for existing Task Manager window via window mediator
     try {
-      const wm = (Components.classes as any)["@mozilla.org/appshell/window-mediator;1"]
-        ?.getService(Components.interfaces.nsIWindowMediator);
+      const wm = (Components.classes as any)[
+        "@mozilla.org/appshell/window-mediator;1"
+      ]?.getService(Components.interfaces.nsIWindowMediator);
       if (wm) {
         const existing = wm.getMostRecentWindow("mineruTaskManager");
         if (existing) {

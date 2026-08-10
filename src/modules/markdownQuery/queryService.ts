@@ -27,7 +27,11 @@ export interface PreferredMarkdownReader extends ParseStatusReader {
  * 表示 Markdown Query API 对外提供的服务接口。
  */
 export interface MarkdownQueryService {
-  searchByTitle(input: { libraryID: number; title: string; tag?: string }): Promise<unknown>;
+  searchByTitle(input: {
+    libraryID: number;
+    title: string;
+    tag?: string;
+  }): Promise<unknown>;
   queryMarkdown(input: {
     libraryID: number;
     key: string;
@@ -37,7 +41,11 @@ export interface MarkdownQueryService {
     q?: string;
     contextParagraphs?: number;
   }): Promise<unknown>;
-  triggerParse(input: { libraryID: number; key: string; attachmentKey?: string }): Promise<unknown>;
+  triggerParse(input: {
+    libraryID: number;
+    key: string;
+    attachmentKey?: string;
+  }): Promise<unknown>;
   getTasks(): Promise<unknown>;
 }
 
@@ -67,11 +75,20 @@ export function createMarkdownQueryService(deps: {
       });
       // Try to parse using Zotero backend. This won't wait for it to finish.
       // We don't await because it blocks the HTTP response.
-      const item = Zotero.Items.getByLibraryAndKey(input.libraryID, resolved.attachment.key);
+      const item = Zotero.Items.getByLibraryAndKey(
+        input.libraryID,
+        resolved.attachment.key,
+      );
       if (item) {
-        parseAttachment(item).catch(e => ztoolkit.log("API Trigger Parse Error", e));
+        parseAttachment(item).catch((e) =>
+          ztoolkit.log("API Trigger Parse Error", e),
+        );
       }
-      return { status: "submitted", itemID: resolved.attachment.id, key: resolved.attachment.key };
+      return {
+        status: "submitted",
+        itemID: resolved.attachment.id,
+        key: resolved.attachment.key,
+      };
     },
     async searchByTitle(input) {
       if (!input.title.trim()) {
@@ -145,7 +162,10 @@ export function createMarkdownQueryService(deps: {
       };
 
       try {
-        const item = Zotero.Items.getByLibraryAndKey(input.libraryID, resolved.item.key);
+        const item = Zotero.Items.getByLibraryAndKey(
+          input.libraryID,
+          resolved.item.key,
+        );
         if (item) {
           const bibtex = await exportBibTeX(item);
           if (bibtex) {

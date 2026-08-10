@@ -482,63 +482,67 @@ async function parseAttachmentWithDependencies(
     phase = "submit";
     const filePath =
       (attachment as any)._mineruSplitPath || attachment.getFilePath()!;
-      
+
     const pageCount = await getPdfPageCount(filePath);
-    let results: any[] = [];
-    let taskIDs: string[] = [];
+    const results: any[] = [];
+    const taskIDs: string[] = [];
 
     if (pageCount > 200) {
       const CHUNK_SIZE = 200;
       const chunks = Math.ceil(pageCount / CHUNK_SIZE);
       const tmpDir = Zotero.DataDirectory.dir;
-      
+
       for (let i = 0; i < chunks; i++) {
         const startPage = i * CHUNK_SIZE + 1;
         const endPage = Math.min((i + 1) * CHUNK_SIZE, pageCount);
-        const targetPath = toNativePath(`${tmpDir}/mineru-part-${attachment.id}-${i}.pdf`);
-        
-        const success = await splitPdf(filePath, targetPath, startPage, endPage);
-        if (!success) {
-          throw new MinerUTaskError(`Failed to split PDF chunk ${i + 1}/${chunks}. pdftk may not be installed.`);
-        }
-        
-        taskStore.updateTaskStatus(
-          String(attachment.id),
-          "running",
-          undefined
+        const targetPath = toNativePath(
+          `${tmpDir}/mineru-part-${attachment.id}-${i}.pdf`,
         );
+
+        const success = await splitPdf(
+          filePath,
+          targetPath,
+          startPage,
+          endPage,
+        );
+        if (!success) {
+          throw new MinerUTaskError(
+            `Failed to split PDF chunk ${i + 1}/${chunks}. pdftk may not be installed.`,
+          );
+        }
+
+        taskStore.updateTaskStatus(String(attachment.id), "running", undefined);
         taskStore.upsertTask({
           ...taskStore.getTask(String(attachment.id))!,
-          detail: `[Auto-Split] Processing part ${i+1}/${chunks} (Pages ${startPage}-${endPage})`,
+          detail: `[Auto-Split] Processing part ${i + 1}/${chunks} (Pages ${startPage}-${endPage})`,
         });
-        
+
         const submitResult = await client.submitPdf(targetPath);
         const taskID = submitResult.taskID;
         taskIDs.push(taskID);
-        
+
         await waitForTask(
           client,
           taskID,
           dependencies.delay,
           getPollTimeoutMs(source, dependencies),
-          () => taskStore.getTask(String(attachment.id))?.status === "failed"
+          () => taskStore.getTask(String(attachment.id))?.status === "failed",
         );
-        
+
         const res = await client.downloadResult(taskID);
         (res as any)._chunkPageCount = endPage - startPage + 1;
         results.push(res);
-        
+
         try {
           await IOUtils.remove(targetPath);
         } catch (e) {}
       }
-      
+
       // Clear detail when done
       taskStore.upsertTask({
         ...taskStore.getTask(String(attachment.id))!,
         detail: `[Auto-Split] Finished processing ${chunks} parts. Merging...`,
       });
-
     } else {
       taskStore.upsertTask({
         ...taskStore.getTask(String(attachment.id))!,
@@ -552,7 +556,7 @@ async function parseAttachmentWithDependencies(
         taskID,
         dependencies.delay,
         getPollTimeoutMs(source, dependencies),
-        () => taskStore.getTask(String(attachment.id))?.status === "failed"
+        () => taskStore.getTask(String(attachment.id))?.status === "failed",
       );
       taskStore.upsertTask({
         ...taskStore.getTask(String(attachment.id))!,
@@ -568,48 +572,48 @@ async function parseAttachmentWithDependencies(
       detail: undefined,
     });
     if (mode === "lite") {
-       mergedResult = {
-         kind: "lite",
-         markdown: results.map(r => r.markdown).join("\n\n---\n\n"),
-       };
+      mergedResult = {
+        kind: "lite",
+        markdown: results.map((r) => r.markdown).join("\n\n---\n\n"),
+      };
     } else {
-       let mergedMarkdown = "";
-       let mergedImages: any[] = [];
-       let rawResultsArr: any[] = [];
-       let mergedBoxes: any[] = [];
-       let pageOffset = 0;
-       
-       for (let i = 0; i < results.length; i++) {
-         const res = results[i];
-         rawResultsArr.push(res.rawResult);
-         
-         let md = res.markdown;
-         const images = res.images || [];
-         for (const img of images) {
-            const oldPath = img.path;
-            const newPath = `part${i}_${oldPath.replace("images/", "")}`;
-            img.path = `images/${newPath}`;
-            md = md.split(oldPath).join(img.path);
-         }
-         mergedImages.push(...images);
-         mergedMarkdown += md + (i < results.length - 1 ? "\n\n---\n\n" : "");
-         
-         const boxes = normalizeMinerUBoxes(res.rawResult);
-         for (const box of boxes) {
-            box.page += pageOffset;
-         }
-         mergedBoxes.push(...boxes);
-         
-         pageOffset += res._chunkPageCount || 200;
-       }
-       
-       mergedResult = {
-         kind: "precise",
-         rawResult: rawResultsArr,
-         markdown: mergedMarkdown,
-         images: mergedImages,
-         _mergedBoxes: mergedBoxes
-       };
+      let mergedMarkdown = "";
+      const mergedImages: any[] = [];
+      const rawResultsArr: any[] = [];
+      const mergedBoxes: any[] = [];
+      let pageOffset = 0;
+
+      for (let i = 0; i < results.length; i++) {
+        const res = results[i];
+        rawResultsArr.push(res.rawResult);
+
+        let md = res.markdown;
+        const images = res.images || [];
+        for (const img of images) {
+          const oldPath = img.path;
+          const newPath = `part${i}_${oldPath.replace("images/", "")}`;
+          img.path = `images/${newPath}`;
+          md = md.split(oldPath).join(img.path);
+        }
+        mergedImages.push(...images);
+        mergedMarkdown += md + (i < results.length - 1 ? "\n\n---\n\n" : "");
+
+        const boxes = normalizeMinerUBoxes(res.rawResult);
+        for (const box of boxes) {
+          box.page += pageOffset;
+        }
+        mergedBoxes.push(...boxes);
+
+        pageOffset += res._chunkPageCount || 200;
+      }
+
+      mergedResult = {
+        kind: "precise",
+        rawResult: rawResultsArr,
+        markdown: mergedMarkdown,
+        images: mergedImages,
+        _mergedBoxes: mergedBoxes,
+      };
     }
 
     const result = mergedResult;

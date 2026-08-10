@@ -185,14 +185,19 @@ export function exportBibTeX(item: Zotero.Item): Promise<string> {
 
 export async function syncAllToAgentFolder(
   storage: import("./storage").StorageAdapter,
-  onProgress?: (synced: number, total: number) => void
+  onProgress?: (synced: number, total: number) => void,
 ): Promise<number> {
   const syncFolder = getSyncFolder().trim();
   const hasIO = hasIOUtils();
   const shouldSync = syncFolder && hasIO;
 
   const statuses = await storage.listParseStatuses();
-  const readyKeys: { libraryID: number; key: string; preciseReady: boolean; liteReady: boolean }[] = [];
+  const readyKeys: {
+    libraryID: number;
+    key: string;
+    preciseReady: boolean;
+    liteReady: boolean;
+  }[] = [];
 
   for (const [idKey, status] of statuses.entries()) {
     if (status.preciseReady || status.liteReady) {
@@ -202,7 +207,7 @@ export async function syncAllToAgentFolder(
           libraryID: parseInt(parts[0], 10),
           key: parts[1],
           preciseReady: status.preciseReady,
-          liteReady: status.liteReady
+          liteReady: status.liteReady,
         });
       }
     }
@@ -233,7 +238,7 @@ export async function syncAllToAgentFolder(
         const sourceDir = storage.getAttachmentDir(ref);
         await syncResultToAgentFolder(attachment, sourceDir);
       }
-      
+
       processed++;
       if (onProgress) {
         onProgress(processed, readyKeys.length);
@@ -246,15 +251,15 @@ export async function syncAllToAgentFolder(
 
 export async function updateAllMinerUTags(
   storage: import("./storage").StorageAdapter,
-  onProgress?: (processed: number, total: number) => void
+  onProgress?: (processed: number, total: number) => void,
 ): Promise<number> {
   const statuses = await storage.listParseStatuses();
-  
+
   // Find all items with MinerU tags
   const search = new Zotero.Search();
-  search.addCondition('tag', 'contains', 'MinerU:');
+  search.addCondition("tag", "contains", "MinerU:");
   const itemIDs = await search.search();
-  
+
   let processed = 0;
   for (const id of itemIDs) {
     const item = await Zotero.Items.getAsync(id);
@@ -266,11 +271,15 @@ export async function updateAllMinerUTags(
     const status = statuses.get(idKey);
 
     const task = taskStore.getTask(String(id));
-    const isRunning = task?.status === 'running' || task?.status === 'pending';
-    const isFailed = task?.status === 'failed';
-    
+    const isRunning = task?.status === "running" || task?.status === "pending";
+    const isFailed = task?.status === "failed";
+
     // Remove existing MinerU tags
-    const tags = item.getTags().filter((t: any) => typeof t.tag === 'string' && t.tag.startsWith('MinerU:'));
+    const tags = item
+      .getTags()
+      .filter(
+        (t: any) => typeof t.tag === "string" && t.tag.startsWith("MinerU:"),
+      );
     for (const t of tags) {
       item.removeTag(t.tag);
       changed = true;
@@ -278,23 +287,23 @@ export async function updateAllMinerUTags(
 
     // Add correct tag based on state
     if (isRunning) {
-      item.addTag('MinerU: Processing ⏳', 1);
+      item.addTag("MinerU: Processing ⏳", 1);
       changed = true;
     } else if (status?.preciseReady) {
-      item.addTag('MinerU: Precise ✅', 1);
+      item.addTag("MinerU: Precise ✅", 1);
       changed = true;
     } else if (status?.liteReady) {
-      item.addTag('MinerU: Lite ✅', 1);
+      item.addTag("MinerU: Lite ✅", 1);
       changed = true;
     } else if (isFailed) {
-      item.addTag('MinerU: Failed ❌', 1);
+      item.addTag("MinerU: Failed ❌", 1);
       changed = true;
     }
 
     if (changed) {
       await item.saveTx();
     }
-    
+
     processed++;
     if (onProgress) {
       onProgress(processed, itemIDs.length);
