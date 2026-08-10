@@ -172,7 +172,9 @@ export function createMarkdownQueryService(deps: {
             (base as any).bibtex = bibtex;
           }
         }
-      } catch (e) {}
+      } catch (e) {
+        // ignore error
+      }
       const granularity = input.granularity ?? "full";
 
       if (granularity === "full") {

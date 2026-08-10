@@ -69,8 +69,7 @@ export async function getPdfPageCount(filePath: string): Promise<number> {
   const nativePath = toNativePath(filePath);
 
   try {
-    let uint8Array: Uint8Array;
-    uint8Array = await IOUtils.read(nativePath);
+    const uint8Array = await IOUtils.read(nativePath);
     const pdfDoc = await PDFDocument.load(uint8Array, {
       ignoreEncryption: true,
     });
@@ -103,8 +102,7 @@ export async function splitPdf(
   const nativeTarget = toNativePath(targetPath);
 
   try {
-    let uint8Array: Uint8Array;
-    uint8Array = await IOUtils.read(nativePath);
+    const uint8Array = await IOUtils.read(nativePath);
 
     const pdfDoc = await PDFDocument.load(uint8Array, {
       ignoreEncryption: true,

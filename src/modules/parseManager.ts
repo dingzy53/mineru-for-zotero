@@ -535,7 +535,9 @@ async function parseAttachmentWithDependencies(
 
         try {
           await IOUtils.remove(targetPath);
-        } catch (e) {}
+        } catch (e) {
+          // ignore
+        }
       }
 
       // Clear detail when done
