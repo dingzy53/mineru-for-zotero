@@ -60,6 +60,23 @@ export interface MarkdownSearchMatch {
 }
 
 /**
+ * Represents a match found within precise layout boxes, including page and bounding box details.
+ */
+export interface MarkdownLocateMatch {
+  boxIndex: number;
+  page: number;
+  type: string;
+  hit: string;
+  context: string;
+  bbox: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+}
+
+/**
  * 表示 Markdown Query API 解析附件时依赖的最小 Zotero item 视图。
  */
 export interface ZoteroItemLike {
@@ -124,7 +141,12 @@ export interface ParseStatusReader {
 /**
  * 表示 Markdown 查询返回内容的粒度。
  */
-export type MarkdownGranularity = "full" | "headings" | "section" | "search";
+export type MarkdownGranularity =
+  | "full"
+  | "headings"
+  | "section"
+  | "search"
+  | "locate";
 
 /**
  * 表示查询结果中的条目摘要信息。

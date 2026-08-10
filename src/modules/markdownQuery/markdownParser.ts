@@ -1,9 +1,11 @@
 import {
   MarkdownHeading,
+  MarkdownLocateMatch,
   MarkdownQueryError,
   MarkdownSearchMatch,
   MarkdownSectionResult,
 } from "./types";
+import type { NormalizedBox } from "../domain";
 
 const ATX_HEADING = /^(#{1,6})\s+(.+?)\s*#*\s*$/;
 const TOP_LEVEL_TITLE = /^#\s+.+$/;
@@ -123,6 +125,50 @@ export function searchMarkdown(
       },
     ];
   });
+}
+
+/**
+ * Searches precisely parsed boxes and returns physical page number matches with context.
+ */
+export function searchBoxes(
+  boxes: NormalizedBox[],
+  query: string,
+  contextBoxes = 2,
+): MarkdownLocateMatch[] {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) {
+    throw new MarkdownQueryError("missing-query", 400, "missing-query");
+  }
+
+  const contextSize = Math.max(0, Math.floor(contextBoxes));
+  const matches: MarkdownLocateMatch[] = [];
+
+  boxes.forEach((box, index) => {
+    const textToSearch = [box.markdown, box.formula, box.tableFormats?.markdown]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    if (textToSearch.includes(normalizedQuery)) {
+      const before = boxes.slice(Math.max(0, index - contextSize), index);
+      const after = boxes.slice(index + 1, index + 1 + contextSize);
+      const contextText = [...before, box, ...after]
+        .map((b) => (b.markdown || b.formula || "").trim())
+        .filter(Boolean)
+        .join("\n\n");
+
+      matches.push({
+        boxIndex: index,
+        page: box.page,
+        type: box.type,
+        hit: box.markdown || box.formula || "",
+        context: contextText,
+        bbox: box.bbox,
+      });
+    }
+  });
+
+  return matches;
 }
 
 /**

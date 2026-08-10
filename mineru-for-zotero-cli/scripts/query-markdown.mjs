@@ -11,7 +11,13 @@ const DEFAULT_TIMEOUT_MS = 30000;
 const SEARCH_ENDPOINT = "/mineru-for-zotero/search";
 const MARKDOWN_ENDPOINT = "/mineru-for-zotero/markdown";
 const VALID_FORMATS = new Set(["text", "json"]);
-const VALID_GRANULARITIES = new Set(["full", "headings", "section", "search"]);
+const VALID_GRANULARITIES = new Set([
+  "full",
+  "headings",
+  "section",
+  "search",
+  "locate",
+]);
 
 /**
  * Runs the CLI entry point and maps failures to stable process output.
@@ -99,7 +105,7 @@ function parseCommand(argv) {
   const granularity = getFlag(flags, "--granularity", "full");
   if (!VALID_GRANULARITIES.has(granularity)) {
     throw new CliArgumentError(
-      "Invalid --granularity. Expected full, headings, section, or search.",
+      "Invalid --granularity. Expected full, headings, section, search, or locate.",
     );
   }
 
@@ -338,6 +344,8 @@ function formatMarkdownText(options, data) {
     lines.push(...formatSection(data));
   } else if (granularity === "search") {
     lines.push(...formatSearchMatches(data));
+  } else if (granularity === "locate") {
+    lines.push(...formatLocateMatches(data));
   } else {
     lines.push("[Content]", data.content ?? "");
   }
@@ -407,6 +415,31 @@ function formatSearchMatches(data) {
 }
 
 /**
+ * Formats precise layout box matches indicating physical page numbers.
+ */
+function formatLocateMatches(data) {
+  const matches = Array.isArray(data.matches) ? data.matches : [];
+  const lines = [
+    `Query: ${valueOrUnknown(data.query)}`,
+    `Matches: ${matches.length}`,
+  ];
+
+  matches.forEach((match, index) => {
+    lines.push(
+      "",
+      `[Match ${index + 1}]`,
+      `Page: ${match.page}`,
+      `Type: ${match.type}`,
+    );
+    if (match.context) {
+      lines.push("", "Context:", match.context);
+    }
+  });
+
+  return lines;
+}
+
+/**
  * Formats API and network errors for direct agent reading.
  */
 function formatTextError(envelope) {
@@ -467,7 +500,7 @@ function helpText() {
   return [
     "Usage:",
     "  node skill/scripts/query-markdown.mjs search --library-id <id> --title <text> [--format text|json]",
-    "  node skill/scripts/query-markdown.mjs markdown --library-id <id> --key <key> [--granularity full|headings|section|search] [--format text|json]",
+    "  node skill/scripts/query-markdown.mjs markdown --library-id <id> --key <key> [--granularity full|headings|section|search|locate] [--format text|json]",
     "",
     "Common options:",
     "  --port <number>              Zotero local server port. Default: auto-detect from Zotero profile, then 23119",
@@ -478,8 +511,8 @@ function helpText() {
     "Markdown options:",
     "  --attachment-key <key>       Select a specific PDF attachment under a regular item.",
     "  --section-path <path>        Section path for granularity=section.",
-    "  --query <text>               Search query for granularity=search.",
-    "  --context-paragraphs <n>     Context paragraphs for granularity=search.",
+    "  --query <text>               Search query for granularity=search or locate.",
+    "  --context-paragraphs <n>     Context paragraphs for granularity=search or locate.",
   ].join("\n");
 }
 

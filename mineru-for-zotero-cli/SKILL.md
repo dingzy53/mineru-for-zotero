@@ -49,7 +49,7 @@ node scripts/query-markdown.mjs <command> [options]
 ### Markdown options
 
 - `--attachment-key <key>` — Select a specific PDF attachment after ambiguous-attachment or explicit user choice
-- `--granularity <kind>` — full, headings, section, or search
+- `--granularity <kind>` — full, headings, section, search, or locate
 - `--section-path <path>` — Exact full heading path from headings output, including root title
 - `--query <text>` — Search query for search queries
 - `--context-paragraphs <n>` — Context paragraphs for search queries
@@ -98,6 +98,14 @@ Use this for local context inside a saved parse result.
 
 ```powershell
 node scripts/query-markdown.mjs markdown --library-id 1 --key ABCD1234 --granularity search --query "retrieval" --context-paragraphs 2
+```
+
+### Locate physical page numbers
+
+Use this to find the exact physical page number of a text snippet within a precisely parsed PDF.
+
+```powershell
+node scripts/query-markdown.mjs markdown --library-id 1 --key ABCD1234 --granularity locate --query "specific snippet"
 ```
 
 ### Fetch full Markdown

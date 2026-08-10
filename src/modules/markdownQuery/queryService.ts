@@ -1,5 +1,10 @@
 import { resolveAttachment } from "./attachmentResolver";
-import { parseHeadings, readSection, searchMarkdown } from "./markdownParser";
+import {
+  parseHeadings,
+  readSection,
+  searchMarkdown,
+  searchBoxes,
+} from "./markdownParser";
 import {
   AttachmentSummary,
   ItemSummary,
@@ -12,6 +17,7 @@ import {
 import { parseAttachment } from "../parseManager";
 import { taskStore } from "../taskStore";
 import { exportBibTeX } from "../agentSync";
+import type { NormalizedBox } from "../domain";
 
 /**
  * 表示可读取优先 Markdown 结果与解析状态的存储接口。
@@ -21,6 +27,7 @@ export interface PreferredMarkdownReader extends ParseStatusReader {
     libraryID: number;
     key: string;
   }): Promise<string>;
+  readBoxes(ref: { libraryID: number; key: string }): Promise<NormalizedBox[]>;
 }
 
 /**
@@ -197,6 +204,25 @@ export function createMarkdownQueryService(deps: {
             input.q ?? "",
             input.contextParagraphs,
           ),
+        };
+      }
+      if (granularity === "locate") {
+        if (!parseStatus.preciseReady) {
+          throw new MarkdownQueryError(
+            "invalid-request",
+            400,
+            "Locate granularity is only available for precise parse results",
+          );
+        }
+        const boxes = await deps.storage.readBoxes({
+          libraryID: resolved.attachment.libraryID,
+          key: resolved.attachment.key,
+        });
+        return {
+          ...base,
+          granularity,
+          query: input.q ?? "",
+          matches: searchBoxes(boxes, input.q ?? "", input.contextParagraphs),
         };
       }
 
