@@ -37,8 +37,7 @@ export async function runPdftkCommand(args: string[]): Promise<string> {
       await proc.wait();
       return output;
     } catch (e) {
-      // On macOS/Linux, retry via shell to resolve PATH overrides (like flatpak)
-      // On Windows, /bin/sh doesn't exist so just re-throw
+      // On macOS/Linux, try common absolute paths since GUI apps don't inherit PATH
       const isWindows =
         (globalThis as any).AppConstants?.platform === "win" ||
         ((globalThis as any).Services?.appinfo?.OS || "")
@@ -47,19 +46,29 @@ export async function runPdftkCommand(args: string[]): Promise<string> {
       if (isWindows) {
         throw e;
       }
-      ztoolkit.log("Direct pdftk failed, trying /bin/sh to resolve PATH", e);
-      const proc = await Subprocess.call({
-        command: "/bin/sh",
-        arguments: [
-          "-c",
-          'PATH="$PATH:/usr/local/bin:/opt/homebrew/bin" pdftk "$@"',
-          "sh",
-          ...args,
-        ],
-      });
-      const output = await readAll(proc.stdout);
-      await proc.wait();
-      return output;
+
+      const commonPaths = [
+        "/opt/homebrew/bin/pdftk",
+        "/opt/homebrew/pdftk",
+        "/usr/local/bin/pdftk",
+        "/usr/bin/pdftk",
+      ];
+
+      let lastError = e;
+      for (const pdftkPath of commonPaths) {
+        try {
+          const proc = await Subprocess.call({
+            command: pdftkPath,
+            arguments: args,
+          });
+          const output = await readAll(proc.stdout);
+          await proc.wait();
+          return output;
+        } catch (err) {
+          lastError = err;
+        }
+      }
+      throw lastError;
     }
   }
   throw new Error("Subprocess execution failed completely");
