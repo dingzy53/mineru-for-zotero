@@ -46,7 +46,7 @@ export function buildReaderOverlayRoot(
   boxes: NormalizedBox[],
   mode: Exclude<OverlayMode, "off">,
   selectionOptions: ReaderOverlaySelectionOptions = {},
-): HTMLDivElement {
+): { root: HTMLDivElement; cleanup: () => void } {
   const root = doc.createElement("div");
   root.className = `mineru-copy-overlay-root mineru-copy-mode-${mode}`;
   const selectableRawIndexes = [
@@ -56,12 +56,36 @@ export function buildReaderOverlayRoot(
     ...(selectionOptions.rangeSelectableRawIndexes ?? []),
   ];
 
+  const IntersectionObserverClass =
+    doc.defaultView?.IntersectionObserver ?? IntersectionObserver;
+  const boxesByLayer = new WeakMap<HTMLDivElement, NormalizedBox[]>();
+  const observer = new IntersectionObserverClass(
+    (entries: IntersectionObserverEntry[]) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          const layer = entry.target as HTMLDivElement;
+          if (!layer.dataset.rendered) {
+            layer.dataset.rendered = "true";
+            const pageBoxes = boxesByLayer.get(layer) || [];
+            const fragment = doc.createDocumentFragment();
+            for (const box of pageBoxes) {
+              fragment.append(createBoxElement(doc, box, selectionOptions));
+            }
+            layer.append(fragment);
+          }
+        }
+      }
+    },
+    { root: null, rootMargin: "1000px 0px 1000px 0px" },
+  );
+
   for (const page of groupBoxesByPage(boxes)) {
     const layer = doc.createElement("div");
     layer.className = "mineru-copy-page-layer";
     layer.dataset.pageNumber = String(page.page);
 
-    for (const box of getRenderablePageBoxes(page.boxes)) {
+    const renderableBoxes = getRenderablePageBoxes(page.boxes);
+    for (const box of renderableBoxes) {
       if (!selectableRawIndexes.includes(box.rawIndex)) {
         selectableRawIndexes.push(box.rawIndex);
       }
@@ -71,8 +95,9 @@ export function buildReaderOverlayRoot(
       ) {
         rangeSelectableRawIndexes.push(box.rawIndex);
       }
-      layer.append(createBoxElement(doc, box, selectionOptions));
     }
+    boxesByLayer.set(layer, renderableBoxes);
+    observer.observe(layer);
     root.append(layer);
   }
   selectionOptions.selectableRawIndexes = selectableRawIndexes;
@@ -80,7 +105,12 @@ export function buildReaderOverlayRoot(
   root.dataset.selectableRawIndexes = selectableRawIndexes.join(",");
   root.dataset.rangeSelectableRawIndexes = rangeSelectableRawIndexes.join(",");
 
-  return root;
+  return {
+    root,
+    cleanup: () => {
+      safeReaderOverlayCleanup(() => observer.disconnect());
+    },
+  };
 }
 
 /** Shift 范围选择默认跳过页眉、页脚、页码等页面装饰 box。 */

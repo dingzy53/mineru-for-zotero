@@ -133,18 +133,27 @@ export async function renderReaderOverlayForReader(
 
     const mountContainer = getReaderOverlayMountContainer(doc);
     const selectionOptions = createSelectionOptions(state, attachment);
-    const root = buildReaderOverlayRoot(doc, boxes, mode, selectionOptions);
+    const { root, cleanup: cleanupObserver } = buildReaderOverlayRoot(
+      doc,
+      boxes,
+      mode,
+      selectionOptions,
+    );
     ensureReaderOverlayStyles(doc);
     positionPageLayers(doc, root);
     mountContainer?.append(root);
 
-    const cleanup = createReaderOverlayPositioningController({
+    const cleanupPositioning = createReaderOverlayPositioningController({
       doc,
       win,
       root,
       reposition: () => positionPageLayers(doc, root),
       selectionOptions,
     }).cleanup;
+    const cleanup = () => {
+      cleanupObserver();
+      cleanupPositioning();
+    };
     state.rootsByWindow.set(win, root);
     state.cleanupPositioningByWindow.set(win, cleanup);
     state.root = root;
