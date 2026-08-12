@@ -26,6 +26,8 @@ Use TypeScript ES modules and follow the existing two-space indentation. Prettie
 
 Tests use Mocha and Chai through `zotero-plugin test`. Place unit tests in `test/` with names like `featureName.test.ts`, and keep shared fixtures in clearly named helper files such as `domainFixtures.ts`. Add or update tests for parsing, formatting, storage, client boundaries, normalizer coverage, reader toolbar behavior, reader overlay interactions, and lifecycle behavior when those areas change.
 
+When modifying the return signature of a core UI function (e.g., returning an object instead of a DOM element) or introducing asynchronous/lazy DOM APIs like `IntersectionObserver`, you **must** proactively update the corresponding test files (`test/*.test.ts`) that call these functions. Tests often rely on synchronous DOM evaluation; ensure you provide synchronous test mocks (e.g., in `createDocumentStub`) for asynchronous APIs to prevent massive test failures. If you cannot run `npm run test` locally due to environment constraints (like missing Zotero binary), you must at minimum run `npx tsc -p test/tsconfig.json --noEmit` to verify test type correctness before committing.
+
 After code changes, run the full scaffold test suite with `zotero-plugin test --exit-on-finish` so the scaffold test Zotero process exits automatically after the suite completes. On Windows, prefer the local scaffold binary for final verification:
 
 ```powershell
