@@ -14,7 +14,7 @@ Core feature modules currently include `mineruClient/` for selecting and running
 - `npm test`: runs the scaffold test suite.
 - `npm run lint:check`: checks Prettier formatting and ESLint rules (`prettier --check . && eslint .`).
 - `npm run lint:fix`: formats files and applies safe ESLint fixes (`prettier --write . && eslint . --fix`).
-- `npm run release`: starts the configured release flow for versioning, packaging, tags, and GitHub release assets.
+- `npm run release`: starts the configured release flow for versioning, packaging, tags, and GitHub release assets. If running manually, you can use `npm version patch -m "chore(release): bump version to %s" && git push --follow-tags` to bump the version and push the tag. The `.github/workflows/release.yml` GitHub Action will automatically compile and publish the `.xpi` when a `v*` tag is pushed.
 
 Treat `npm run lint:check` as the local equivalent of the CI lint gate. Before any commit, run it after all file edits are complete and fix every reported Prettier or ESLint issue. Do not tell the user a change is ready to commit, push, or merge while `npm run lint:check` is failing or has not been run after the latest edit. Ensure `npm install` has been run first; Prettier and ESLint binaries are not available without `node_modules`.
 
