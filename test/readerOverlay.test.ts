@@ -56,7 +56,7 @@ describe("readerOverlay", function () {
   it("marks hover mode on the root so mode-specific rendering can differ", function () {
     const doc = createDocumentStub();
 
-    const root = buildReaderOverlayRoot(
+    const { root } = buildReaderOverlayRoot(
       doc as unknown as Document,
       normalizedBoxes,
       "hover",
@@ -68,7 +68,7 @@ describe("readerOverlay", function () {
   it("renders hover labels and copy controls", function () {
     const doc = createDocumentStub();
 
-    const root = buildReaderOverlayRoot(
+    const { root } = buildReaderOverlayRoot(
       doc as unknown as Document,
       [
         createBox(0, "text", "第一段"),
@@ -183,7 +183,7 @@ describe("readerOverlay", function () {
     try {
       const doc = createDocumentStub();
 
-      const root = buildReaderOverlayRoot(
+      const { root } = buildReaderOverlayRoot(
         doc as unknown as Document,
         [
           createBox(0, "text", "First paragraph"),
@@ -235,7 +235,7 @@ describe("readerOverlay", function () {
   it("renders labels and copy controls in all mode", function () {
     const doc = createDocumentStub();
 
-    const root = buildReaderOverlayRoot(
+    const { root } = buildReaderOverlayRoot(
       doc as unknown as Document,
       [
         createBox(0, "text", "第一段"),
@@ -269,7 +269,7 @@ describe("readerOverlay", function () {
   it("renders selectable copy panels from raw markdown and keeps formula dollars", function () {
     const doc = createDocumentStub();
 
-    const root = buildReaderOverlayRoot(
+    const { root } = buildReaderOverlayRoot(
       doc as unknown as Document,
       [
         createBox(0, "text", "**Raw** markdown"),
@@ -307,7 +307,7 @@ describe("readerOverlay", function () {
   it("shows table markdown in selectable copy panels when raw markdown is empty", function () {
     const doc = createDocumentStub();
 
-    const root = buildReaderOverlayRoot(
+    const { root } = buildReaderOverlayRoot(
       doc as unknown as Document,
       [
         {
@@ -370,7 +370,7 @@ describe("readerOverlay", function () {
 
     try {
       const doc = createDocumentStub();
-      const root = buildReaderOverlayRoot(
+      const { root } = buildReaderOverlayRoot(
         doc as unknown as Document,
         [createBox(0, "image", "")],
         "hover",
@@ -390,7 +390,7 @@ describe("readerOverlay", function () {
 
   it("keeps textarea keyboard behavior inside selectable copy panels", function () {
     const doc = createDocumentStub();
-    const root = buildReaderOverlayRoot(
+    const { root } = buildReaderOverlayRoot(
       doc as unknown as Document,
       [createBox(0, "text", "Selectable text")],
       "hover",
@@ -417,7 +417,7 @@ describe("readerOverlay", function () {
 
   it("keeps textarea pointer defaults for text selection and resize", function () {
     const doc = createDocumentStub();
-    const root = buildReaderOverlayRoot(
+    const { root } = buildReaderOverlayRoot(
       doc as unknown as Document,
       [createBox(0, "text", "Selectable text")],
       "hover",
@@ -444,7 +444,7 @@ describe("readerOverlay", function () {
 
   it("focuses selectable copy textarea on pointer down without preventing native selection", function () {
     const doc = createDocumentStub();
-    const root = buildReaderOverlayRoot(
+    const { root } = buildReaderOverlayRoot(
       doc as unknown as Document,
       [createBox(0, "text", "Selectable text")],
       "hover",
@@ -491,7 +491,7 @@ describe("readerOverlay", function () {
 
     try {
       const doc = createDocumentStub();
-      const root = buildReaderOverlayRoot(
+      const { root } = buildReaderOverlayRoot(
         doc as unknown as Document,
         [createBox(0, "text", "Selectable text")],
         "hover",
@@ -570,7 +570,7 @@ describe("readerOverlay", function () {
 
     try {
       const doc = createDocumentStub();
-      const root = buildReaderOverlayRoot(
+      const { root } = buildReaderOverlayRoot(
         doc as unknown as Document,
         [createBox(0, "image", "![figure](images/figure.png)")],
         "hover",
@@ -629,7 +629,7 @@ describe("readerOverlay", function () {
 
     try {
       const doc = createDocumentStub();
-      const root = buildReaderOverlayRoot(
+      const { root } = buildReaderOverlayRoot(
         doc as unknown as Document,
         [{ ...createBox(0, "image", ""), imagePath: "figure.jpg" }],
         "hover",
@@ -673,7 +673,7 @@ describe("readerOverlay", function () {
 
     try {
       const doc = createDocumentStub();
-      const root = buildReaderOverlayRoot(
+      const { root } = buildReaderOverlayRoot(
         doc as unknown as Document,
         [
           {
@@ -748,7 +748,7 @@ describe("readerOverlay", function () {
 
     try {
       const doc = createDocumentStub();
-      const root = buildReaderOverlayRoot(
+      const { root } = buildReaderOverlayRoot(
         doc as unknown as Document,
         [{ ...createBox(0, "table", ""), imagePath: "table.png" }],
         "hover",
@@ -808,7 +808,7 @@ describe("readerOverlay", function () {
 
     try {
       const doc = createDocumentStub();
-      const root = buildReaderOverlayRoot(
+      const { root } = buildReaderOverlayRoot(
         doc as unknown as Document,
         [createBox(0, "image", "")],
         "hover",
@@ -829,7 +829,7 @@ describe("readerOverlay", function () {
 
   it("isolates selectable copy textarea pointer and context menu events", function () {
     const doc = createDocumentStub();
-    const root = buildReaderOverlayRoot(
+    const { root } = buildReaderOverlayRoot(
       doc as unknown as Document,
       [createBox(0, "text", "Selectable text")],
       "hover",
@@ -867,7 +867,7 @@ describe("readerOverlay", function () {
 
   it("sizes selectable copy textarea rows from content length", function () {
     const doc = createDocumentStub();
-    const root = buildReaderOverlayRoot(
+    const { root } = buildReaderOverlayRoot(
       doc as unknown as Document,
       [
         createBox(0, "text", "Short text"),
@@ -893,7 +893,7 @@ describe("readerOverlay", function () {
 
   it("opens one selectable panel and closes it on Escape or outside click", function () {
     const doc = createDocumentStub();
-    const root = buildReaderOverlayRoot(
+    const { root } = buildReaderOverlayRoot(
       doc as unknown as Document,
       [createBox(0, "text", "First"), createBox(1, "text", "Second")],
       "hover",
@@ -966,7 +966,7 @@ describe("readerOverlay", function () {
 
   it("locks selectable panel interactions to the owning box", function () {
     const doc = createDocumentStub();
-    const root = buildReaderOverlayRoot(
+    const { root } = buildReaderOverlayRoot(
       doc as unknown as Document,
       [createBox(0, "text", "First"), createBox(1, "text", "Second")],
       "hover",
@@ -1025,7 +1025,7 @@ describe("readerOverlay", function () {
 
   it("keeps selectable panels and actions inside viewport edges", function () {
     const doc = createDocumentStub();
-    const root = buildReaderOverlayRoot(
+    const { root } = buildReaderOverlayRoot(
       doc as unknown as Document,
       [createBox(0, "text", "Left edge"), createBox(1, "text", "Right edge")],
       "hover",
@@ -1056,7 +1056,7 @@ describe("readerOverlay", function () {
 
   it("refreshes horizontal placement from a neutral rect", function () {
     const doc = createDocumentStub();
-    const root = buildReaderOverlayRoot(
+    const { root } = buildReaderOverlayRoot(
       doc as unknown as Document,
       [createBox(0, "text", "Movable edge")],
       "hover",
@@ -1091,7 +1091,7 @@ describe("readerOverlay", function () {
 
   it("keeps selectable panel open for internal document mousedown targets", function () {
     const doc = createDocumentStub();
-    const root = buildReaderOverlayRoot(
+    const { root } = buildReaderOverlayRoot(
       doc as unknown as Document,
       [createBox(0, "text", "Internal target")],
       "hover",
@@ -1120,7 +1120,7 @@ describe("readerOverlay", function () {
 
   it("keeps toolbar buttons icon-only while formula menu items stay readable", function () {
     const doc = createDocumentStub();
-    const root = buildReaderOverlayRoot(
+    const { root } = buildReaderOverlayRoot(
       doc as unknown as Document,
       [createBox(0, "formula", "E=mc^2", "E=mc^2")],
       "hover",
@@ -1154,7 +1154,7 @@ describe("readerOverlay", function () {
   it("does not render list container boxes that cover reference boxes", function () {
     const doc = createDocumentStub();
 
-    const root = buildReaderOverlayRoot(
+    const { root } = buildReaderOverlayRoot(
       doc as unknown as Document,
       [
         {
@@ -1656,7 +1656,7 @@ describe("readerOverlay", function () {
 
   it("hides only page layers whose PDF page cannot be mapped", function () {
     const doc = createDocumentStub();
-    const root = buildReaderOverlayRoot(
+    const { root } = buildReaderOverlayRoot(
       doc as unknown as Document,
       [
         createBox(0, "text", "missing page"),
@@ -2137,7 +2137,7 @@ describe("readerOverlay", function () {
     const doc = createDocumentStub();
     const selectedRawIndexes = new Set<number>();
     const selectionAnchor = { rawIndex: null as number | null };
-    const root = buildReaderOverlayRoot(
+    const { root } = buildReaderOverlayRoot(
       doc as unknown as Document,
       normalizedBoxes,
       "all",
@@ -3259,7 +3259,7 @@ describe("readerOverlay", function () {
 
     try {
       const doc = createDocumentStub();
-      const root = buildReaderOverlayRoot(
+      const { root } = buildReaderOverlayRoot(
         doc as unknown as Document,
         [createBox(0, "formula", "E=mc^2", "E=mc^2")],
         "hover",
@@ -3393,13 +3393,13 @@ describe("readerOverlay", function () {
     state.selectedRawIndexes.add(0);
     state.selectedRawIndexes.add(1);
 
-    const primaryRoot = buildReaderOverlayRoot(
+    const { root: primaryRoot } = buildReaderOverlayRoot(
       createDocumentStub() as unknown as Document,
       normalizedBoxes,
       "all",
       { selectedRawIndexes: state.selectedRawIndexes },
     );
-    const secondaryRoot = buildReaderOverlayRoot(
+    const { root: secondaryRoot } = buildReaderOverlayRoot(
       createDocumentStub() as unknown as Document,
       normalizedBoxes,
       "all",
@@ -3562,7 +3562,7 @@ describe("readerOverlay", function () {
       },
     };
 
-    const root = buildReaderOverlayRoot(
+    const { root } = buildReaderOverlayRoot(
       doc as unknown as Document,
       boxesForSelection,
       "all",
@@ -3746,6 +3746,24 @@ function createDocumentStub(): Document & {
     },
     createElement(_tagName: string) {
       return createFakeElement();
+    },
+    createDocumentFragment() {
+      return createFakeElement();
+    },
+    defaultView: {
+      IntersectionObserver: class {
+        callback: IntersectionObserverCallback;
+        constructor(callback: IntersectionObserverCallback) {
+          this.callback = callback;
+        }
+        observe(target: Element) {
+          this.callback(
+            [{ isIntersecting: true, target } as IntersectionObserverEntry],
+            this as any,
+          );
+        }
+        disconnect() {}
+      },
     },
     getElementById(id: string) {
       return (
