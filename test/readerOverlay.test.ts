@@ -334,11 +334,10 @@ describe("readerOverlay", function () {
   it("shows a notice instead of opening an empty selectable copy panel", async function () {
     const notices: string[] = [];
     const globals = globalThis as typeof globalThis & {
-      ztoolkit?: unknown;
       addon?: unknown;
     };
-    const originalZtoolkit = globals.ztoolkit;
     const originalAddon = globals.addon;
+    const originalGetMainWindow = Zotero.getMainWindow;
     globals.addon = {
       data: {
         config: { addonName: "MinerU for Zotero" },
@@ -357,16 +356,11 @@ describe("readerOverlay", function () {
         },
       },
     };
-    globals.ztoolkit = {
-      ProgressWindow: class {
-        createLine(input: { text: string }) {
-          notices.push(input.text);
-          return this;
-        }
-
-        show() {}
+    (Zotero as any).getMainWindow = () => ({
+      alert(text: string) {
+        notices.push(text);
       },
-    };
+    });
 
     try {
       const doc = createDocumentStub();
@@ -383,8 +377,8 @@ describe("readerOverlay", function () {
       assert.notInclude(actions.className, "mineru-copy-select-panel-open");
       assert.deepEqual(notices, ["当前 box 没有可选择复制的文本。"]);
     } finally {
-      globals.ztoolkit = originalZtoolkit;
       globals.addon = originalAddon;
+      (Zotero as any).getMainWindow = originalGetMainWindow;
     }
   });
 
@@ -772,11 +766,10 @@ describe("readerOverlay", function () {
   it("shows a notice when a visual box has no copied image", async function () {
     const notices: string[] = [];
     const globals = globalThis as typeof globalThis & {
-      ztoolkit?: unknown;
       addon?: unknown;
     };
-    const originalZtoolkit = globals.ztoolkit;
     const originalAddon = globals.addon;
+    const originalGetMainWindow = Zotero.getMainWindow;
     globals.addon = {
       data: {
         config: { addonName: "MinerU for Zotero" },
@@ -795,16 +788,11 @@ describe("readerOverlay", function () {
         },
       },
     };
-    globals.ztoolkit = {
-      ProgressWindow: class {
-        createLine(input: { text: string }) {
-          notices.push(input.text);
-          return this;
-        }
-
-        show() {}
+    (Zotero as any).getMainWindow = () => ({
+      alert(text: string) {
+        notices.push(text);
       },
-    };
+    });
 
     try {
       const doc = createDocumentStub();
@@ -822,8 +810,8 @@ describe("readerOverlay", function () {
         assert.deepEqual(notices, ["当前 box 没有可复制的图片。"]);
       });
     } finally {
-      globals.ztoolkit = originalZtoolkit;
       globals.addon = originalAddon;
+      (Zotero as any).getMainWindow = originalGetMainWindow;
     }
   });
 
@@ -3463,16 +3451,15 @@ describe("readerOverlay", function () {
       selectedRawIndexes: new Set<number>([1]),
     };
 
-    const root = (
-      buildReaderOverlayRoot as (
-        doc: Document,
-        boxes: typeof normalizedBoxes,
-        mode: "all",
-        options: { selectedRawIndexes: Set<number> },
-      ) => FakeElement
-    )(doc as unknown as Document, normalizedBoxes, "all", state);
+    const { root } = buildReaderOverlayRoot(
+      doc as unknown as Document,
+      normalizedBoxes,
+      "all",
+      state,
+    );
+    const overlayRoot = root as unknown as FakeElement;
 
-    const boxes = findElementsByClass(root, "mineru-copy-box");
+    const boxes = findElementsByClass(overlayRoot, "mineru-copy-box");
     assert.lengthOf(boxes, 3);
     assert.notInclude(boxes[0].className, "mineru-copy-box-selected");
     assert.include(boxes[1].className, "mineru-copy-box-selected");
@@ -3519,22 +3506,15 @@ describe("readerOverlay", function () {
       },
     };
 
-    const root = (
-      buildReaderOverlayRoot as (
-        doc: Document,
-        boxes: typeof normalizedBoxes,
-        mode: "all",
-        options: {
-          selectedRawIndexes: Set<number>;
-          getSelectionAnchorRawIndex: () => number | null;
-          setSelectionAnchorRawIndex: (rawIndex: number | null) => void;
-          onSelectionChange: () => void;
-        },
-      ) => FakeElement
-    )(doc as unknown as Document, normalizedBoxes, "all", state);
-    rootRef.current = root;
+    const { root } = buildReaderOverlayRoot(
+      doc as unknown as Document,
+      normalizedBoxes,
+      "all",
+      state,
+    );
+    rootRef.current = root as unknown as FakeElement;
 
-    const boxes = findElementsByClass(root, "mineru-copy-box");
+    const boxes = findElementsByClass(rootRef.current, "mineru-copy-box");
     boxes[0].dispatch("click", createClickEvent({ ctrlKey: true }));
     boxes[2].dispatch("click", createClickEvent({ shiftKey: true }));
 
@@ -3763,6 +3743,11 @@ function createDocumentStub(): Document & {
           );
         }
         disconnect() {}
+      },
+      getComputedStyle() {
+        return {
+          getPropertyValue: () => "",
+        };
       },
     },
     getElementById(id: string) {

@@ -6,11 +6,11 @@ const rootDir = "TmpD/mineru-copy";
 
 describe("storage", function () {
   it("uses libraryID and attachmentKey as stable directory name", function () {
-    const storage = createStorage(rootDir);
+    const storage = createStorage("custom-root/mineru-copy");
 
     assert.equal(
       storage.getAttachmentDir({ libraryID: 12, key: "ABC123" }),
-      "TmpD/mineru-copy/attachments/12-ABC123",
+      "custom-root/mineru-copy/attachments/12-ABC123",
     );
   });
 

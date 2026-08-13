@@ -143,7 +143,66 @@ describe("markdownApiEndpoint", function () {
     assert.deepEqual(MARKDOWN_ENDPOINT_PATHS, [
       "/mineru-for-zotero/search",
       "/mineru-for-zotero/markdown",
+      "/mineru-for-zotero/parse",
+      "/mineru-for-zotero/tasks",
     ]);
+  });
+
+  it("returns task records through the tasks endpoint", async function () {
+    setMarkdownApiEnabled(true);
+    setMarkdownApiRequireToken(false);
+    const endpoint = createMarkdownQueryEndpoint({
+      ...fakeService(),
+      async getTasks() {
+        return { tasks: [{ id: "1", status: "running" }] };
+      },
+    });
+
+    const response = await endpoint.init(request("/mineru-for-zotero/tasks"));
+
+    assert.equal(response[0], 200);
+    assert.include(String(response[2]), '"tasks":');
+  });
+
+  it("rejects non-POST parse triggers", async function () {
+    setMarkdownApiEnabled(true);
+    setMarkdownApiRequireToken(false);
+    const endpoint = createMarkdownQueryEndpoint(fakeService());
+
+    const response = await endpoint.init(
+      request("/mineru-for-zotero/parse", {
+        query: { libraryID: "1", key: "PDF1" },
+      }),
+    );
+
+    assert.equal(response[0], 405);
+    assert.include(String(response[2]), "invalid-request");
+  });
+
+  it("submits parse tasks through the parse endpoint", async function () {
+    setMarkdownApiEnabled(true);
+    setMarkdownApiRequireToken(false);
+    let submitted: unknown;
+    const endpoint = createMarkdownQueryEndpoint({
+      ...fakeService(),
+      async triggerParse(input) {
+        submitted = input;
+        return { status: "submitted", itemID: 1, key: "PDF1" };
+      },
+    });
+
+    const response = await endpoint.init(
+      request("/mineru-for-zotero/parse", {
+        method: "POST",
+        query: { libraryID: "1", key: "ABC1" },
+      }),
+    );
+
+    assert.equal(response[0], 200);
+    assert.include(String(response[2]), '"submitted"');
+    const trigger = submitted as { libraryID: number; key: string };
+    assert.equal(trigger.libraryID, 1);
+    assert.equal(trigger.key, "ABC1");
   });
 });
 
@@ -154,6 +213,12 @@ function fakeService() {
     },
     async queryMarkdown() {
       return { granularity: "full", content: "# Body" };
+    },
+    async triggerParse() {
+      return { status: "submitted" };
+    },
+    async getTasks() {
+      return { tasks: [] };
     },
   };
 }

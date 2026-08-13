@@ -16,6 +16,7 @@ import {
   MinerURequestError,
 } from "../src/modules/mineruClient";
 import { normalizedBoxes } from "./domainFixtures";
+import { taskStore } from "../src/modules/taskStore";
 
 describe("parseManager", function () {
   it("normalizes multiline progress window text into one visible line", function () {
@@ -446,6 +447,37 @@ describe("parseManager", function () {
     await manager.parseAttachment(pdfAttachment());
 
     assert.deepEqual(events, ["lite:running", "lite:ready"]);
+  });
+
+  it("registers the injected attachment title in the task store", async function () {
+    const manager = createParseManager({
+      ...baseDependencies([]),
+      getAttachmentTitle: async () => "Injected Parent Title",
+      client: successfulPreciseClient(),
+    });
+
+    await manager.parseAttachment(pdfAttachment());
+
+    assert.equal(taskStore.getTask("1")?.title, "Injected Parent Title");
+  });
+
+  it("falls back to a placeholder task title when Zotero item lookups fail", async function () {
+    const originalGetAsync = Zotero.Items.getAsync;
+    (Zotero.Items as any).getAsync = async () => {
+      throw new Error("Item lookup unavailable");
+    };
+    try {
+      const manager = createParseManager({
+        ...baseDependencies([]),
+        client: successfulPreciseClient(),
+      });
+
+      await manager.parseAttachment(pdfAttachment());
+
+      assert.equal(taskStore.getTask("1")?.title, "PDF Document");
+    } finally {
+      (Zotero.Items as any).getAsync = originalGetAsync;
+    }
   });
 
   it("clears running parse column status after parse failure", async function () {
@@ -1775,6 +1807,8 @@ function baseDependencies(messages: string[]): ParseManagerDependencies {
     getParseSource: () => "online",
     getParseMode: () => "precise",
     getLocalApiBaseURL: () => "http://127.0.0.1:8000",
+    getPdfPageCount: async () => 10,
+    openTaskManager: () => {},
     storage: baseStorage(),
     client: {
       submitPdf: async () => ({ taskID: "task-1" }),
