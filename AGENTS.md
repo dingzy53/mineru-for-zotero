@@ -11,7 +11,7 @@ Core feature modules currently include `mineruClient/` for selecting and running
 - Use `npm` for package scripts and dependency operations in this repository. The tracked lockfile is `package-lock.json`.
 - `npm start`: runs `zotero-plugin serve`, builds in development mode, launches Zotero, and watches `src/**` and `addon/**` for hot reload.
 - `npm run build`: creates a production plugin build with `zotero-plugin build`, then runs `tsc --noEmit` for type checking. The `.xpi` output lands at `.scaffold/build/mineru-for-zotero.xpi` (a standard ZIP archive).
-- `npm test`: runs the scaffold test suite.
+- `npm test`: runs the scaffold test suite. On Linux CI the scaffold downloads Zotero automatically; locally, download the Linux tarball (`https://www.zotero.org/download/client/dl?platform=linux-x86_64&channel=beta`), extract it, and run `ZOTERO_PLUGIN_ZOTERO_BIN_PATH=<extracted>/Zotero_linux-x86_64/zotero npm test`. A desktop session with a working X display is enough; Xvfb is only needed headless.
 - `npm run lint:check`: checks Prettier formatting and ESLint rules (`prettier --check . && eslint .`).
 - `npm run lint:fix`: formats files and applies safe ESLint fixes (`prettier --write . && eslint . --fix`).
 - `npm run release`: starts the configured release flow for versioning, packaging, tags, and GitHub release assets. If running manually, you can use `npm version patch -m "chore(release): bump version to %s" && git push --follow-tags` to bump the version and push the tag. The `.github/workflows/release.yml` GitHub Action will automatically compile and publish the `.xpi` when a `v*` tag is pushed.
@@ -27,6 +27,12 @@ Use TypeScript ES modules and follow the existing two-space indentation. Prettie
 Tests use Mocha and Chai through `zotero-plugin test`. Place unit tests in `test/` with names like `featureName.test.ts`, and keep shared fixtures in clearly named helper files such as `domainFixtures.ts`. Add or update tests for parsing, formatting, storage, client boundaries, normalizer coverage, reader toolbar behavior, reader overlay interactions, and lifecycle behavior when those areas change.
 
 When modifying the return signature of a core UI function (e.g., returning an object instead of a DOM element) or introducing asynchronous/lazy DOM APIs like `IntersectionObserver`, you **must** proactively update the corresponding test files (`test/*.test.ts`) that call these functions. Tests often rely on synchronous DOM evaluation; ensure you provide synchronous test mocks (e.g., in `createDocumentStub`) for asynchronous APIs to prevent massive test failures. If you cannot run `npm run test` locally due to environment constraints (like missing Zotero binary), you must at minimum run `npx tsc -p test/tsconfig.json --noEmit` to verify test type correctness before committing.
+
+### Understanding Scaffold Test Failures
+
+The scaffold streams test results out of Zotero as JSON, which drops non-enumerable Error properties. A chai `AssertionError` still shows its message plus `Expected:`/`Received:` diffs, but a thrown `TypeError`/`ReferenceError`/custom `Error` prints as `✖ <name>, undefined / Expected: undefined / Received: undefined`. Treat that shape as "the test threw an error", and get the real message by reproducing the test outside Zotero: bundle it with `npx esbuild test/<file>.test.ts --bundle --format=cjs --platform=node --outfile=/tmp/<file>.cjs`, run it with `node_modules/.bin/mocha --require <stub-file>` using minimal `Zotero`/`ztoolkit`/`addon` global stubs, and read the real stack. Tests driven purely by injected fakes (e.g. `parseManager`, `markdownApiEndpoint`) reproduce well this way; DOM-dependent tests are best debugged through the full suite.
+
+`Error: The operation was canceled.` mid-run means the Zotero-side run aborted and the remaining suites silently never ran, hiding later failures. In this project the observed cause was batch parse tests calling `openTaskManagerWindow()` directly and opening real chrome dialogs inside the test Zotero; routing window opening through injected dependencies fixed the abort. Always re-run the full suite locally to catch failures hidden by an abort.
 
 After code changes, run the full scaffold test suite with `zotero-plugin test --exit-on-finish` so the scaffold test Zotero process exits automatically after the suite completes. On Windows, prefer the local scaffold binary for final verification:
 
@@ -59,6 +65,12 @@ The mitigation is `scripts/fix-test-profile.mjs`, which runs via `preserve`/`pre
 If the connector stops detecting Zotero after development work, first fully exit Zotero, then run `node scripts/fix-zotero-connector-port.mjs`. The script repairs only the leaked test port `23124` in Windows Zotero profiles and restores the Connector default port `23119`. If needed, manually check the real profile's `prefs.js` for the same stray setting.
 
 ## MinerU Parsing Pipeline
+
+### Parse Manager Dependency Injection Contract
+
+`parseAttachmentWithDependencies()` must keep every external boundary behind `ParseManagerDependencies`: item/title lookups (`getAttachmentTitle`), window opening (`openTaskManager`), page counting (`getPdfPageCount`), storage, clients, notices, and parse-column callbacks. Do not call `Zotero.Items.getAsync`, `attachment.getField()`, `attachment.getFilePath()`, `openTaskManagerWindow()`, or `pdfSplitter` helpers directly inside the parse flow — unit tests inject fakes and must never touch the real Zotero database or open real windows.
+
+Parse notices are part of the contract: emit submitted/finished notices through `showParseNotice(dependencies, createParseSubmittedNotice(...))` / `createParseFinishedNotice(...)`; surface empty-boxes and empty-lite results as user messages and mark the taskStore record failed in those paths; report caught failures with `dependencies.showMessage(failure.id, failure.args)`. When a single (non-split) parse completes, pass the original `rawResult` and `images` through to storage instead of wrapping them in a one-element array.
 
 ### Client Selection & API Limits
 
@@ -110,6 +122,8 @@ Precise parsing results are stored under `ProfD/mineru-copy/attachments/<library
 Prefer `storage.readPreferredMarkdown()` when user-facing copy should work with either precise or lite results. It reads ready precise Markdown first and falls back to ready lite Markdown.
 
 Storage writes use temporary and backup directories to keep previous ready results readable when replacement fails. Ignore transient `.tmp-*` and `.bak-*` result directories when counting or diagnosing ready results.
+
+`createStorage()` resolves the first path segment as a Zotero directory-service key (`TmpD`, `ProfD`, `Home`). `Services.dirsvc.get(key)` **throws** `NS_ERROR_FAILURE` for unknown keys instead of returning null, so the lookup must be wrapped in try/catch and treated as a miss. Storage unit tests must use roots whose first segment is not a dirsvc key (or expect the resolved absolute path).
 
 `storage.readBoxes()` may refresh stale `boxes.normalized.json` from `mineru-result.json` when the raw MinerU result contains more detailed supported boxes. Do not assume an unchanged box count means the normalized file is current.
 
@@ -237,6 +251,10 @@ Reader overlay floating menus and panels must keep the owning box in a sustained
 Do not reuse the icon-only toolbar button base class for text menu items. Pseudo-element icons, fixed button dimensions, and icon-button hover boxes will pollute text menu layout.
 
 When adding reader overlay hit-testing helpers across modules, keep helper scope explicit. Do not assume a helper local to `render.ts` is available from `selection.ts`; missing helpers can break hover protection before the visual fix runs.
+
+### Overlay Tests
+
+`buildReaderOverlayRoot()` returns `{ root, cleanup }`; tests must destructure the root instead of passing the result object to DOM helpers. `createDocumentStub()` must provide synchronous mocks for browser APIs the overlay touches (e.g. `IntersectionObserver`, `defaultView.getComputedStyle`); extend the stub there rather than patching per-test. Reader notices are shown through `Zotero.getMainWindow().alert()` (not `ProgressWindow`); notice tests should stub `Zotero.getMainWindow` and restore it in `finally`.
 
 ## CLI Tool
 
