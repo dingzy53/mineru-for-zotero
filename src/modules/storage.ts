@@ -780,7 +780,7 @@ function getDirectoryServicePath(key: string | undefined): string | null {
       }
     ).Components?.interfaces?.nsIFile;
 
-  const dirServicePath = services?.dirsvc?.get?.(key, nsIFile)?.path;
+  const dirServicePath = readDirectoryServicePath(services, key, nsIFile);
   if (dirServicePath) {
     return dirServicePath;
   }
@@ -797,6 +797,28 @@ function getDirectoryServicePath(key: string | undefined): string | null {
   }
 
   return null;
+}
+
+/**
+ * 安全读取目录服务路径。未知 key 会抛 NS_ERROR_FAILURE 而不是返回 null，
+ * 因此需要捕获异常并视为未命中。
+ */
+function readDirectoryServicePath(
+  services:
+    | {
+        dirsvc?: {
+          get?: (key: string, iface: unknown) => { path?: string };
+        };
+      }
+    | undefined,
+  key: string,
+  nsIFile: unknown,
+): string | null {
+  try {
+    return services?.dirsvc?.get?.(key, nsIFile)?.path ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function makeStamp(): string {

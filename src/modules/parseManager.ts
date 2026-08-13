@@ -55,6 +55,7 @@ export interface ParseManagerDependencies {
   getLocalApiBaseURL?: () => string;
   getLocalApiTimeoutMinutes?: () => number;
   getSaveImages?: () => boolean;
+  getPdfPageCount?: (filePath: string) => Promise<number>;
   storage?: StorageAdapter;
   createStorage?: () => StorageAdapter;
   client?: MinerUClient;
@@ -66,6 +67,8 @@ export interface ParseManagerDependencies {
     saveImages: boolean;
   }) => MinerUClient;
   showMessage: (id: FluentMessageId, args?: Record<string, string>) => void;
+  getAttachmentTitle?: (attachment: Zotero.Item) => Promise<string>;
+  openTaskManager?: () => void;
   confirmReparse: () => Promise<ReparseChoice>;
   isFileReadable: (filePath: string) => Promise<boolean>;
   delay: (ms: number) => Promise<void>;
@@ -218,7 +221,7 @@ async function parseAttachmentsWithDependencies(
     const queue = [...attachmentsToParse];
 
     try {
-      openTaskManagerWindow();
+      (dependencies.openTaskManager ?? openTaskManagerWindow)();
     } catch (e) {
       ztoolkit.log("Failed to open Task Manager window", e);
     }
@@ -289,7 +292,7 @@ async function parseAttachmentsWithDependencies(
 
   // Open the global Task Manager UI to view progress
   try {
-    openTaskManagerWindow();
+    (dependencies.openTaskManager ?? openTaskManagerWindow)();
   } catch (e) {
     ztoolkit.log("Failed to open Task Manager window", e);
   }
@@ -459,11 +462,7 @@ async function parseAttachmentWithDependencies(
   let parseColumnRunning = false;
   let phase: ParsePhase = "submit";
   const attachmentTitle =
-    (await Zotero.Items.getAsync(attachment.id))?.parentItem?.getField(
-      "title",
-    ) ||
-    attachment.getField("title") ||
-    "PDF Document";
+    (await resolveAttachmentTitle(attachment, dependencies)) || "PDF Document";
 
   // Register in TaskStore
   taskStore.upsertTask({
@@ -480,10 +479,13 @@ async function parseAttachmentWithDependencies(
     await updateParseColumnStatus(dependencies, "running", attachmentRef, mode);
     parseColumnRunning = true;
     phase = "submit";
+    let submittedNoticeShown = false;
     const filePath =
-      (attachment as any)._mineruSplitPath || attachment.getFilePath()!;
+      (attachment as any)._mineruSplitPath || toNativePath(rawFilePath);
 
-    const pageCount = await getPdfPageCount(filePath);
+    const pageCount = dependencies.getPdfPageCount
+      ? await dependencies.getPdfPageCount(filePath)
+      : await getPdfPageCount(filePath);
     const results: any[] = [];
     const taskIDs: string[] = [];
 
@@ -520,6 +522,13 @@ async function parseAttachmentWithDependencies(
         const submitResult = await client.submitPdf(targetPath);
         const taskID = submitResult.taskID;
         taskIDs.push(taskID);
+        if (!submittedNoticeShown) {
+          showParseNotice(
+            dependencies,
+            createParseSubmittedNotice(currentNoticeContext),
+          );
+          submittedNoticeShown = true;
+        }
 
         await waitForTask(
           client,
@@ -553,6 +562,13 @@ async function parseAttachmentWithDependencies(
       const submitResult = await client.submitPdf(filePath);
       const taskID = submitResult.taskID;
       taskIDs.push(taskID);
+      if (!submittedNoticeShown) {
+        showParseNotice(
+          dependencies,
+          createParseSubmittedNotice(currentNoticeContext),
+        );
+        submittedNoticeShown = true;
+      }
       await waitForTask(
         client,
         taskID,
@@ -577,6 +593,15 @@ async function parseAttachmentWithDependencies(
       mergedResult = {
         kind: "lite",
         markdown: results.map((r) => r.markdown).join("\n\n---\n\n"),
+      };
+    } else if (results.length === 1) {
+      const single = results[0];
+      mergedResult = {
+        kind: "precise",
+        rawResult: single.rawResult,
+        markdown: single.markdown,
+        images: single.images || [],
+        _mergedBoxes: normalizeMinerUBoxes(single.rawResult),
       };
     } else {
       let mergedMarkdown = "";
@@ -634,6 +659,11 @@ async function parseAttachmentWithDependencies(
           parseColumnRunning = false;
         }
         dependencies.showMessage("parse-error-empty-lite-markdown");
+        taskStore.updateTaskStatus(
+          String(attachment.id),
+          "failed",
+          "parse-error-empty-lite-markdown",
+        );
         return;
       }
       await storage.writeLiteResult({
@@ -647,6 +677,11 @@ async function parseAttachmentWithDependencies(
         "ready",
         attachmentRef,
         "lite",
+      );
+      parseColumnRunning = false;
+      showParseNotice(
+        dependencies,
+        createParseFinishedNotice(currentNoticeContext),
       );
 
       // Update Tags
@@ -668,7 +703,6 @@ async function parseAttachmentWithDependencies(
 
       taskStore.updateTaskStatus(String(attachment.id), "succeeded");
 
-      parseColumnRunning = false;
       return;
     }
     const boxes = result._mergedBoxes || normalizeMinerUBoxes(result.rawResult);
@@ -700,6 +734,8 @@ async function parseAttachmentWithDependencies(
       } catch (e) {
         // Ignore tag update errors
       }
+      dependencies.showMessage("parse-error-empty-boxes");
+      taskStore.updateTaskStatus(String(attachment.id), "failed");
       return;
     }
 
@@ -718,6 +754,11 @@ async function parseAttachmentWithDependencies(
       "ready",
       attachmentRef,
       "precise",
+    );
+    parseColumnRunning = false;
+    showParseNotice(
+      dependencies,
+      createParseFinishedNotice(currentNoticeContext),
     );
 
     // Update Tags
@@ -738,8 +779,6 @@ async function parseAttachmentWithDependencies(
     );
 
     taskStore.updateTaskStatus(String(attachment.id), "succeeded");
-
-    parseColumnRunning = false;
   } catch (error) {
     if (parseColumnRunning) {
       await updateParseColumnStatus(
@@ -772,6 +811,7 @@ async function parseAttachmentWithDependencies(
       phase,
       mode === "precise" && hasExistingResult,
     );
+    dependencies.showMessage(failure.id, failure.args);
 
     taskStore.updateTaskStatus(
       String(attachment.id),
@@ -779,6 +819,44 @@ async function parseAttachmentWithDependencies(
       failure.args?.error || String(error),
     );
   }
+}
+
+/**
+ * Best-effort 解析附件的展示标题。
+ *
+ * 优先使用依赖注入的实现（便于单元测试），其次回退到 Zotero 父条目标题，
+ * 最后尝试附件自身的标题字段。任何一步失败都不应中断解析流程。
+ */
+async function resolveAttachmentTitle(
+  attachment: Zotero.Item,
+  dependencies: ParseManagerDependencies,
+): Promise<string> {
+  const injected = await dependencies.getAttachmentTitle?.(attachment);
+  if (injected) {
+    return injected;
+  }
+
+  try {
+    const parentTitle = (
+      await Zotero.Items.getAsync(attachment.id)
+    )?.parentItem?.getField?.("title");
+    if (parentTitle) {
+      return String(parentTitle);
+    }
+  } catch {
+    // Zotero 条目查询失败时回退到附件自身标题。
+  }
+
+  try {
+    const title = attachment.getField?.("title");
+    if (title) {
+      return String(title);
+    }
+  } catch {
+    // 附件缺少标题信息时使用占位标题。
+  }
+
+  return "";
 }
 
 /**
