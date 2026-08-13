@@ -108,7 +108,12 @@ export function createStorage(rootDir: string): StorageAdapter {
           statuses.set(child, status);
         }
       }
-      return statuses;
+      // readdir 顺序随文件系统变化，按目录名排序保证输出稳定。
+      return new Map(
+        [...statuses.entries()].sort(([a], [b]) =>
+          a < b ? -1 : a > b ? 1 : 0,
+        ),
+      );
     },
 
     async readManifest(ref) {
