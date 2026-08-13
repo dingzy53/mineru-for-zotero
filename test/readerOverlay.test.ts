@@ -1518,30 +1518,38 @@ describe("readerOverlay", function () {
   });
 
   it("turns overlay mode off when boxes cannot be read", async function () {
-    await createStorage(getMinerUStorageRoot()).writeFailedResult({
-      attachment: {
-        id: 1,
-        key: "MISSINGBOX",
-        libraryID: 1,
-        fileName: "a.pdf",
-        filePath: "a.pdf",
-        mtime: 1,
-      },
-      mineruTaskID: "task-empty",
-      rawResult: { content_list: [] },
-      markdown: "",
-      error: "empty boxes",
+    const originalGetMainWindow = Zotero.getMainWindow;
+    (Zotero as any).getMainWindow = () => ({
+      alert() {},
     });
-    const reader = createReader({
-      instanceID: "reader-missing-boxes",
-      attachmentKey: "MISSINGBOX",
-      views: [createView("primary")],
-    });
+    try {
+      await createStorage(getMinerUStorageRoot()).writeFailedResult({
+        attachment: {
+          id: 1,
+          key: "MISSINGBOX",
+          libraryID: 1,
+          fileName: "a.pdf",
+          filePath: "a.pdf",
+          mtime: 1,
+        },
+        mineruTaskID: "task-empty",
+        rawResult: { content_list: [] },
+        markdown: "",
+        error: "empty boxes",
+      });
+      const reader = createReader({
+        instanceID: "reader-missing-boxes",
+        attachmentKey: "MISSINGBOX",
+        views: [createView("primary")],
+      });
 
-    const state = await applyReaderOverlayMode(reader, "all");
+      const state = await applyReaderOverlayMode(reader, "all");
 
-    assert.equal(state?.mode, "off");
-    assert.isNull(state?.root);
+      assert.equal(state?.mode, "off");
+      assert.isNull(state?.root);
+    } finally {
+      (Zotero as any).getMainWindow = originalGetMainWindow;
+    }
   });
 
   it("mounts overlay roots on the document body even when a PDF scroll container exists", async function () {
