@@ -18,6 +18,7 @@ declare namespace _ZoteroTypes {
       "saveImages": boolean;
       "syncFolder": string;
       "autoParsePageLimit": number;
+      "parallelSplit": boolean;
     };
   }
 }

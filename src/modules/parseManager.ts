@@ -33,6 +33,7 @@ import {
   getParseMode,
   getParseSource,
   getSaveImages,
+  getParallelSplit,
   type ParseMode,
   type ParseSource,
 } from "../utils/prefs";
@@ -55,6 +56,7 @@ export interface ParseManagerDependencies {
   getLocalApiBaseURL?: () => string;
   getLocalApiTimeoutMinutes?: () => number;
   getSaveImages?: () => boolean;
+  getParallelSplit?: () => boolean;
   getPdfPageCount?: (filePath: string) => Promise<number>;
   storage?: StorageAdapter;
   createStorage?: () => StorageAdapter;
@@ -493,13 +495,31 @@ async function parseAttachmentWithDependencies(
       const CHUNK_SIZE = 200;
       const chunks = Math.ceil(pageCount / CHUNK_SIZE);
       const tmpDir = Zotero.DataDirectory.dir;
+      const isParallel = dependencies.getParallelSplit
+        ? dependencies.getParallelSplit()
+        : getParallelSplit();
 
-      for (let i = 0; i < chunks; i++) {
+      const chunkTasks = Array.from({ length: chunks }, (_, i) => async () => {
         const startPage = i * CHUNK_SIZE + 1;
         const endPage = Math.min((i + 1) * CHUNK_SIZE, pageCount);
         const targetPath = toNativePath(
           `${tmpDir}/mineru-part-${attachment.id}-${i}.pdf`,
         );
+        const cachePath = toNativePath(
+          `${tmpDir}/mineru-part-${attachment.id}-${i}-result.json`,
+        );
+
+        if (await IOUtils.exists(cachePath)) {
+          try {
+            const cached = JSON.parse(await IOUtils.readUTF8(cachePath));
+            if (cached && cached._chunkPageCount) {
+              results[i] = cached;
+              return;
+            }
+          } catch (e) {
+            // Ignore cache error and re-parse
+          }
+        }
 
         const success = await splitPdf(
           filePath,
@@ -513,11 +533,17 @@ async function parseAttachmentWithDependencies(
           );
         }
 
-        taskStore.updateTaskStatus(String(attachment.id), "running", undefined);
-        taskStore.upsertTask({
-          ...taskStore.getTask(String(attachment.id))!,
-          detail: `[Auto-Split] Processing part ${i + 1}/${chunks} (Pages ${startPage}-${endPage})`,
-        });
+        if (!isParallel) {
+          taskStore.updateTaskStatus(
+            String(attachment.id),
+            "running",
+            undefined,
+          );
+          taskStore.upsertTask({
+            ...taskStore.getTask(String(attachment.id))!,
+            detail: `[Auto-Split] Processing part ${i + 1}/${chunks} (Pages ${startPage}-${endPage})`,
+          });
+        }
 
         const submitResult = await client.submitPdf(targetPath);
         const taskID = submitResult.taskID;
@@ -540,10 +566,66 @@ async function parseAttachmentWithDependencies(
 
         const res = await client.downloadResult(taskID);
         (res as any)._chunkPageCount = endPage - startPage + 1;
-        results.push(res);
+        results[i] = res;
 
         try {
+          await IOUtils.writeUTF8(cachePath, JSON.stringify(res));
           await IOUtils.remove(targetPath);
+        } catch (e) {
+          // ignore
+        }
+      });
+
+      if (isParallel) {
+        taskStore.updateTaskStatus(String(attachment.id), "running", undefined);
+        taskStore.upsertTask({
+          ...taskStore.getTask(String(attachment.id))!,
+          detail: `[Auto-Split] Processing ${chunks} parts in parallel...`,
+        });
+        const queue = [...chunkTasks];
+        let active = 0;
+        await new Promise<void>((resolve, reject) => {
+          let hasError = false;
+          const next = () => {
+            if (hasError) return;
+            if (taskStore.getTask(String(attachment.id))?.status === "failed") {
+              hasError = true;
+              reject(new Error("The operation was canceled."));
+              return;
+            }
+            if (queue.length === 0 && active === 0) {
+              resolve();
+              return;
+            }
+            while (active < 3 && queue.length > 0) {
+              const task = queue.shift()!;
+              active++;
+              task()
+                .then(() => {
+                  active--;
+                  next();
+                })
+                .catch((err) => {
+                  hasError = true;
+                  reject(err);
+                });
+            }
+          };
+          next();
+        });
+      } else {
+        for (const task of chunkTasks) {
+          await task();
+        }
+      }
+
+      for (let i = 0; i < chunks; i++) {
+        try {
+          await IOUtils.remove(
+            toNativePath(
+              `${tmpDir}/mineru-part-${attachment.id}-${i}-result.json`,
+            ),
+          );
         } catch (e) {
           // ignore
         }

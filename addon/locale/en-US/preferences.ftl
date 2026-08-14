@@ -34,6 +34,9 @@ pref-data-storage-title = Data Storage
 pref-sync-folder = Agent-friendly Sync Folder
 pref-sync-all-button = Sync All Results Now
 pref-auto-parse-page-limit = Auto-parse if pages <= (0 = disable)
+pref-parallel-split =
+    .label = Process split chunks in parallel
+pref-parallel-split-help = When splitting large PDFs, parse chunks concurrently. Also enables resuming from breakpoints in the task manager.
 pref-data-folder-title = Data Folder
 pref-open-task-manager = Open Task Manager
 pref-open-data-folder = Open Data Folder

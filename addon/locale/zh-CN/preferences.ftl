@@ -31,6 +31,12 @@ pref-save-images =
     .label = 保存解析结果图片
 pref-save-images-help = 开启后会把 MinerU 结果包中 images 目录下的图片保存到本地解析结果目录。
 pref-data-storage-title = 数据存储
+pref-sync-folder = 面向 Agent 的同步目录
+pref-sync-all-button = 立即同步所有结果
+pref-auto-parse-page-limit = 自动解析如果页数 <= (0 = 禁用)
+pref-parallel-split =
+    .label = 拆分PDF后并发解析
+pref-parallel-split-help = 拆分大型PDF时，并行而不是顺序解析各个部分，同时支持从任务管理器恢复失败的进度。
 pref-data-folder-title = 数据目录
 pref-open-data-folder = 打开数据文件夹
 pref-parsed-count = 已解析 PDF：{ $count }

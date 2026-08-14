@@ -203,6 +203,15 @@ export function setAutoParsePageLimit(value: number) {
   return setPref("autoParsePageLimit" as keyof PluginPrefsMap, value);
 }
 
+export function getParallelSplit(): boolean {
+  const value = getPref("parallelSplit" as keyof PluginPrefsMap);
+  return value !== false;
+}
+
+export function setParallelSplit(value: boolean) {
+  return setPref("parallelSplit" as keyof PluginPrefsMap, value);
+}
+
 export function getPdftkPath(): string {
   const value = getPref("pdftkPath" as keyof PluginPrefsMap);
   return typeof value === "string" ? value : DEFAULT_PDFTK_PATH;
