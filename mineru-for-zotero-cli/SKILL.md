@@ -1,6 +1,6 @@
 ---
 name: mineru-for-zotero-cli
-description: Query MinerU for Zotero Markdown parse results through a bundled CLI. Use this skill when the task requires searching Zotero items by title, selecting parsed PDF attachments, inspecting Markdown headings, reading specific sections, searching parsed Markdown content, or fetching full Markdown. Produces agent-readable text output or structured JSON for pipeline usage.
+description: Query MinerU for Zotero Markdown parse results through a bundled CLI. Use this skill when the task requires searching Zotero items by title or author (author-year citations), selecting parsed PDF attachments, inspecting Markdown headings, reading specific sections, searching parsed Markdown content, locating physical page numbers, or fetching full Markdown. Produces agent-readable text output or structured JSON for pipeline usage.
 ---
 
 # MinerU for Zotero CLI
@@ -29,10 +29,10 @@ node scripts/query-markdown.mjs <command> [options]
 
 ### Commands
 
-| Command    | Description                                                               | Example                                                                                                       |
-| ---------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `search`   | Search Zotero items by title and return matching candidates.              | `node scripts/query-markdown.mjs search --library-id 1 --title "keyword" --format json`                       |
-| `markdown` | Query saved MinerU Markdown for an item key, with selectable granularity. | `node scripts/query-markdown.mjs markdown --library-id 1 --key ABCD1234 --granularity headings --format text` |
+| Command    | Description                                                                 | Example                                                                                                       |
+| ---------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `search`   | Search Zotero items by title and/or creator and return matching candidates. | `node scripts/query-markdown.mjs search --library-id 1 --title "keyword" --format json`                       |
+| `markdown` | Query saved MinerU Markdown for an item key, with selectable granularity.   | `node scripts/query-markdown.mjs markdown --library-id 1 --key ABCD1234 --granularity headings --format text` |
 
 ### Common Options
 
@@ -44,13 +44,18 @@ node scripts/query-markdown.mjs <command> [options]
 
 ### Search options
 
-- `--title <text>` — Required search text for title matching
+- `--title <text>` — Title substring to match. Optional when `--creator` is provided; at least one of `--title`/`--creator` is required.
+- `--creator <text>` — Creator substring to match. Use this for author-year citations such as “Chen et al. 2022” where the author name does not appear in the title.
+- `--year <YYYY>` — Four-digit year filter applied after the search. Candidate summaries include a `year:` line when available.
+- `--tag <tag>` — Exact tag filter.
+- `--limit <n>` — Maximum number of candidates to return.
 
 ### Markdown options
 
 - `--attachment-key <key>` — Select a specific PDF attachment after ambiguous-attachment or explicit user choice
 - `--granularity <kind>` — full, headings, section, search, or locate
 - `--section-path <path>` — Exact full heading path from headings output, including root title
+- `--include-subsections` — With `granularity=section`, extend the range past same-level numbered subsections (e.g. include `3.1`–`3.4` inside `3.`) until the next chapter or unnumbered heading
 - `--query <text>` — Search query for search queries
 - `--context-paragraphs <n>` — Context paragraphs for search queries
 
@@ -63,6 +68,16 @@ Use this when you do not yet know the Zotero item key.
 ```powershell
 node scripts/query-markdown.mjs search --library-id 1 --title "paper title"
 ```
+
+### Search a paper by author-year citation
+
+Citations like “Chen et al. 2022” reference authors, not titles. Search by creator instead of guessing title keywords:
+
+```powershell
+node scripts/query-markdown.mjs search --library-id 1 --creator "Chen" --year 2022
+```
+
+Candidate summaries include `year:` and `creators:` lines so you can confirm the match before querying Markdown. Add `--limit` to cap the candidate list for broad creator names.
 
 ### Read headings first
 
@@ -92,6 +107,12 @@ node scripts/query-markdown.mjs markdown --library-id 1 --key ABCD1234 --granula
 
 `--section-path` must be the exact full path shown by `headings`, including the root title. A leaf heading such as `"Background"` is not enough when the headings output shows `"Paper Title/Introduction/Background"`.
 
+By default a section ends at the next same-level or higher heading. MinerU often renders numbered subsections (`3.1`, `3.2`, …) at the same level as their parent (`3.`), so reading `"3. System Model"` alone returns only the section intro. Pass `--include-subsections` to pull in the whole numbered group until the next chapter:
+
+```powershell
+node scripts/query-markdown.mjs markdown --library-id 1 --key ABCD1234 --granularity section --section-path "Paper Title/3. System Model" --include-subsections
+```
+
 ### Search parsed Markdown
 
 Use this for local context inside a saved parse result.
@@ -116,8 +137,16 @@ node scripts/query-markdown.mjs markdown --library-id 1 --key ABCD1234 --granula
 
 Use full Markdown only when section or search output is insufficient.
 
+## Response Format Notes
+
+- Prefer `--format text` (the default) when you are reading results directly; it already prints keys, page numbers, and context lines. Use `--format json` only when another script needs structured output.
+- Search responses nest fields under each candidate: read `candidates[i].item.key`, `candidates[i].item.title`, and `candidates[i].attachments[j].key`. There is no top-level `title` on candidates.
+- Markdown query responses put `matches` at the top level of `data` (next to `item` and `attachment`); it is not under `data.result`.
+- `locate` matches carry `page`, `boxIndex`, and `bbox`; use them to cite physical pages. Matching is literal substring matching, so quote surrounding prose rather than LaTeX with spacing artifacts.
+
 ## Error Handling
 
+- `network-error`: Zotero may not be running, or nothing listens on the detected port. Ask whether Zotero is running, start it, or retry with an explicit `--port`. The CLI prints this hint automatically.
 - `api-disabled`: Ask the user to enable the Markdown query API in Zotero preferences.
 - `invalid-token`: Ask the user for the current API token from Zotero preferences.
 - `ambiguous-attachment`: This is the signal to re-run with `--attachment-key` using one of the candidate keys. It is not a failure to prevent in advance.

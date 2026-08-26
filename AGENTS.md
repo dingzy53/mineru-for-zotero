@@ -264,10 +264,13 @@ Granularity modes:
 
 - `full`: returns the entire Markdown document.
 - `headings`: returns the heading tree (document outline/index).
-- `section`: returns a specific section identified by `--section-path "Introduction/Background"` (hierarchy separator is `/`).
+- `section`: returns a specific section identified by `--section-path "Introduction/Background"` (hierarchy separator is `/`). Pass `--include-subsections` to extend the range past same-level numbered subsections (`3.1`, `3.2`, … inside `3.`) until the next chapter or unnumbered heading.
 - `search`: returns matching paragraphs with configurable `--context-paragraphs`.
+- `locate`: searches precise layout boxes and returns physical page numbers with bbox for a text snippet (precise results only).
 
-The CLI auto-detects the local HTTP server port from the Zotero profile, falling back to `23119`. Override with `--port <number>`. Output format defaults to `text` (agent-readable); use `--format json` for script consumption. If the plugin's "Require token" setting is enabled, pass `--token "<token>"` to all commands.
+Search supports title, creator, or both: at least one of `--title`/`--creator` is required, and `--year <YYYY>`, `--tag`, and `--limit` refine the result. Candidate summaries include `year` and `creators` fields so author-year citations such as "Chen et al. 2022" can be resolved without asking the user for the full title.
+
+The CLI auto-detects the local HTTP server port from the Zotero profile, falling back to `23119`. Override with `--port <number>`, or set `ZOTERO_CONFIG_DIR` in tests to point profile discovery at a fixture directory. Output format defaults to `text` (agent-readable); use `--format json` for script consumption. If the plugin's "Require token" setting is enabled, pass `--token "<token>"` to all commands. Unreachable endpoints exit with a `network-error` hint that suggests starting Zotero or passing `--port`.
 
 ## Commit & Pull Request Guidelines
 
