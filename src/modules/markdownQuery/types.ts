@@ -77,6 +77,29 @@ export interface MarkdownLocateMatch {
 }
 
 /**
+ * 表示搜索条目时允许的组合条件。
+ * title 与 creator 至少提供一个，其余条件可选。
+ */
+export interface ItemSearchInput {
+  libraryID: number;
+  title?: string;
+  creator?: string;
+  /** 四位年份，按条目 date 字段前缀过滤。 */
+  year?: string;
+  tag?: string;
+  limit?: number;
+}
+
+/**
+ * 表示 Zotero 创作者的最小视图，兼容单名字段。
+ */
+export interface CreatorLike {
+  firstName?: string;
+  lastName?: string;
+  name?: string;
+}
+
+/**
  * 表示 Markdown Query API 解析附件时依赖的最小 Zotero item 视图。
  */
 export interface ZoteroItemLike {
@@ -92,6 +115,7 @@ export interface ZoteroItemLike {
   getField(field: string): string;
   getAttachments(includeTrashed?: boolean): number[];
   getBestAttachments(): Promise<ZoteroItemLike[]>;
+  getCreators?(): CreatorLike[];
 }
 
 /**
@@ -157,6 +181,10 @@ export interface ItemSummary {
   key: string;
   type: "regular" | "attachment";
   title: string;
+  /** 条目 date 字段中的四位年份，缺失时不输出。 */
+  year?: string;
+  /** 格式化后的创作者列表，缺失或为空时不输出。 */
+  creators?: string[];
 }
 
 /**

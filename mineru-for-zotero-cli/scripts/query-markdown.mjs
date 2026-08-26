@@ -18,6 +18,12 @@ const VALID_GRANULARITIES = new Set([
   "search",
   "locate",
 ]);
+const YEAR_PATTERN = /^\d{4}$/;
+
+/**
+ * Flags that act as switches and do not consume a value.
+ */
+const BOOLEAN_FLAGS = new Set(["--include-subsections"]);
 
 /**
  * Runs the CLI entry point and maps failures to stable process output.
@@ -85,7 +91,6 @@ function parseCommand(argv) {
   parseInteger(libraryID, "--library-id");
 
   if (command === "search") {
-    const title = getRequiredFlag(flags, "--title");
     return {
       command,
       endpoint: SEARCH_ENDPOINT,
@@ -94,10 +99,7 @@ function parseCommand(argv) {
       format,
       timeoutMs,
       token,
-      params: {
-        libraryID,
-        title,
-      },
+      params: parseSearchParams(flags, libraryID),
     };
   }
 
@@ -117,6 +119,9 @@ function parseCommand(argv) {
   addOptionalParam(params, "attachmentKey", getFlag(flags, "--attachment-key"));
   addOptionalParam(params, "sectionPath", getFlag(flags, "--section-path"));
   addOptionalParam(params, "q", getFlag(flags, "--query"));
+  if (flags.has("--include-subsections")) {
+    params.includeSubsections = "true";
+  }
 
   const contextParagraphs = getFlag(flags, "--context-paragraphs");
   if (contextParagraphs !== undefined) {
@@ -137,7 +142,8 @@ function parseCommand(argv) {
 }
 
 /**
- * Parses command-line flags that use the `--flag value` shape.
+ * Parses flags that use the `--flag value` shape.
+ * Boolean switch flags are accepted with or without a following value.
  */
 function parseFlags(args) {
   const flags = new Map();
@@ -150,6 +156,10 @@ function parseFlags(args) {
       flags.set(name, "true");
       continue;
     }
+    if (BOOLEAN_FLAGS.has(name)) {
+      flags.set(name, "true");
+      continue;
+    }
 
     const value = args[index + 1];
     if (value === undefined || value.startsWith("--")) {
@@ -159,6 +169,52 @@ function parseFlags(args) {
     index += 1;
   }
   return flags;
+}
+
+/**
+ * Builds the search request parameters, requiring a title or creator.
+ */
+function parseSearchParams(flags, libraryID) {
+  const title = getFlag(flags, "--title");
+  const creator = getFlag(flags, "--creator");
+  if (!hasValue(title) && !hasValue(creator)) {
+    throw new CliArgumentError("Missing required option: --title or --creator");
+  }
+
+  const params = { libraryID };
+  if (hasValue(title)) {
+    params.title = title.trim();
+  }
+  if (hasValue(creator)) {
+    params.creator = creator.trim();
+  }
+  addOptionalParam(params, "tag", getFlag(flags, "--tag"));
+
+  const year = getFlag(flags, "--year");
+  if (year !== undefined) {
+    const normalizedYear = year.trim();
+    if (!YEAR_PATTERN.test(normalizedYear)) {
+      throw new CliArgumentError(
+        "Invalid --year. Expected a four-digit year such as 2022.",
+      );
+    }
+    params.year = normalizedYear;
+  }
+
+  const limit = getFlag(flags, "--limit");
+  if (limit !== undefined) {
+    parsePositiveInteger(limit, "--limit");
+    params.limit = limit;
+  }
+
+  return params;
+}
+
+/**
+ * Returns true when a flag value is present and non-blank.
+ */
+function hasValue(value) {
+  return typeof value === "string" && value.trim() !== "";
 }
 
 /**
@@ -299,8 +355,15 @@ function formatSearchText(options, data) {
       `   itemID: ${valueOrUnknown(item.itemID)}`,
       `   key: ${valueOrUnknown(item.key)}`,
       `   type: ${valueOrUnknown(item.type)}`,
-      "   attachments:",
     );
+    if (item.year !== undefined && item.year !== null && item.year !== "") {
+      lines.push(`   year: ${item.year}`);
+    }
+    const creators = Array.isArray(item.creators) ? item.creators : [];
+    if (creators.length > 0) {
+      lines.push(`   creators: ${creators.join("; ")}`);
+    }
+    lines.push("   attachments:");
 
     if (attachments.length === 0) {
       lines.push("   - none");
@@ -480,6 +543,8 @@ function hintForError(code) {
     "section-not-found":
       "Run with --granularity headings first and use an exact heading path.",
     "missing-query": "Pass a non-empty --query value.",
+    "network-error":
+      "Zotero may not be running, or the API is unreachable. Start Zotero and retry, or pass --port if it listens on a non-default port.",
   };
   return hints[code];
 }
@@ -499,7 +564,7 @@ function writeArgumentError(error) {
 function helpText() {
   return [
     "Usage:",
-    "  node skill/scripts/query-markdown.mjs search --library-id <id> --title <text> [--format text|json]",
+    "  node skill/scripts/query-markdown.mjs search --library-id <id> [--title <text> | --creator <text>] [--year YYYY] [--tag <tag>] [--limit <n>] [--format text|json]",
     "  node skill/scripts/query-markdown.mjs markdown --library-id <id> --key <key> [--granularity full|headings|section|search|locate] [--format text|json]",
     "",
     "Common options:",
@@ -508,9 +573,17 @@ function helpText() {
     "  --format <text|json>         Output format. Default: text",
     "  --timeout-ms <number>        Request timeout. Default: 30000",
     "",
+    "Search options:",
+    "  --title <text>               Title substring to match (at least one of --title/--creator is required)",
+    "  --creator <text>             Creator substring to match, for author-year citations such as Chen et al. 2022",
+    "  --year <YYYY>                Four-digit year filter applied after search",
+    "  --tag <tag>                  Exact tag filter",
+    "  --limit <n>                  Maximum number of candidates to return",
+    "",
     "Markdown options:",
     "  --attachment-key <key>       Select a specific PDF attachment under a regular item.",
     "  --section-path <path>        Section path for granularity=section.",
+    "  --include-subsections        Include same-level subsections in section output.",
     "  --query <text>               Search query for granularity=search or locate.",
     "  --context-paragraphs <n>     Context paragraphs for granularity=search or locate.",
   ].join("\n");
@@ -654,8 +727,13 @@ function findDefaultZoteroProfileDir() {
 
 /**
  * Returns the platform-specific Zotero configuration directory.
+ * ZOTERO_CONFIG_DIR overrides discovery for tests and portable setups.
  */
 function getZoteroConfigDir() {
+  if (process.env.ZOTERO_CONFIG_DIR) {
+    return process.env.ZOTERO_CONFIG_DIR;
+  }
+
   if (process.platform === "win32") {
     return process.env.APPDATA
       ? join(process.env.APPDATA, "Zotero", "Zotero")

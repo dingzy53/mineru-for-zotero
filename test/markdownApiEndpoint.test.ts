@@ -4,6 +4,7 @@ import {
   createMarkdownQueryEndpointClass,
   MARKDOWN_ENDPOINT_PATHS,
 } from "../src/modules/markdownQuery/apiEndpoint";
+import { MarkdownQueryError } from "../src/modules/markdownQuery/types";
 import {
   setMarkdownApiEnabled,
   setMarkdownApiRequireToken,
@@ -78,6 +79,132 @@ describe("markdownApiEndpoint", function () {
 
     assert.equal(response[0], 200);
     assert.include(String(response[2]), '"candidates":[]');
+  });
+
+  it("forwards creator, year, tag, and limit search parameters", async function () {
+    setMarkdownApiEnabled(true);
+    setMarkdownApiRequireToken(false);
+    const searches: unknown[] = [];
+    const endpoint = createMarkdownQueryEndpoint({
+      ...fakeService(),
+      async searchByTitle(input) {
+        searches.push(input);
+        return { candidates: [] };
+      },
+    });
+
+    const response = await endpoint.init(
+      request("/mineru-for-zotero/search", {
+        query: {
+          libraryID: "1",
+          creator: "Chen",
+          year: "2022",
+          tag: "scheduling",
+          limit: "5",
+        },
+      }),
+    );
+
+    assert.equal(response[0], 200);
+    assert.deepEqual(searches[0], {
+      libraryID: 1,
+      creator: "Chen",
+      year: "2022",
+      tag: "scheduling",
+      limit: 5,
+    });
+  });
+
+  it("rejects malformed year parameters", async function () {
+    setMarkdownApiEnabled(true);
+    setMarkdownApiRequireToken(false);
+    const endpoint = createMarkdownQueryEndpoint(fakeService());
+
+    const response = await endpoint.init(
+      request("/mineru-for-zotero/search", {
+        query: { libraryID: "1", title: "Doc", year: "22" },
+      }),
+    );
+
+    assert.equal(response[0], 400);
+    assert.include(String(response[2]), "invalid-request");
+    assert.include(String(response[2]), "Invalid year parameter");
+  });
+
+  it("rejects non-positive limit parameters", async function () {
+    setMarkdownApiEnabled(true);
+    setMarkdownApiRequireToken(false);
+    const endpoint = createMarkdownQueryEndpoint(fakeService());
+
+    const response = await endpoint.init(
+      request("/mineru-for-zotero/search", {
+        query: { libraryID: "1", title: "Doc", limit: "0" },
+      }),
+    );
+
+    assert.equal(response[0], 400);
+    assert.include(String(response[2]), "invalid-request");
+  });
+
+  it("surfaces the title-or-creator requirement from the service", async function () {
+    setMarkdownApiEnabled(true);
+    setMarkdownApiRequireToken(false);
+    const endpoint = createMarkdownQueryEndpoint({
+      async searchByTitle() {
+        throw new MarkdownQueryError(
+          "invalid-request",
+          400,
+          "Missing title or creator",
+        );
+      },
+      async queryMarkdown() {
+        return { granularity: "full", content: "# Body" };
+      },
+      async triggerParse() {
+        return { status: "submitted" };
+      },
+      async getTasks() {
+        return { tasks: [] };
+      },
+    });
+
+    const response = await endpoint.init(
+      request("/mineru-for-zotero/search", {
+        query: { libraryID: "1" },
+      }),
+    );
+
+    assert.equal(response[0], 400);
+    assert.include(String(response[2]), "Missing title or creator");
+  });
+
+  it("forwards includeSubsections to markdown queries", async function () {
+    setMarkdownApiEnabled(true);
+    setMarkdownApiRequireToken(false);
+    const queries: unknown[] = [];
+    const endpoint = createMarkdownQueryEndpoint({
+      ...fakeService(),
+      async queryMarkdown(input) {
+        queries.push(input);
+        return { granularity: "section", content: "# Body" };
+      },
+    });
+
+    const response = await endpoint.init(
+      request("/mineru-for-zotero/markdown", {
+        query: {
+          libraryID: "1",
+          key: "PDF1",
+          granularity: "section",
+          sectionPath: "Doc/A",
+          includeSubsections: "true",
+        },
+      }),
+    );
+
+    assert.equal(response[0], 200);
+    const query = queries[0] as { includeSubsections?: boolean };
+    assert.equal(query.includeSubsections, true);
   });
 
   it("creates a constructible Zotero endpoint class", async function () {

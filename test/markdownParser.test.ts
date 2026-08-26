@@ -24,6 +24,27 @@ const markdown = [
   "Method body mentions retrieval again.",
 ].join("\n");
 
+// MinerU 常把编号子节渲染成与父节同级，例如 3 与 3.1 都是二级标题。
+const sameLevelMarkdown = [
+  "# Doc",
+  "",
+  "## 3. System Model",
+  "",
+  "System intro.",
+  "",
+  "## 3.1. Task Model",
+  "",
+  "Task body.",
+  "",
+  "## 3.2. Power Model",
+  "",
+  "Power body.",
+  "",
+  "## 4. Algorithm",
+  "",
+  "Algorithm body.",
+].join("\n");
+
 describe("markdownParser", function () {
   it("extracts ATX headings with paths", function () {
     assert.deepEqual(parseHeadings(markdown), [
@@ -56,6 +77,69 @@ describe("markdownParser", function () {
     assert.equal(
       section.content,
       "## Introduction\n\nIntro body.\n\n### Background\n\nBackground body mentions Retrieval.",
+    );
+  });
+
+  it("stops at same-level headings by default", function () {
+    const section = readSection(sameLevelMarkdown, ["Doc", "3. System Model"]);
+
+    assert.equal(section.content, "## 3. System Model\n\nSystem intro.");
+  });
+
+  it("includes same-level subsections when requested", function () {
+    const section = readSection(sameLevelMarkdown, ["Doc", "3. System Model"], {
+      includeSubsections: true,
+    });
+
+    assert.equal(
+      section.content,
+      [
+        "## 3. System Model",
+        "",
+        "System intro.",
+        "",
+        "## 3.1. Task Model",
+        "",
+        "Task body.",
+        "",
+        "## 3.2. Power Model",
+        "",
+        "Power body.",
+      ].join("\n"),
+    );
+  });
+
+  it("includes everything below a level-one heading when requested", function () {
+    const section = readSection(sameLevelMarkdown, ["Doc"], {
+      includeSubsections: true,
+    });
+
+    assert.include(section.content, "Algorithm body.");
+  });
+
+  it("stops the subtree at unnumbered same-level headings", function () {
+    const markdown = [
+      "# Doc",
+      "",
+      "## 3. System Model",
+      "",
+      "System intro.",
+      "",
+      "## 3.1. Task Model",
+      "",
+      "Task body.",
+      "",
+      "## Notes",
+      "",
+      "Notes body.",
+    ].join("\n");
+    const section = readSection(markdown, ["Doc", "3. System Model"], {
+      includeSubsections: true,
+    });
+
+    assert.equal(
+      section.content,
+      "## 3. System Model\n\nSystem intro.\n\n## 3.1. Task Model\n\nTask body.",
     );
   });
 

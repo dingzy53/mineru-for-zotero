@@ -7,6 +7,7 @@ import {
 } from "./markdownParser";
 import {
   AttachmentSummary,
+  ItemSearchInput,
   ItemSummary,
   MarkdownGranularity,
   MarkdownQueryError,
@@ -34,17 +35,14 @@ export interface PreferredMarkdownReader extends ParseStatusReader {
  * 表示 Markdown Query API 对外提供的服务接口。
  */
 export interface MarkdownQueryService {
-  searchByTitle(input: {
-    libraryID: number;
-    title: string;
-    tag?: string;
-  }): Promise<unknown>;
+  searchByTitle(input: ItemSearchInput): Promise<unknown>;
   queryMarkdown(input: {
     libraryID: number;
     key: string;
     attachmentKey?: string;
     granularity?: MarkdownGranularity;
     sectionPath?: string[] | string;
+    includeSubsections?: boolean;
     q?: string;
     contextParagraphs?: number;
   }): Promise<unknown>;
@@ -62,11 +60,7 @@ export interface MarkdownQueryService {
 export function createMarkdownQueryService(deps: {
   items: ZoteroItemsGateway;
   storage: PreferredMarkdownReader;
-  searchItemsByTitle(input: {
-    libraryID: number;
-    title: string;
-    tag?: string;
-  }): Promise<ZoteroItemLike[]>;
+  searchItems(input: ItemSearchInput): Promise<ZoteroItemLike[]>;
 }): MarkdownQueryService {
   return {
     async getTasks() {
@@ -98,11 +92,15 @@ export function createMarkdownQueryService(deps: {
       };
     },
     async searchByTitle(input) {
-      if (!input.title.trim()) {
-        throw new MarkdownQueryError("invalid-request", 400, "Missing title");
+      if (!input.title?.trim() && !input.creator?.trim()) {
+        throw new MarkdownQueryError(
+          "invalid-request",
+          400,
+          "Missing title or creator",
+        );
       }
 
-      const items = await deps.searchItemsByTitle(input);
+      const items = await deps.searchItems(input);
       return {
         candidates: await Promise.all(
           items.map(async (item) => ({
@@ -191,7 +189,9 @@ export function createMarkdownQueryService(deps: {
         return { ...base, granularity, headings: parseHeadings(markdown) };
       }
       if (granularity === "section") {
-        const section = readSection(markdown, input.sectionPath ?? []);
+        const section = readSection(markdown, input.sectionPath ?? [], {
+          includeSubsections: input.includeSubsections,
+        });
         return { ...base, granularity, ...section };
       }
       if (granularity === "search") {
@@ -236,16 +236,54 @@ export function createMarkdownQueryService(deps: {
 }
 
 /**
- * 为返回结果提取稳定的条目摘要。
+ * 为返回结果提取稳定的条目摘要，附带年份与创作者信息。
  */
 function summarizeItem(item: ZoteroItemLike): ItemSummary {
-  return {
+  const summary: ItemSummary = {
     itemID: item.id,
     libraryID: item.libraryID,
     key: item.key,
     type: item.isPDFAttachment() ? "attachment" : "regular",
     title: item.getDisplayTitle() || item.getField("title"),
   };
+
+  const year = extractYear(item);
+  if (year) {
+    summary.year = year;
+  }
+  const creators = extractCreators(item);
+  if (creators.length > 0) {
+    summary.creators = creators;
+  }
+  return summary;
+}
+
+/**
+ * 从条目 date 字段提取四位年份。
+ */
+function extractYear(item: ZoteroItemLike): string | undefined {
+  const match = /^\s*(\d{4})/.exec(item.getField("date") ?? "");
+  return match?.[1];
+}
+
+/**
+ * 将 Zotero 创作者格式化为 "Last, First" 或单名形式。
+ */
+function extractCreators(item: ZoteroItemLike): string[] {
+  if (typeof item.getCreators !== "function") {
+    return [];
+  }
+  return item
+    .getCreators()
+    .map((creator) =>
+      creator.name
+        ? creator.name
+        : [creator.lastName, creator.firstName]
+            .filter((part): part is string => Boolean(part && part.trim()))
+            .map((part) => part.trim())
+            .join(", "),
+    )
+    .filter(Boolean);
 }
 
 /**

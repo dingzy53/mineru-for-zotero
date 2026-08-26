@@ -1,6 +1,8 @@
 import { assert } from "chai";
 import { createMarkdownQueryService } from "../src/modules/markdownQuery/queryService";
 import {
+  CreatorLike,
+  ItemSearchInput,
   MarkdownQueryError,
   ZoteroItemLike,
   ZoteroItemsGateway,
@@ -96,6 +98,29 @@ describe("markdownQueryService", function () {
     assert.propertyVal(response, "content", "## Methods\n\nAlpha");
   });
 
+  it("passes includeSubsections through to the section reader", async function () {
+    const service = createMarkdownQueryService(
+      fakeDeps({
+        markdown:
+          "# Doc\n\n## 3. Section\n\nAlpha\n\n## 3.1. Sub\n\nSub body\n\n## 4. Next\n\nBeta",
+      }),
+    );
+
+    const response = await service.queryMarkdown({
+      libraryID: 1,
+      key: "PDF1",
+      granularity: "section",
+      sectionPath: ["Doc", "3. Section"],
+      includeSubsections: true,
+    });
+
+    assert.propertyVal(
+      response,
+      "content",
+      "## 3. Section\n\nAlpha\n\n## 3.1. Sub\n\nSub body",
+    );
+  });
+
   it("returns search granularity", async function () {
     const service = createMarkdownQueryService(
       fakeDeps({
@@ -180,7 +205,7 @@ describe("markdownQueryService", function () {
       fakeDeps({
         markdown: "# Hidden",
         items: [parent, pdf],
-        searchItemsByTitle: async () => [parent],
+        searchItems: async () => [parent],
       }),
     );
 
@@ -215,6 +240,104 @@ describe("markdownQueryService", function () {
     assert.notInclude(JSON.stringify(response), "Hidden");
     assert.notProperty(response as Record<string, unknown>, "content");
   });
+
+  it("searchByTitle supports creator-only search without a title", async function () {
+    let received;
+    const deps = createMarkdownQueryService({
+      items: fakeItems([]),
+      storage: {
+        async readPreferredMarkdown() {
+          return "# X";
+        },
+        async readParseStatus() {
+          return { preciseReady: true, liteReady: true };
+        },
+      },
+      searchItems: async (input) => {
+        received = input;
+        return [];
+      },
+    });
+
+    const response = await deps.searchByTitle({
+      libraryID: 3,
+      creator: "Chen",
+      year: "2022",
+      limit: 5,
+    });
+
+    assert.deepEqual(response, { candidates: [] });
+    assert.deepEqual(received, {
+      libraryID: 3,
+      creator: "Chen",
+      year: "2022",
+      limit: 5,
+    });
+  });
+
+  it("searchByTitle rejects requests without title or creator", async function () {
+    const deps = createMarkdownQueryService({
+      items: fakeItems([]),
+      storage: {
+        async readPreferredMarkdown() {
+          return "# X";
+        },
+        async readParseStatus() {
+          return { preciseReady: true, liteReady: true };
+        },
+      },
+      searchItems: async () => [],
+    });
+
+    await assertRejectsCode(
+      () => deps.searchByTitle({ libraryID: 1 }),
+      "invalid-request",
+    );
+  });
+
+  it("summarizes year and creators for citation matching", async function () {
+    const parent = fakeItem({
+      id: 2,
+      key: "ITEM1",
+      regular: true,
+      title: "Energy-Saving Task Scheduling",
+      date: "2022-01-15",
+      creators: [
+        { firstName: "Qingfeng", lastName: "Chen" },
+        { lastName: "Han", firstName: "Yu" },
+        { name: "MDPI Publishing" },
+      ],
+    });
+    const service = createMarkdownQueryService(
+      fakeDeps({
+        markdown: "# Hidden",
+        items: [parent],
+        searchItems: async () => [parent],
+      }),
+    );
+
+    const response = await service.searchByTitle({
+      libraryID: 1,
+      title: "Energy",
+    });
+
+    assert.deepEqual(response, {
+      candidates: [
+        {
+          item: {
+            itemID: 2,
+            libraryID: 1,
+            key: "ITEM1",
+            type: "regular",
+            title: "Energy-Saving Task Scheduling",
+            year: "2022",
+            creators: ["Chen, Qingfeng", "Han, Yu", "MDPI Publishing"],
+          },
+          attachments: [],
+        },
+      ],
+    });
+  });
 });
 
 function fakeDeps(input: {
@@ -228,10 +351,7 @@ function fakeDeps(input: {
     libraryID: number;
     key: string;
   }) => Promise<string>;
-  searchItemsByTitle?: (input: {
-    libraryID: number;
-    title: string;
-  }) => Promise<ZoteroItemLike[]>;
+  searchItems?: (input: ItemSearchInput) => Promise<ZoteroItemLike[]>;
 }) {
   const pdf =
     input.items?.find((item) => item.key === "PDF1") ??
@@ -260,12 +380,9 @@ function fakeDeps(input: {
         return parseStatus;
       },
     },
-    async searchItemsByTitle(searchInput: {
-      libraryID: number;
-      title: string;
-    }) {
-      if (input.searchItemsByTitle) {
-        return input.searchItemsByTitle(searchInput);
+    async searchItems(searchInput: ItemSearchInput) {
+      if (input.searchItems) {
+        return input.searchItems(searchInput);
       }
       return [pdf];
     },
@@ -280,6 +397,8 @@ function fakeItem(input: {
   title?: string;
   fileName?: string;
   dateAdded?: string;
+  date?: string;
+  creators?: CreatorLike[];
   parentItemID?: number | false;
   attachments?: number[];
   bestAttachments?: ZoteroItemLike[];
@@ -296,9 +415,18 @@ function fakeItem(input: {
     isRegularItem: () => Boolean(input.regular),
     isPDFAttachment: () => Boolean(input.pdf),
     getDisplayTitle: () => input.title ?? input.fileName ?? input.key,
-    getField: (field) => (field === "title" ? (input.title ?? "") : ""),
+    getField: (field) => {
+      if (field === "title") {
+        return input.title ?? "";
+      }
+      if (field === "date") {
+        return input.date ?? "";
+      }
+      return "";
+    },
     getAttachments: () => input.attachments ?? [],
     getBestAttachments: async () => input.bestAttachments ?? [],
+    ...(input.creators ? { getCreators: () => input.creators } : {}),
   };
 }
 

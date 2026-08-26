@@ -43,11 +43,24 @@ export function parseHeadings(markdown: string): MarkdownHeading[] {
 }
 
 /**
+ * 表示读取章节时的可选行为。
+ */
+export interface ReadSectionOptions {
+  /**
+   * 包含同级及以下全部子节内容。
+   * MinerU 常把 "3.1" 这类编号子节渲染成与父节同级的标题，
+   * 开启后结束边界改为下一个更高级别标题，一次返回整棵子树。
+   */
+  includeSubsections?: boolean;
+}
+
+/**
  * 根据 heading path 返回章节内容，包含章节标题行。
  */
 export function readSection(
   markdown: string,
   sectionPath: string[] | string,
+  options: ReadSectionOptions = {},
 ): MarkdownSectionResult {
   const path = normalizeSectionPath(sectionPath);
   const lines = markdown.split(/\r?\n/);
@@ -67,16 +80,68 @@ export function readSection(
   }
 
   const heading = matches[0];
-  const nextHeading = headings.find(
-    (candidate) =>
-      candidate.line > heading.line && candidate.level <= heading.level,
-  );
-  const endLine = nextHeading?.line ?? lines.length;
+  const endLine = options.includeSubsections
+    ? findSubtreeEndLine(headings, heading)
+    : findSectionEndLine(headings, heading);
 
   return {
     heading,
     content: lines.slice(heading.line, endLine).join("\n").trimEnd(),
   };
+}
+
+/**
+ * 默认边界：下一个同级或更高级标题。
+ */
+function findSectionEndLine(
+  headings: MarkdownHeading[],
+  heading: MarkdownHeading,
+): number {
+  const nextHeading = headings.find(
+    (candidate) =>
+      candidate.line > heading.line && candidate.level <= heading.level,
+  );
+  return nextHeading?.line ?? Infinity;
+}
+
+/**
+ * 子树边界：下一个更高层标题，或编号切换到另一组的同级标题。
+ *
+ * MinerU 常把 "3.1" 这类编号子节渲染成与父节同级的标题，
+ * 单靠层级无法区分子节与下一章，因此借助标题的数字前缀：
+ * 同级且顶层编号不同的标题（如 "4."）结束当前组；
+ * 无编号的同级标题（如 "References"）也视为新的一节。
+ */
+function findSubtreeEndLine(
+  headings: MarkdownHeading[],
+  heading: MarkdownHeading,
+): number {
+  const targetNumber = leadingNumber(heading.title);
+  const stopHeading = headings.find((candidate) => {
+    if (candidate.line <= heading.line) {
+      return false;
+    }
+    if (candidate.level < heading.level) {
+      return true;
+    }
+    if (candidate.level > heading.level) {
+      return false;
+    }
+    const candidateNumber = leadingNumber(candidate.title);
+    if (candidateNumber === undefined || targetNumber === undefined) {
+      return true;
+    }
+    return candidateNumber !== targetNumber;
+  });
+  return stopHeading?.line ?? Infinity;
+}
+
+/**
+ * 提取标题开头的顶层数字编号，例如 "3.1. Task" 返回 3。
+ */
+function leadingNumber(title: string): number | undefined {
+  const match = /^(\d+)\b/.exec(title.trim());
+  return match ? Number(match[1]) : undefined;
 }
 
 /**

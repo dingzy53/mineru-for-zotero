@@ -283,6 +283,149 @@ test("discovers the listen port from the default Zotero profile", async () => {
   );
 });
 
+test("formats creator/year search results as agent-friendly text", async () => {
+  await withServer(
+    {
+      status: 200,
+      body: {
+        candidates: [
+          {
+            item: {
+              itemID: 29,
+              libraryID: 1,
+              key: "AGQEUI5S",
+              type: "regular",
+              title: "Energy-Saving Task Scheduling",
+              year: "2022",
+              creators: ["Chen, Qingfeng", "Han, Yu"],
+            },
+            attachments: [],
+          },
+        ],
+      },
+    },
+    async ({ port, requests }) => {
+      const result = await runCli([
+        "search",
+        "--port",
+        String(port),
+        "--library-id",
+        "1",
+        "--creator",
+        "Chen",
+        "--year",
+        "2022",
+        "--limit",
+        "5",
+        "--format",
+        "text",
+      ]);
+
+      assert.equal(result.code, 0);
+      assert.match(result.stdout, /1\. Energy-Saving Task Scheduling/);
+      assert.match(result.stdout, /year: 2022/);
+      assert.match(result.stdout, /creators: Chen, Qingfeng; Han, Yu/);
+      assert.equal(requests[0].searchParams.creator, "Chen");
+      assert.equal(requests[0].searchParams.year, "2022");
+      assert.equal(requests[0].searchParams.limit, "5");
+      assert.equal(requests[0].searchParams.title, undefined);
+    },
+  );
+});
+
+test("requires a title or creator for search", async () => {
+  const result = await runCli(["search", "--library-id", "1"]);
+
+  assert.equal(result.code, 2);
+  assert.match(result.stderr, /Missing required option: --title or --creator/);
+});
+
+test("rejects malformed year values", async () => {
+  const result = await runCli([
+    "search",
+    "--library-id",
+    "1",
+    "--title",
+    "Doc",
+    "--year",
+    "22",
+  ]);
+
+  assert.equal(result.code, 2);
+  assert.match(result.stderr, /Invalid --year/);
+});
+
+const markdownServerBody = {
+  item: {
+    itemID: 123,
+    libraryID: 1,
+    key: "ABCD1234",
+    type: "regular",
+    title: "Example Paper",
+  },
+  attachment: {
+    itemID: 456,
+    libraryID: 1,
+    key: "PDFKEY01",
+    fileName: "paper.pdf",
+  },
+  result: { mode: "precise", source: "preferred" },
+};
+
+test("sends include-subsections switch to the API", async () => {
+  await withServer(
+    {
+      status: 200,
+      body: {
+        ...markdownServerBody,
+        granularity: "section",
+        heading: { title: "A", path: ["Doc", "A"], line: 2 },
+        content: "## A\n\nAlpha",
+      },
+    },
+    async ({ port, requests }) => {
+      const result = await runCli([
+        "markdown",
+        "--port",
+        String(port),
+        "--library-id",
+        "1",
+        "--key",
+        "ABCD1234",
+        "--granularity",
+        "section",
+        "--section-path",
+        "Doc/A",
+        "--include-subsections",
+      ]);
+
+      assert.equal(result.code, 0);
+      assert.equal(requests[0].searchParams.includeSubsections, "true");
+      assert.match(result.stdout, /Granularity: section/);
+    },
+  );
+});
+
+test("hints at Zotero availability when the API is unreachable", async () => {
+  // 端口 1 上通常没有监听者，连接会立即被拒绝。
+  const result = await runCli([
+    "markdown",
+    "--port",
+    "1",
+    "--timeout-ms",
+    "2000",
+    "--library-id",
+    "1",
+    "--key",
+    "ABCD1234",
+  ]);
+
+  assert.equal(result.code, 2);
+  assert.equal(result.stdout, "");
+  assert.match(result.stderr, /Error: network-error/);
+  assert.match(result.stderr, /Zotero may not be running/);
+});
+
 /**
  * Runs a temporary JSON HTTP server while a CLI test executes.
  */
@@ -353,6 +496,7 @@ async function withZoteroProfile(port, run) {
     await run({
       env: {
         APPDATA: appDataRoot,
+        ZOTERO_CONFIG_DIR: zoteroRoot,
       },
     });
   } finally {

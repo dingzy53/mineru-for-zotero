@@ -10,6 +10,7 @@ import {
   MarkdownQueryService,
 } from "./queryService";
 import { MarkdownQueryError, ZoteroItemLike } from "./types";
+import type { ItemSearchInput } from "./types";
 
 interface MarkdownEndpointRequest {
   method: "GET" | "POST";
@@ -34,7 +35,7 @@ export function registerMarkdownQueryApiEndpoint(): void {
   const service = createMarkdownQueryService({
     items: Zotero.Items,
     storage: createStorage(getMinerUStorageRoot()),
-    searchItemsByTitle,
+    searchItems,
   });
   const EndpointClass = createMarkdownQueryEndpointClass(service);
 
@@ -66,8 +67,13 @@ export function createMarkdownQueryEndpoint(service: MarkdownQueryService) {
         if (options.pathname === "/mineru-for-zotero/search") {
           payload = await service.searchByTitle({
             libraryID: requireInteger(query.libraryID, "libraryID"),
-            title: requireString(query.title, "title"),
-            tag: optionalString(query.tag),
+            ...pickDefined({
+              title: optionalString(query.title),
+              creator: optionalString(query.creator),
+              year: parseYearParam(query.year),
+              tag: optionalString(query.tag),
+              limit: parseOptionalLimit(query.limit),
+            }),
           });
         } else if (options.pathname === "/mineru-for-zotero/parse") {
           if (options.method !== "POST")
@@ -95,6 +101,7 @@ export function createMarkdownQueryEndpoint(service: MarkdownQueryService) {
               | "search"
               | undefined,
             sectionPath: parseSectionPath(query.sectionPath),
+            includeSubsections: parseOptionalBoolean(query.includeSubsections),
             q: optionalString(query.q),
             contextParagraphs: parseOptionalInteger(query.contextParagraphs),
           });
@@ -138,20 +145,37 @@ function toZoteroEndpoint(
 }
 
 /**
- * 通过 Zotero.Search 按标题模糊检索库内条目。
+ * 通过 Zotero.Search 按标题、创作者等条件模糊检索库内条目。
+ * year 在检索结果上做前缀过滤，limit 在过滤后截断，保证两者语义稳定。
  */
-async function searchItemsByTitle(input: {
-  libraryID: number;
-  title: string;
-  tag?: string;
-}): Promise<ZoteroItemLike[]> {
+async function searchItems(input: ItemSearchInput): Promise<ZoteroItemLike[]> {
   const search = new Zotero.Search({ libraryID: input.libraryID });
-  search.addCondition("title", "contains", input.title);
+  if (input.title) {
+    search.addCondition("title", "contains", input.title);
+  }
+  if (input.creator) {
+    search.addCondition("creator", "contains", input.creator);
+  }
   if (input.tag) {
     search.addCondition("tag", "is", input.tag);
   }
   const ids = await search.search();
-  return Zotero.Items.getAsync(ids);
+  let items = await Zotero.Items.getAsync(ids);
+  const year = input.year;
+  if (year) {
+    items = items.filter((item) => itemMatchesYear(item, year));
+  }
+  if (input.limit !== undefined) {
+    items = items.slice(0, input.limit);
+  }
+  return items;
+}
+
+/**
+ * 判断条目 date 字段是否以指定四位年份开头。
+ */
+function itemMatchesYear(item: ZoteroItemLike, year: string): boolean {
+  return (item.getField("date") ?? "").trim().startsWith(year);
 }
 
 /**
@@ -234,6 +258,59 @@ function requireInteger(value: string | undefined, name: string): number {
 function optionalString(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
+}
+
+/**
+ * 去掉值为 undefined 的字段，保持注入边界上的参数形状干净。
+ */
+function pickDefined<T extends Record<string, unknown>>(input: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(input).filter(([, value]) => value !== undefined),
+  ) as Partial<T>;
+}
+
+/**
+ * 解析可选年份参数，必须是恰好四位的数字字符串。
+ */
+function parseYearParam(value: string | undefined): string | undefined {
+  const text = optionalString(value);
+  if (text === undefined) {
+    return undefined;
+  }
+  if (!/^\d{4}$/.test(text)) {
+    throw new MarkdownQueryError(
+      "invalid-request",
+      400,
+      `Invalid year parameter: ${text}`,
+    );
+  }
+  return text;
+}
+
+/**
+ * 解析可选正整数 limit 参数，非法值直接拒绝。
+ */
+function parseOptionalLimit(value: string | undefined): number | undefined {
+  const parsed = parseOptionalInteger(value);
+  if (parsed !== undefined && parsed <= 0) {
+    throw new MarkdownQueryError(
+      "invalid-request",
+      400,
+      `Invalid positive integer parameter: ${value}`,
+    );
+  }
+  return parsed;
+}
+
+/**
+ * 解析可选布尔参数，仅接受 true/1 为真值。
+ */
+function parseOptionalBoolean(value: string | undefined): boolean | undefined {
+  const text = optionalString(value);
+  if (text === undefined) {
+    return undefined;
+  }
+  return text === "true" || text === "1";
 }
 
 /**
