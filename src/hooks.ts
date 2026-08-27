@@ -17,6 +17,7 @@ import {
 import { createZToolkit } from "./utils/ztoolkit";
 import { getAutoParsePageLimit } from "./utils/prefs";
 import { parseAttachment } from "./modules/parseManager";
+import { taskStore } from "./modules/taskStore";
 
 let notifierID: string | null = null;
 
@@ -120,7 +121,10 @@ async function onMainWindowUnload(win: Window): Promise<void> {
   addon.data.dialog?.window?.close();
 }
 
-function onShutdown(): void {
+async function onShutdown(): Promise<void> {
+  // Flush any queued task-store writes (resume metadata etc.) before tearing
+  // down plugin chrome, so a later session can resume from a complete record.
+  await taskStore.waitForPersistence();
   Zotero.getMainWindows().forEach((win) => {
     removeMainWindowFTL(win);
     removeMainWindowStylesheet(win);

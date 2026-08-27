@@ -89,6 +89,19 @@
         border: 1px solid #e0e0e0;
       }
 
+      .progress-track {
+        height: 6px;
+        border-radius: 3px;
+        background-color: #e0e0e0;
+        overflow: hidden;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background-color: #2a6099;
+        transition: width 0.3s ease;
+      }
+
       .empty-state {
         color: #777;
         text-align: center;
@@ -203,7 +216,7 @@
   </head>
   <body>
     <div class="top-bar">
-      <h1>MinerU Task Manager</h1>
+      <h1 id="title">MinerU Task Manager</h1>
       <button class="clear-btn" id="clearBtn">Clear History</button>
     </div>
     <div class="task-list" id="taskList">
@@ -278,13 +291,72 @@
           }
         }
 
+        // Localized text: the dialog cannot register Fluent resources itself,
+        // so the addon API exposes getString(). Fall back to built-in English
+        // literals when the API is unreachable.
+        function getAddonApi() {
+          try {
+            if (
+              window.arguments &&
+              window.arguments[0] &&
+              window.arguments[0].Zotero
+            ) {
+              return window.arguments[0].Zotero.MinerUForZotero.api || null;
+            }
+            if (globalThis.Zotero && globalThis.Zotero.MinerUForZotero) {
+              return globalThis.Zotero.MinerUForZotero.api || null;
+            }
+            if (globalThis.opener && globalThis.opener.Zotero) {
+              return globalThis.opener.Zotero.MinerUForZotero.api || null;
+            }
+          } catch (e) {
+            /* ignore — cross-origin on Wayland */
+          }
+          return null;
+        }
+
+        var addonApi = getAddonApi();
+
+        function t(id, fallback, args) {
+          try {
+            if (addonApi && typeof addonApi.getString === "function") {
+              var localized = addonApi.getString(id, args);
+              if (localized) return localized;
+            }
+          } catch (e) {
+            /* fall through to fallback */
+          }
+          if (args && args.message) {
+            return fallback.replace(/\{\s*\$message\s*\}/g, args.message);
+          }
+          return fallback;
+        }
+
+        // Apply static chrome labels.
+        var titleEl = document.getElementById("title");
+        if (titleEl) {
+          titleEl.textContent = t("task-manager-title", "MinerU Task Manager");
+        }
+        var clearBtnEl = document.getElementById("clearBtn");
+        if (clearBtnEl) {
+          clearBtnEl.textContent = t(
+            "task-manager-clear-history",
+            "Clear History",
+          );
+        }
+
         function renderTasks() {
           if (!listEl) return;
           listEl.innerHTML = "";
 
           if (!taskStore) {
             listEl.innerHTML =
-              '<div class="error-state">TaskStore not found. Please restart Zotero and try again.</div>';
+              '<div class="error-state">' +
+              t(
+                "task-manager-store-missing",
+                "TaskStore not found. Please restart Zotero and try again.",
+              ) +
+              "</div>";
             return;
           }
 
@@ -293,17 +365,39 @@
             tasks = taskStore.getTasks();
           } catch (e) {
             listEl.innerHTML =
-              '<div class="error-state">Error reading tasks: ' +
-              e.message +
+              '<div class="error-state">' +
+              t(
+                "task-manager-read-error",
+                "Error reading tasks: { $message }",
+                {
+                  message: e.message,
+                },
+              ) +
               "</div>";
             return;
           }
 
           if (tasks.length === 0) {
-            listEl.innerHTML =
-              '<div class="empty-state">No tasks yet.<br><small>Parse a PDF and tasks will appear here.</small></div>';
+            var emptyState = document.createElement("div");
+            emptyState.className = "empty-state";
+            emptyState.textContent = t("task-manager-empty", "No tasks yet.");
+            emptyState.appendChild(document.createElement("br"));
+            var hint = document.createElement("small");
+            hint.textContent = t(
+              "task-manager-empty-hint",
+              "Parse a PDF and tasks will appear here.",
+            );
+            emptyState.appendChild(hint);
+            listEl.innerHTML = "";
+            listEl.appendChild(emptyState);
             return;
           }
+
+          var groupLabels = {
+            Running: t("task-manager-group-running", "Running"),
+            Failed: t("task-manager-group-failed", "Failed"),
+            Succeeded: t("task-manager-group-succeeded", "Succeeded"),
+          };
 
           var groups = {
             Running: [],
@@ -332,7 +426,7 @@
             var groupHeader = document.createElement("div");
             groupHeader.className = "group-header";
             groupHeader.textContent =
-              groupName + " (" + groupTasks.length + ")";
+              groupLabels[groupName] + " (" + groupTasks.length + ")";
 
             var groupContent = document.createElement("div");
             groupContent.className = "group-content task-list";
@@ -365,7 +459,9 @@
 
               if (task.status === "failed") {
                 var retryBtn = document.createElement("button");
-                retryBtn.textContent = task.resume ? "Resume" : "Retry";
+                retryBtn.textContent = task.resume
+                  ? t("task-manager-resume", "Resume")
+                  : t("task-manager-retry", "Retry");
                 retryBtn.className = "clear-btn"; // reuse styling
                 retryBtn.style.padding = "2px 8px";
                 retryBtn.style.fontSize = "0.75rem";
@@ -374,26 +470,7 @@
                     e.stopPropagation();
                     if (taskStore && taskStore.getTask) {
                       try {
-                        var addonApi = null;
-                        if (
-                          window.arguments &&
-                          window.arguments[0] &&
-                          window.arguments[0].Zotero
-                        ) {
-                          addonApi =
-                            window.arguments[0].Zotero.MinerUForZotero.api;
-                        } else if (
-                          globalThis.Zotero &&
-                          globalThis.Zotero.MinerUForZotero
-                        ) {
-                          addonApi = globalThis.Zotero.MinerUForZotero.api;
-                        } else if (
-                          globalThis.opener &&
-                          globalThis.opener.Zotero
-                        ) {
-                          addonApi =
-                            globalThis.opener.Zotero.MinerUForZotero.api;
-                        }
+                        var addonApi = getAddonApi();
                         var currentTask = taskStore.getTask(taskId);
                         if (addonApi) {
                           if (
@@ -416,7 +493,7 @@
                 task.status === "pending"
               ) {
                 var cancelBtn = document.createElement("button");
-                cancelBtn.textContent = "Stop";
+                cancelBtn.textContent = t("task-manager-stop", "Stop");
                 cancelBtn.className = "clear-btn"; // reuse styling
                 cancelBtn.style.padding = "2px 8px";
                 cancelBtn.style.fontSize = "0.75rem";
@@ -425,26 +502,7 @@
                     e.stopPropagation();
                     if (taskStore && taskStore.getTask) {
                       try {
-                        var addonApi = null;
-                        if (
-                          window.arguments &&
-                          window.arguments[0] &&
-                          window.arguments[0].Zotero
-                        ) {
-                          addonApi =
-                            window.arguments[0].Zotero.MinerUForZotero.api;
-                        } else if (
-                          globalThis.Zotero &&
-                          globalThis.Zotero.MinerUForZotero
-                        ) {
-                          addonApi = globalThis.Zotero.MinerUForZotero.api;
-                        } else if (
-                          globalThis.opener &&
-                          globalThis.opener.Zotero
-                        ) {
-                          addonApi =
-                            globalThis.opener.Zotero.MinerUForZotero.api;
-                        }
+                        var addonApi = getAddonApi();
                         if (
                           addonApi &&
                           typeof addonApi.cancelTask === "function"
@@ -460,13 +518,39 @@
 
               var status = document.createElement("div");
               status.className = "task-status status-" + task.status;
-              status.textContent = task.status.toUpperCase();
+              var statusLabel =
+                task.status === "pending"
+                  ? groupLabels.Running
+                  : task.status === "running"
+                    ? groupLabels.Running
+                    : task.status === "failed"
+                      ? groupLabels.Failed
+                      : groupLabels.Succeeded;
+              status.textContent = statusLabel.toUpperCase();
 
               statusContainer.appendChild(status);
 
               header.appendChild(title);
               header.appendChild(statusContainer);
               item.appendChild(header);
+
+              if (task.status === "running" || task.status === "pending") {
+                var progressPct =
+                  typeof task.progress === "number"
+                    ? Math.max(0, Math.min(100, Math.round(task.progress)))
+                    : 0;
+                var progressTrack = document.createElement("div");
+                progressTrack.className = "progress-track";
+                progressTrack.setAttribute(
+                  "aria-label",
+                  "progress " + progressPct + "%",
+                );
+                var progressFill = document.createElement("div");
+                progressFill.className = "progress-fill";
+                progressFill.style.width = progressPct + "%";
+                progressTrack.appendChild(progressFill);
+                item.appendChild(progressTrack);
+              }
 
               if (task.detail) {
                 var detail = document.createElement("div");
@@ -478,7 +562,11 @@
               if (task.error) {
                 var error = document.createElement("div");
                 error.className = "task-error";
-                error.textContent = "Error: " + task.error;
+                error.textContent = t(
+                  "task-manager-error-prefix",
+                  "Error: { $message }",
+                  { message: task.error },
+                );
                 item.appendChild(error);
               }
 

@@ -143,4 +143,17 @@ export type FluentMessageId =
   | 'startup-begin'
   | 'startup-finish'
   | 'tabpanel-lib-tab-label'
-  | 'tabpanel-reader-tab-label';
+  | 'tabpanel-reader-tab-label'
+  | 'task-manager-clear-history'
+  | 'task-manager-empty'
+  | 'task-manager-empty-hint'
+  | 'task-manager-error-prefix'
+  | 'task-manager-group-failed'
+  | 'task-manager-group-running'
+  | 'task-manager-group-succeeded'
+  | 'task-manager-read-error'
+  | 'task-manager-resume'
+  | 'task-manager-retry'
+  | 'task-manager-stop'
+  | 'task-manager-store-missing'
+  | 'task-manager-title';

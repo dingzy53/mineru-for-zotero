@@ -11,6 +11,8 @@ import { createZToolkit } from "./utils/ztoolkit";
 import { taskStore, openTaskManagerWindow } from "./modules/taskStore";
 import { syncAllToAgentFolder, updateAllMinerUTags } from "./modules/agentSync";
 import { parseAttachment } from "./modules/parseManager";
+import { getString } from "./utils/locale";
+import type { FluentMessageId } from "../typings/i10n";
 
 class Addon {
   public data: {
@@ -55,6 +57,19 @@ class Addon {
       retryTask: this.retryTask.bind(this),
       resumeTask: this.resumeTask.bind(this),
       cancelTask: this.cancelTask.bind(this),
+      /**
+       * Localized UI text for chrome dialogs (e.g. the Task Manager window)
+       * that cannot resolve Fluent resources declaratively. Returns an empty
+       * string when the locale bundle is unavailable; callers fall back to
+       * their built-in English literals.
+       */
+      getString: (id: FluentMessageId, args?: Record<string, string>) => {
+        try {
+          return args ? getString(id, { args }) : getString(id);
+        } catch {
+          return "";
+        }
+      },
     };
   }
 
@@ -65,6 +80,9 @@ class Addon {
         ...existingTask,
         status: "failed",
         error: "Cancelled by user",
+        detail: existingTask.resume
+          ? "Resume available for the saved MinerU task."
+          : undefined,
       });
     }
   }
