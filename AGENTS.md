@@ -11,7 +11,7 @@ Core feature modules currently include `mineruClient/` for selecting and running
 - Use `npm` for package scripts and dependency operations in this repository. The tracked lockfile is `package-lock.json`.
 - `npm start`: runs `zotero-plugin serve`, builds in development mode, launches Zotero, and watches `src/**` and `addon/**` for hot reload.
 - `npm run build`: creates a production plugin build with `zotero-plugin build`, then runs `tsc --noEmit` for type checking. The `.xpi` output lands at `.scaffold/build/mineru-for-zotero.xpi` (a standard ZIP archive).
-- `npm test`: runs the scaffold test suite. On Linux CI the scaffold downloads Zotero automatically; locally, download the Linux tarball (`https://www.zotero.org/download/client/dl?platform=linux-x86_64&channel=beta`), extract it, and run `ZOTERO_PLUGIN_ZOTERO_BIN_PATH=<extracted>/Zotero_linux-x86_64/zotero npm test`. A desktop session with a working X display is enough; Xvfb is only needed headless.
+- `npm test`: runs the scaffold test suite. On Linux CI the scaffold downloads Zotero automatically; locally, download the Linux tarball (`https://www.zotero.org/download/client/dl?platform=linux-x86_64&channel=beta`), extract it, and run `ZOTERO_PLUGIN_ZOTERO_BIN_PATH=<extracted>/Zotero_linux-x86_64/zotero npm test`. A desktop session with a working X display is enough; Xvfb is only needed headless. Downloading that tarball with `wget`'s default user agent gets an HTTP 403 from the CDN; use `curl` (or set a browser-like UA). The payload may be XZ-compressed even though the URL looks like a `.tar.bz2`, so inspect with `file` and extract with `tar -xJf` when needed.
 - `npm run lint:check`: checks Prettier formatting and ESLint rules (`prettier --check . && eslint .`).
 - `npm run lint:fix`: formats files and applies safe ESLint fixes (`prettier --write . && eslint . --fix`).
 - `npm run release`: starts the configured release flow for versioning, packaging, tags, and GitHub release assets. If running manually, you can use `npm version patch -m "chore(release): bump version to %s" && git push --follow-tags` to bump the version and push the tag. The `.github/workflows/release.yml` GitHub Action will automatically compile and publish the `.xpi` when a `v*` tag is pushed.
@@ -81,7 +81,7 @@ MinerU API limits:
 - **Precision Extract API (v4)**: max 200 MB/file, max 600 pages/file, batch up to 200 files.
 - **Agent Lightweight API (v1)**: max 10 MB/file, max 20 pages/file, single file only.
 - Daily quota is approximately 2000 high-priority pages per account for the Precision API.
-- The environment variable `MINERU_API_MAX_CONCURRENT_REQUESTS` controls concurrency.
+- The environment variable `MINERU_API_MAX_CONCURRENT_REQUESTS` caps how many attachments or PDF chunks are processed at once (`Services.env`, clamped to 1–10, default 3). It feeds both the attachment batch queue and the per-PDF chunk queue in `parseManager.ts`; tests override it through the `getMaxConcurrentRequests` dependency instead.
 
 ### Online Precise Flow
 
@@ -106,6 +106,16 @@ Diagnose MinerU result ZIP download issues with network evidence. In the Zotero/
 After downloading a ZIP locally, prefer ZIP readers available in the Zotero runtime, such as `nsIZipReader`; do not assume `DecompressionStream("deflate-raw")` is available in the target runtime.
 
 When debugging the MinerU parsing pipeline, do not infer API behavior from UI messages alone. Use tests or diagnostics to verify each boundary: API key checks, file readability, upload URL creation, bare upload, polling, result download, ZIP reading, raw result schema selection, box normalization, and storage writes.
+
+### Task Persistence, Resume & Reconnect
+
+Task records persist in `ProfD/mineru_tasks.json` through `taskStore`; all writes go through a serialized save queue (`upsertTask`/`updateTaskStatus` return promises so callers can await durability). On startup, records stuck in `running` are marked `failed` with a message telling the user to Resume (when resume metadata exists) or Retry.
+
+Resume state lives in two places: per-chunk bookkeeping inside `TaskRecord.resume` (source/mode/`filePath`/pdf mtime guard whether a task can actually be resumed) and chunk result caches under `ProfD/mineru-resume/<attachmentID>/`. Chunk caches stay on disk until the final merged result is written; on success `cleanupTaskResume()` removes them and clears `resume`. Non-resumable parses reset that directory first and also delete legacy `mineru-part-<id>-*-result.json` files left by older versions directly in the data directory root.
+
+During parsing, transient network failures (status 0 or ≥ 500) reconnect with exponential backoff instead of failing the task. For `local` every `local-*` stage may retry; for online clients only idempotent GET stages (`poll`, `agent-poll`, `download`, `agent-download`) retry — submit/upload never do, or one blip would burn quota twice. A local 404 during poll/download means the remote task was lost after a server restart: only that unfinished chunk is resubmitted, completed chunks keep their caches.
+
+The Task Manager window (`addon/content/taskManager.html`) reads localized labels from the addon API (`api.getString`, fallback English literals) because chrome HTML dialogs cannot resolve plugin Fluent resources declaratively. Keep any new dialog strings behind that helper.
 
 ### Box Normalization
 
