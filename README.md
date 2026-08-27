@@ -11,7 +11,7 @@
 
 - Parse one or more selected PDF attachments from the Zotero item list.
 - Automatically handles PDFs over 200 pages by splitting, parsing, and seamlessly merging the results.
-- Tracks processing jobs in the persistent **MinerU Task Manager** with status grouping (Running, Succeeded, Failed) and history clearing.
+- Tracks processing jobs in the persistent **MinerU Task Manager** with live progress bars, status grouping (Running, Succeeded, Failed), history clearing, and one-click **Resume** for interrupted jobs.
 - Automatically adds Zotero tags (`MinerU: Precise ✅`, `MinerU: Lite ✅`, `MinerU: Failed ❌`, `MinerU: Processing ⏳`) based on parse status.
 - Export results to an **Agent-friendly Sync Folder**, which automatically generates structured Markdown, images, and standard BibTeX metadata (`metadata.bib`) for each parsed PDF for seamless integration with downstream AI agents.
 - Reuse an existing parse result, or reparse and replace it when needed.
@@ -112,7 +112,9 @@ For multi-box copying, hold `Shift` or `Ctrl` while clicking boxes. Then use the
 
 Open `Edit` -> `Settings` -> `MinerU for Zotero` and click `Open Data Folder` to view local parse results. The settings page also shows how many PDFs currently have usable results.
 
-You can also open the **MinerU Task Manager** from the settings page to view the real-time status of your parsing jobs, view error messages, and clear your history.
+You can also open the **MinerU Task Manager** from the settings page to view the real-time status of your parsing jobs, view error messages, and clear your history. Each running job shows a live progress bar.
+
+Parsing jobs survive Zotero restarts. If Zotero closes while a job is running, the job is marked as failed on the next start and shows a `Resume` button in the Task Manager. Resuming keeps every finished part of a split PDF and only re-submits the missing parts, so a 600-page parse does not have to start over. Transient network drops during polling and downloading reconnect automatically with backoff instead of failing the job.
 
 The result folder contains the parsed Markdown, box data used by the reader, and optional images. External tools may read these files, but editing them is not recommended.
 
@@ -277,7 +279,11 @@ Confirm that the toolbar mode is not set to `Disable plugin features`. If the PD
 
 ### Result Download Failed
 
-The MinerU result download may be temporarily unavailable. Try again later or reparse the PDF.
+The MinerU result download may be temporarily unavailable. Parsing automatically reconnects through short network drops; if the failure persists, try again later or reparse the PDF.
+
+### A Parse Was Interrupted (Zotero Closed or Crashed)
+
+Open the Task Manager from the settings page. Jobs that were running when Zotero closed are marked as failed and show a `Resume` button. Resume continues from the finished parts instead of re-submitting the whole PDF. This is especially useful for local parsing, where the MinerU service keeps the submitted parts between sessions.
 
 ## Development
 

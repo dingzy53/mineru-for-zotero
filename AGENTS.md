@@ -149,7 +149,7 @@ PDFs exceeding the MinerU page limit (200 pages for Precision API) are automatic
 
 For `pdftk`, use `pdftk <file> dump_data` and parse `NumberOfPages:\s*(\d+)` for page count, then `pdftk <file> cat 1-200 output <target>` for splitting. On macOS and Linux, use `/bin/sh -c 'pdftk "$@"' sh ...args` as a fallback to resolve PATH issues (especially inside Flatpak). On Windows, skip the shell fallback and call `pdftk` directly.
 
-Batch parsing uses a local queue with a hard concurrency limit of 3. The pattern is: shift from queue, increment active count, call `.finally()` to decrement and invoke `next()`. The batch promise resolves when both `queue.length === 0` and `active === 0`.
+Batch parsing and per-PDF chunk processing each use a local queue with the same concurrency cap (default 3, overridden by `MINERU_API_MAX_CONCURRENT_REQUESTS`, clamped 1–10). The pattern is: shift from queue, increment active count, call `.finally()` to decrement and invoke `next()`. The batch promise resolves when both `queue.length === 0` and `active === 0`. Parallel chunk processing itself is opt-in through the `parallelSplit` preference (default off); sequential chunk processing is the safe default.
 
 ## Cross-Platform Compatibility
 
