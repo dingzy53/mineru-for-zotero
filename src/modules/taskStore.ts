@@ -1,6 +1,27 @@
 import { AttachmentRef } from "./domain";
 
 export type TaskStatus = "pending" | "running" | "succeeded" | "failed";
+export type TaskChunkStatus = "pending" | "submitted" | "succeeded";
+
+export interface TaskChunkRecord {
+  index: number;
+  startPage: number;
+  endPage: number;
+  status: TaskChunkStatus;
+  taskID?: string;
+  resultPath?: string;
+}
+
+export interface TaskResumeRecord {
+  source: "online" | "local";
+  mode: "precise" | "lite";
+  localApiBaseURL?: string;
+  filePath: string;
+  pdfMtime: number;
+  pageCount: number;
+  chunkSize: number;
+  chunks: TaskChunkRecord[];
+}
 
 export interface TaskRecord {
   id: string; // unique job id, e.g., attachment ID
@@ -10,6 +31,7 @@ export interface TaskRecord {
   progress: number; // 0 to 100
   detail?: string;
   error?: string;
+  resume?: TaskResumeRecord;
   createdAt: number;
   updatedAt: number;
 }
@@ -18,10 +40,12 @@ class TaskManagerStore {
   private tasks = new Map<string, TaskRecord>();
   private listeners = new Set<() => void>();
   private dataFile: string;
+  private saveQueue: Promise<void> = Promise.resolve();
+  private loadPromise: Promise<void>;
 
   constructor() {
     this.dataFile = Zotero.DataDirectory.dir + "/mineru_tasks.json";
-    this.load();
+    this.loadPromise = this.load();
   }
 
   private async load() {
@@ -30,7 +54,24 @@ class TaskManagerStore {
         if (await IOUtils.exists(this.dataFile)) {
           const content = await IOUtils.readUTF8(this.dataFile);
           const records: TaskRecord[] = JSON.parse(content);
-          records.forEach((r) => this.tasks.set(r.id, r));
+          let hasStaleRunningTask = false;
+          records.forEach((record) => {
+            const task = { ...record };
+            if (task.status === "running") {
+              task.status = "failed";
+              task.error = task.resume
+                ? "The previous Zotero session ended; resume this task to continue."
+                : "The previous Zotero session ended; retry this task to continue.";
+              task.detail = task.resume
+                ? "Resume available for the saved MinerU task."
+                : "Retry available for the saved MinerU task.";
+              hasStaleRunningTask = true;
+            }
+            this.tasks.set(task.id, task);
+          });
+          if (hasStaleRunningTask) {
+            await this.save();
+          }
           this.notify();
         }
       } catch (e) {
@@ -39,17 +80,26 @@ class TaskManagerStore {
     }
   }
 
-  private async save() {
-    if (typeof IOUtils !== "undefined") {
+  private save(): Promise<void> {
+    if (typeof IOUtils === "undefined") {
+      return Promise.resolve();
+    }
+
+    const records = Array.from(this.tasks.values());
+    this.saveQueue = this.saveQueue.then(async () => {
       try {
-        const records = Array.from(this.tasks.values());
         await IOUtils.writeUTF8(this.dataFile, JSON.stringify(records), {
           tmpPath: this.dataFile + ".tmp",
         });
       } catch (e) {
         ztoolkit.log("Failed to save mineru_tasks.json", e);
       }
-    }
+    });
+    return this.saveQueue;
+  }
+
+  public waitUntilLoaded(): Promise<void> {
+    return this.loadPromise;
   }
 
   public getTasks(): TaskRecord[] {
@@ -62,31 +112,45 @@ class TaskManagerStore {
     return this.tasks.get(id);
   }
 
-  public upsertTask(task: TaskRecord) {
+  public upsertTask(task: TaskRecord): Promise<void> {
     this.tasks.set(task.id, { ...task, updatedAt: Date.now() });
-    this.save();
     this.notify();
+    return this.save();
   }
 
-  public updateTaskStatus(id: string, status: TaskStatus, error?: string) {
+  public updateTaskStatus(
+    id: string,
+    status: TaskStatus,
+    error?: string,
+  ): Promise<void> {
     const task = this.tasks.get(id);
-    if (task) {
-      task.status = status;
-      if (error) task.error = error;
-      task.updatedAt = Date.now();
-      this.save();
-      this.notify();
+    if (!task) {
+      return Promise.resolve();
     }
+    task.status = status;
+    if (error) task.error = error;
+    task.updatedAt = Date.now();
+    this.notify();
+    return this.save();
   }
 
-  public clearHistory() {
+  /**
+   * Wait until all task mutations queued so far have reached disk.
+   * Critical resume metadata uses upsertTask's returned promise directly;
+   * this method is useful for lifecycle and UI actions.
+   */
+  public waitForPersistence(): Promise<void> {
+    return this.saveQueue;
+  }
+
+  public clearHistory(): Promise<void> {
     for (const [id, task] of this.tasks.entries()) {
       if (task.status === "succeeded" || task.status === "failed") {
         this.tasks.delete(id);
       }
     }
-    this.save();
     this.notify();
+    return this.save();
   }
 
   public subscribe(listener: () => void) {

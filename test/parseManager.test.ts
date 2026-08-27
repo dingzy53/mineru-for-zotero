@@ -1739,6 +1739,95 @@ describe("parseManager", function () {
     assert.include(messages, "parse-error-local-api-unavailable");
   });
 
+  it("retries transient local polling failures without resubmitting", async function () {
+    const messages: string[] = [];
+    let submitCount = 0;
+    let pollCount = 0;
+    const manager = createParseManager({
+      ...baseDependencies(messages),
+      getParseSource: () => "local",
+      getParseMode: () => "precise",
+      getLocalApiTimeoutMinutes: () => 1,
+      delay: async () => {},
+      client: {
+        submitPdf: async () => {
+          submitCount += 1;
+          return { taskID: "local-retry-task" };
+        },
+        pollTask: async () => {
+          pollCount += 1;
+          if (pollCount === 1) {
+            throw new MinerURequestError("local-poll", 0, "offline");
+          }
+          return { status: "succeeded" };
+        },
+        downloadResult: async () => preciseResultFixture(),
+      },
+    });
+
+    await manager.parseAttachment(pdfAttachment({ id: 7101 }));
+
+    assert.equal(submitCount, 1);
+    assert.equal(pollCount, 2);
+    assert.include(messages, "parse-task-finished");
+  });
+
+  it("resumes a failed split from the first incomplete chunk", async function () {
+    const messages: string[] = [];
+    const submitted: string[] = [];
+    const splitPaths: string[] = [];
+    let shouldFailSecondChunk = true;
+    const manager = createParseManager({
+      ...baseDependencies(messages),
+      getParseSource: () => "local",
+      getParseMode: () => "precise",
+      getParallelSplit: () => false,
+      getPdfPageCount: async () => 401,
+      splitPdf: async (_inputPath, outputPath) => {
+        splitPaths.push(outputPath);
+        return true;
+      },
+      getLocalApiTimeoutMinutes: () => 1,
+      delay: async () => {},
+      client: {
+        submitPdf: async (filePath) => {
+          const taskID = `split-task-${submitted.length}`;
+          submitted.push(filePath);
+          return { taskID };
+        },
+        pollTask: async (taskID) => {
+          if (taskID === "split-task-1" && shouldFailSecondChunk) {
+            throw new MinerURequestError(
+              "local-poll",
+              400,
+              "temporary test failure",
+            );
+          }
+          return { status: "succeeded" };
+        },
+        downloadResult: async () => preciseResultFixture(),
+      },
+    });
+    const attachment = pdfAttachment({
+      id: 7102,
+      filePath: "C:/tmp/large.pdf",
+    });
+
+    await manager.parseAttachment(attachment);
+    assert.include(messages, "parse-error-local-api-unavailable");
+    assert.lengthOf(submitted, 2);
+
+    shouldFailSecondChunk = false;
+    await manager.parseAttachment(attachment, { force: true, resume: true });
+
+    // 401 pages -> three chunks. Run 1 submitted chunks 0 and 1; the resume
+    // run skips chunk 0 via its result cache, reconnects chunk 1 through the
+    // saved task ID without re-uploading, and submits the pending chunk 2.
+    assert.lengthOf(submitted, 3);
+    assert.lengthOf(splitPaths, 3);
+    assert.include(messages, "parse-task-finished");
+  });
+
   it("uses the configured local API timeout for long-running local tasks", async function () {
     const messages: string[] = [];
     const delays: number[] = [];

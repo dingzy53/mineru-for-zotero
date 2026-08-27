@@ -205,7 +205,7 @@ export function setAutoParsePageLimit(value: number) {
 
 export function getParallelSplit(): boolean {
   const value = getPref("parallelSplit" as keyof PluginPrefsMap);
-  return value !== false;
+  return value === true;
 }
 
 export function setParallelSplit(value: boolean) {

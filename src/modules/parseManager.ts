@@ -22,7 +22,13 @@ import {
   markAttachmentParseRunning,
 } from "./itemTreeColumn";
 import { syncResultToAgentFolder } from "./agentSync";
-import { taskStore, openTaskManagerWindow } from "./taskStore";
+import {
+  taskStore,
+  openTaskManagerWindow,
+  type TaskChunkRecord,
+  type TaskRecord,
+  type TaskResumeRecord,
+} from "./taskStore";
 import { getPdfPageCount, splitPdf } from "./pdfSplitter";
 import { createStorage, type StorageAdapter } from "./storage";
 import { getString } from "../utils/locale";
@@ -40,6 +46,8 @@ import {
 import { getMinerUStorageRoot } from "./preferenceScript";
 
 const POLL_INTERVAL_MS = 3000;
+const LOCAL_CHUNK_PAGE_LIMIT = 200;
+const DEFAULT_CHUNK_PAGE_LIMIT = 200;
 const DEFAULT_ONLINE_POLL_TIMEOUT_MS = 6 * 60 * 1000;
 const PROGRESS_WINDOW_ICON_URI = `chrome://${config.addonRef}/content/icons/favicon.png`;
 const PROGRESS_WINDOW_LABEL_LINE_HEIGHT_PX = 18;
@@ -58,6 +66,12 @@ export interface ParseManagerDependencies {
   getSaveImages?: () => boolean;
   getParallelSplit?: () => boolean;
   getPdfPageCount?: (filePath: string) => Promise<number>;
+  splitPdf?: (
+    inputPath: string,
+    outputPath: string,
+    startPage: number,
+    endPage: number,
+  ) => Promise<boolean>;
   storage?: StorageAdapter;
   createStorage?: () => StorageAdapter;
   client?: MinerUClient;
@@ -89,15 +103,20 @@ export interface ParseManagerDependencies {
   ) => Promise<void>;
 }
 
+export interface ParseAttachmentOptions {
+  force?: boolean;
+  resume?: boolean;
+}
+
 interface ParseManager {
   getItemParseContext(item: Zotero.Item): Promise<ItemParseContext>;
   parseAttachment(
     attachment: Zotero.Item,
-    options?: { force?: boolean },
+    options?: ParseAttachmentOptions,
   ): Promise<void>;
   parseAttachments(
     attachments: Zotero.Item[],
-    options?: { force?: boolean },
+    options?: ParseAttachmentOptions,
   ): Promise<void>;
 }
 
@@ -126,9 +145,9 @@ type PromptService = {
   ) => number;
 };
 
-export async function parseSelectedAttachment(options?: {
-  force?: boolean;
-}): Promise<void> {
+export async function parseSelectedAttachment(
+  options?: ParseAttachmentOptions,
+): Promise<void> {
   const attachment = await getSelectedPDFAttachment();
   if (!attachment) {
     showMessage("parse-error-not-pdf");
@@ -140,7 +159,7 @@ export async function parseSelectedAttachment(options?: {
 
 export async function parseAttachment(
   attachment: Zotero.Item,
-  options?: { force?: boolean },
+  options?: ParseAttachmentOptions,
 ): Promise<void> {
   await createParseManager(createDefaultDependencies()).parseAttachment(
     attachment,
@@ -150,7 +169,7 @@ export async function parseAttachment(
 
 export async function parseAttachments(
   attachments: Zotero.Item[],
-  options?: { force?: boolean },
+  options?: ParseAttachmentOptions,
 ): Promise<void> {
   await createParseManager(createDefaultDependencies()).parseAttachments(
     attachments,
@@ -180,7 +199,7 @@ export function createParseManager(
 
 async function parseAttachmentsWithDependencies(
   attachments: Zotero.Item[],
-  options: { force?: boolean } | undefined,
+  options: ParseAttachmentOptions | undefined,
   dependencies: ParseManagerDependencies,
 ): Promise<void> {
   const pdfAttachments = attachments.filter((attachment) =>
@@ -403,7 +422,7 @@ async function getReadyAttachmentIDs(
 
 async function parseAttachmentWithDependencies(
   attachment: Zotero.Item,
-  options: { force?: boolean } | undefined,
+  options: ParseAttachmentOptions | undefined,
   dependencies: ParseManagerDependencies,
   noticeContext?: ParseNoticeContext,
 ): Promise<void> {
@@ -429,6 +448,7 @@ async function parseAttachmentWithDependencies(
   const source = getCurrentParseSource(dependencies);
   const mode = getCurrentParseMode(dependencies);
   const apiKey = dependencies.getApiKey().trim();
+  const localApiBaseURL = dependencies.getLocalApiBaseURL?.() ?? "";
   const currentNoticeContext =
     noticeContext ?? createParseNoticeContext({ source, mode });
   if (requiresApiKey(source, mode) && !apiKey) {
@@ -456,7 +476,7 @@ async function parseAttachmentWithDependencies(
       apiKey,
       source,
       mode,
-      localApiBaseURL: dependencies.getLocalApiBaseURL?.() ?? "",
+      localApiBaseURL,
       saveImages: dependencies.getSaveImages?.() !== false,
     },
     dependencies,
@@ -465,123 +485,243 @@ async function parseAttachmentWithDependencies(
   let phase: ParsePhase = "submit";
   const attachmentTitle =
     (await resolveAttachmentTitle(attachment, dependencies)) || "PDF Document";
+  await taskStore.waitUntilLoaded();
+  const existingTask = taskStore.getTask(String(attachment.id));
+  const canResume =
+    options?.resume === true &&
+    existingTask?.resume &&
+    existingTask.resume.source === source &&
+    existingTask.resume.mode === mode &&
+    existingTask.resume.filePath === filePath &&
+    existingTask.resume.pdfMtime === attachmentRef.mtime &&
+    (source !== "local" ||
+      existingTask.resume.localApiBaseURL === localApiBaseURL);
+  const task: TaskRecord = canResume
+    ? {
+        ...existingTask!,
+        status: "running",
+        error: undefined,
+        detail: "Resuming saved MinerU task...",
+      }
+    : {
+        id: String(attachment.id),
+        attachment: attachmentRef,
+        title: attachmentTitle as string,
+        status: "running",
+        progress: 0,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
 
-  // Register in TaskStore
-  taskStore.upsertTask({
-    id: String(attachment.id),
-    attachment: attachmentRef,
-    title: attachmentTitle as string,
-    status: "running",
-    progress: 0,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  });
+  // Register in TaskStore before any remote request. Resume metadata is added
+  // after page counting and then persisted before the first chunk submission.
+  await taskStore.upsertTask(task);
 
   try {
     await updateParseColumnStatus(dependencies, "running", attachmentRef, mode);
     parseColumnRunning = true;
     phase = "submit";
     let submittedNoticeShown = false;
-    const filePath =
-      (attachment as any)._mineruSplitPath || toNativePath(rawFilePath);
 
     const pageCount = dependencies.getPdfPageCount
       ? await dependencies.getPdfPageCount(filePath)
       : await getPdfPageCount(filePath);
-    const results: any[] = [];
-    const taskIDs: string[] = [];
+    const CHUNK_SIZE = getChunkPageLimit(source);
+    const split = dependencies.splitPdf ?? splitPdf;
+    const chunks = Math.max(1, Math.ceil(pageCount / CHUNK_SIZE));
+    const resume = createTaskResume(
+      task.resume,
+      source,
+      mode,
+      localApiBaseURL,
+      filePath,
+      attachmentRef.mtime,
+      pageCount,
+      CHUNK_SIZE,
+      chunks,
+    );
+    task.resume = resume;
+    await taskStore.upsertTask({
+      ...task,
+      progress: 0,
+      error: undefined,
+      detail:
+        chunks > 1
+          ? `[Auto-Split] Prepared ${chunks} parts (maximum ${CHUNK_SIZE} pages each)`
+          : `Uploading full document (${pageCount} pages)...`,
+    });
+    const results: any[] = new Array(chunks);
+    const taskIDs: string[] = new Array(chunks);
+    const resumeDirectory = getTaskResumeDirectory(attachment.id);
+    if (!canResume) {
+      await resetTaskResumeDirectory(resumeDirectory);
+    }
+    await ensureTaskResumeDirectory(resumeDirectory);
 
-    if (pageCount > 200) {
-      const CHUNK_SIZE = 200;
-      const chunks = Math.ceil(pageCount / CHUNK_SIZE);
-      const tmpDir = Zotero.DataDirectory.dir;
+    if (pageCount > CHUNK_SIZE) {
+      const tmpDir = resumeDirectory;
       const isParallel = dependencies.getParallelSplit
         ? dependencies.getParallelSplit()
         : getParallelSplit();
 
       const chunkTasks = Array.from({ length: chunks }, (_, i) => async () => {
-        const startPage = i * CHUNK_SIZE + 1;
-        const endPage = Math.min((i + 1) * CHUNK_SIZE, pageCount);
+        const chunk = resume.chunks[i];
+        const startPage = chunk.startPage;
+        const endPage = chunk.endPage;
         const targetPath = toNativePath(
           `${tmpDir}/mineru-part-${attachment.id}-${i}.pdf`,
         );
-        const cachePath = toNativePath(
-          `${tmpDir}/mineru-part-${attachment.id}-${i}-result.json`,
-        );
-
-        if (await IOUtils.exists(cachePath)) {
-          try {
-            const cached = JSON.parse(await IOUtils.readUTF8(cachePath));
-            if (cached && cached._chunkPageCount) {
-              results[i] = cached;
-              return;
-            }
-          } catch (e) {
-            // Ignore cache error and re-parse
-          }
-        }
-
-        const success = await splitPdf(
-          filePath,
-          targetPath,
-          startPage,
-          endPage,
-        );
-        if (!success) {
-          throw new MinerUTaskError(
-            `Failed to split PDF chunk ${i + 1}/${chunks}. pdftk may not be installed.`,
+        const cachePath =
+          chunk.resultPath ??
+          toNativePath(
+            `${tmpDir}/mineru-part-${attachment.id}-${i}-result.json`,
           );
+        chunk.resultPath = cachePath;
+
+        const cached = await readChunkResult(cachePath);
+        if (cached) {
+          results[i] = cached;
+          taskIDs[i] = chunk.taskID ?? "";
+          chunk.status = "succeeded";
+          await persistTaskResume(task, resume);
+          return;
         }
 
         if (!isParallel) {
-          taskStore.updateTaskStatus(
+          await updateTaskDetail(
             String(attachment.id),
-            "running",
-            undefined,
+            `[Auto-Split] Processing part ${i + 1}/${chunks} (Pages ${startPage}-${endPage})`,
           );
-          taskStore.upsertTask({
-            ...taskStore.getTask(String(attachment.id))!,
-            detail: `[Auto-Split] Processing part ${i + 1}/${chunks} (Pages ${startPage}-${endPage})`,
-          });
         }
 
-        const submitResult = await client.submitPdf(targetPath);
-        const taskID = submitResult.taskID;
-        taskIDs.push(taskID);
-        if (!submittedNoticeShown) {
-          showParseNotice(
-            dependencies,
-            createParseSubmittedNotice(currentNoticeContext),
-          );
-          submittedNoticeShown = true;
+        const submitChunk = async (): Promise<void> => {
+          const success = await split(filePath, targetPath, startPage, endPage);
+          if (!success) {
+            throw new MinerUTaskError(
+              `Failed to split PDF chunk ${i + 1}/${chunks}. pdftk may not be installed.`,
+            );
+          }
+
+          const submitResult = await client.submitPdf(targetPath);
+          chunk.taskID = submitResult.taskID;
+          chunk.status = "submitted";
+          taskIDs[i] = chunk.taskID;
+          await persistTaskResume(task, resume);
+          if (!submittedNoticeShown) {
+            showParseNotice(
+              dependencies,
+              createParseSubmittedNotice(currentNoticeContext),
+            );
+            submittedNoticeShown = true;
+          }
+        };
+
+        // If the previous Zotero run already submitted this chunk, keep the
+        // original task ID and reconnect instead of uploading the chunk again.
+        if (!chunk.taskID) {
+          await submitChunk();
+        } else {
+          taskIDs[i] = chunk.taskID;
         }
 
-        await waitForTask(
-          client,
-          taskID,
-          dependencies.delay,
-          getPollTimeoutMs(source, dependencies),
-          () => taskStore.getTask(String(attachment.id))?.status === "failed",
-        );
-
-        const res = await client.downloadResult(taskID);
-        (res as any)._chunkPageCount = endPage - startPage + 1;
-        results[i] = res;
+        const pollChunk = async (): Promise<void> => {
+          const taskID = chunk.taskID;
+          if (!taskID) {
+            throw new MinerUTaskError("Missing MinerU task ID for chunk");
+          }
+          phase = "poll";
+          await waitForTask(
+            client,
+            taskID,
+            dependencies.delay,
+            getPollTimeoutMs(source, dependencies),
+            () => taskStore.getTask(String(attachment.id))?.status === "failed",
+            source,
+            dependencies.log,
+            async (attempt, waitMs) =>
+              updateTaskDetail(
+                String(attachment.id),
+                getSafeMessageText("parse-task-reconnect", {
+                  attempt: String(attempt),
+                  seconds: String(Math.ceil(waitMs / 1000)),
+                }),
+              ),
+          );
+        };
 
         try {
-          await IOUtils.writeUTF8(cachePath, JSON.stringify(res));
+          await pollChunk();
+        } catch (error) {
+          if (!isTaskNotFoundError(error, source)) {
+            throw error;
+          }
+          // The remote service lost this task (usually after a restart). Only
+          // this unfinished chunk is resubmitted; completed chunks stay cached.
+          chunk.taskID = undefined;
+          chunk.status = "pending";
+          await persistTaskResume(task, resume);
+          await submitChunk();
+          await pollChunk();
+        }
+
+        const downloadChunk = async (): Promise<any> => {
+          const taskID = chunk.taskID;
+          if (!taskID) {
+            throw new MinerUTaskError("Missing MinerU task ID for chunk");
+          }
+          phase = "download";
+          return downloadTaskResultWithRetry(
+            client,
+            taskID,
+            dependencies.delay,
+            getPollTimeoutMs(source, dependencies),
+            source,
+            dependencies.log,
+            async (attempt, waitMs) =>
+              updateTaskDetail(
+                String(attachment.id),
+                getSafeMessageText("parse-task-download-reconnect", {
+                  attempt: String(attempt),
+                  seconds: String(Math.ceil(waitMs / 1000)),
+                }),
+              ),
+          );
+        };
+
+        let res: any;
+        try {
+          res = await downloadChunk();
+        } catch (error) {
+          if (!isTaskNotFoundError(error, source)) {
+            throw error;
+          }
+          chunk.taskID = undefined;
+          chunk.status = "pending";
+          await persistTaskResume(task, resume);
+          await submitChunk();
+          await pollChunk();
+          res = await downloadChunk();
+        }
+        (res as any)._chunkPageCount = endPage - startPage + 1;
+
+        // The cache is written before the chunk is marked succeeded. If the
+        // process fails later, this chunk can be skipped safely on resume.
+        await writeChunkResult(cachePath, res);
+        results[i] = res;
+        chunk.status = "succeeded";
+        await persistTaskResume(task, resume);
+        try {
           await IOUtils.remove(targetPath);
-        } catch (e) {
-          // ignore
+        } catch {
+          // The PDF part is disposable; keep the result cache on failure.
         }
       });
 
       if (isParallel) {
-        taskStore.updateTaskStatus(String(attachment.id), "running", undefined);
-        taskStore.upsertTask({
-          ...taskStore.getTask(String(attachment.id))!,
-          detail: `[Auto-Split] Processing ${chunks} parts in parallel...`,
-        });
+        await updateTaskDetail(
+          String(attachment.id),
+          `[Auto-Split] Processing ${chunks} parts in parallel...`,
+        );
         const queue = [...chunkTasks];
         let active = 0;
         await new Promise<void>((resolve, reject) => {
@@ -619,55 +759,135 @@ async function parseAttachmentWithDependencies(
         }
       }
 
-      for (let i = 0; i < chunks; i++) {
-        try {
-          await IOUtils.remove(
-            toNativePath(
-              `${tmpDir}/mineru-part-${attachment.id}-${i}-result.json`,
-            ),
-          );
-        } catch (e) {
-          // ignore
-        }
-      }
-
-      // Clear detail when done
-      taskStore.upsertTask({
-        ...taskStore.getTask(String(attachment.id))!,
-        detail: `[Auto-Split] Finished processing ${chunks} parts. Merging...`,
-      });
-    } else {
-      taskStore.upsertTask({
-        ...taskStore.getTask(String(attachment.id))!,
-        detail: `Uploading full document (${pageCount} pages)...`,
-      });
-      const submitResult = await client.submitPdf(filePath);
-      const taskID = submitResult.taskID;
-      taskIDs.push(taskID);
-      if (!submittedNoticeShown) {
-        showParseNotice(
-          dependencies,
-          createParseSubmittedNotice(currentNoticeContext),
-        );
-        submittedNoticeShown = true;
-      }
-      await waitForTask(
-        client,
-        taskID,
-        dependencies.delay,
-        getPollTimeoutMs(source, dependencies),
-        () => taskStore.getTask(String(attachment.id))?.status === "failed",
+      // Keep chunk result caches until the final merged result has been
+      // written. A later Resume can therefore skip every completed chunk.
+      await updateTaskDetail(
+        String(attachment.id),
+        `[Auto-Split] Finished processing ${chunks} parts. Merging...`,
       );
-      taskStore.upsertTask({
-        ...taskStore.getTask(String(attachment.id))!,
-        detail: `Downloading result...`,
-      });
-      phase = "download";
-      results.push(await client.downloadResult(taskID));
+    } else {
+      const chunk = resume.chunks[0];
+      const cachePath =
+        chunk.resultPath ??
+        toNativePath(
+          `${getTaskResumeDirectory(attachment.id)}/mineru-part-${attachment.id}-0-result.json`,
+        );
+      chunk.resultPath = cachePath;
+      const cached = await readChunkResult(cachePath);
+      if (cached) {
+        results[0] = cached;
+        taskIDs[0] = chunk.taskID ?? "";
+        chunk.status = "succeeded";
+        await persistTaskResume(task, resume);
+      } else {
+        await updateTaskDetail(
+          String(attachment.id),
+          `Uploading full document (${pageCount} pages)...`,
+        );
+        const submitSingle = async (): Promise<void> => {
+          const submitResult = await client.submitPdf(filePath);
+          chunk.taskID = submitResult.taskID;
+          chunk.status = "submitted";
+          taskIDs[0] = chunk.taskID;
+          await persistTaskResume(task, resume);
+          if (!submittedNoticeShown) {
+            showParseNotice(
+              dependencies,
+              createParseSubmittedNotice(currentNoticeContext),
+            );
+            submittedNoticeShown = true;
+          }
+        };
+        if (!chunk.taskID) {
+          await submitSingle();
+        } else {
+          taskIDs[0] = chunk.taskID;
+        }
+
+        const pollSingle = async (): Promise<void> => {
+          const taskID = chunk.taskID;
+          if (!taskID) {
+            throw new MinerUTaskError("Missing MinerU task ID");
+          }
+          phase = "poll";
+          await waitForTask(
+            client,
+            taskID,
+            dependencies.delay,
+            getPollTimeoutMs(source, dependencies),
+            () => taskStore.getTask(String(attachment.id))?.status === "failed",
+            source,
+            dependencies.log,
+            async (attempt, waitMs) =>
+              updateTaskDetail(
+                String(attachment.id),
+                getSafeMessageText("parse-task-reconnect", {
+                  attempt: String(attempt),
+                  seconds: String(Math.ceil(waitMs / 1000)),
+                }),
+              ),
+          );
+        };
+        try {
+          await pollSingle();
+        } catch (error) {
+          if (!isTaskNotFoundError(error, source)) {
+            throw error;
+          }
+          chunk.taskID = undefined;
+          chunk.status = "pending";
+          await persistTaskResume(task, resume);
+          await submitSingle();
+          await pollSingle();
+        }
+        await updateTaskDetail(String(attachment.id), "Downloading result...");
+        const downloadSingle = async (): Promise<any> => {
+          const taskID = chunk.taskID;
+          if (!taskID) {
+            throw new MinerUTaskError("Missing MinerU task ID");
+          }
+          phase = "download";
+          return downloadTaskResultWithRetry(
+            client,
+            taskID,
+            dependencies.delay,
+            getPollTimeoutMs(source, dependencies),
+            source,
+            dependencies.log,
+            async (attempt, waitMs) =>
+              updateTaskDetail(
+                String(attachment.id),
+                getSafeMessageText("parse-task-download-reconnect", {
+                  attempt: String(attempt),
+                  seconds: String(Math.ceil(waitMs / 1000)),
+                }),
+              ),
+          );
+        };
+        let result: any;
+        try {
+          result = await downloadSingle();
+        } catch (error) {
+          if (!isTaskNotFoundError(error, source)) {
+            throw error;
+          }
+          chunk.taskID = undefined;
+          chunk.status = "pending";
+          await persistTaskResume(task, resume);
+          await submitSingle();
+          await pollSingle();
+          result = await downloadSingle();
+        }
+        (result as any)._chunkPageCount = pageCount;
+        await writeChunkResult(cachePath, result);
+        results[0] = result;
+        chunk.status = "succeeded";
+        await persistTaskResume(task, resume);
+      }
     }
 
     let mergedResult: any;
-    taskStore.upsertTask({
+    await taskStore.upsertTask({
       ...taskStore.getTask(String(attachment.id))!,
       detail: undefined,
     });
@@ -741,7 +961,7 @@ async function parseAttachmentWithDependencies(
           parseColumnRunning = false;
         }
         dependencies.showMessage("parse-error-empty-lite-markdown");
-        taskStore.updateTaskStatus(
+        await taskStore.updateTaskStatus(
           String(attachment.id),
           "failed",
           "parse-error-empty-lite-markdown",
@@ -754,6 +974,7 @@ async function parseAttachmentWithDependencies(
         source,
         markdown: result.markdown,
       });
+      await cleanupTaskResume(String(attachment.id), resume);
       await updateParseColumnStatus(
         dependencies,
         "ready",
@@ -783,7 +1004,7 @@ async function parseAttachmentWithDependencies(
         storage.getAttachmentDir(attachmentRef),
       );
 
-      taskStore.updateTaskStatus(String(attachment.id), "succeeded");
+      await taskStore.updateTaskStatus(String(attachment.id), "succeeded");
 
       return;
     }
@@ -817,7 +1038,7 @@ async function parseAttachmentWithDependencies(
         // Ignore tag update errors
       }
       dependencies.showMessage("parse-error-empty-boxes");
-      taskStore.updateTaskStatus(String(attachment.id), "failed");
+      await taskStore.updateTaskStatus(String(attachment.id), "failed");
       return;
     }
 
@@ -831,6 +1052,7 @@ async function parseAttachmentWithDependencies(
       images:
         dependencies.getSaveImages?.() !== false ? result.images : undefined,
     });
+    await cleanupTaskResume(String(attachment.id), resume);
     await updateParseColumnStatus(
       dependencies,
       "ready",
@@ -860,7 +1082,7 @@ async function parseAttachmentWithDependencies(
       storage.getAttachmentDir(attachmentRef),
     );
 
-    taskStore.updateTaskStatus(String(attachment.id), "succeeded");
+    await taskStore.updateTaskStatus(String(attachment.id), "succeeded");
   } catch (error) {
     if (parseColumnRunning) {
       await updateParseColumnStatus(
@@ -895,7 +1117,7 @@ async function parseAttachmentWithDependencies(
     );
     dependencies.showMessage(failure.id, failure.args);
 
-    taskStore.updateTaskStatus(
+    await taskStore.updateTaskStatus(
       String(attachment.id),
       "failed",
       failure.args?.error || String(error),
@@ -1049,28 +1271,301 @@ async function toAttachmentRef(
   };
 }
 
+function createTaskResume(
+  existing: TaskResumeRecord | undefined,
+  source: ParseSource,
+  mode: ParseMode,
+  localApiBaseURL: string,
+  filePath: string,
+  pdfMtime: number,
+  pageCount: number,
+  chunkSize: number,
+  chunkCount: number,
+): TaskResumeRecord {
+  const expectedChunks = Array.from({ length: chunkCount }, (_, index) => ({
+    index,
+    startPage: index * chunkSize + 1,
+    endPage: Math.min((index + 1) * chunkSize, pageCount),
+  }));
+  const canReuse =
+    existing?.source === source &&
+    existing.mode === mode &&
+    existing.filePath === filePath &&
+    existing.pdfMtime === pdfMtime &&
+    existing.pageCount === pageCount &&
+    existing.chunkSize === chunkSize &&
+    existing.chunks.length === expectedChunks.length &&
+    expectedChunks.every((expected) => {
+      const actual = existing.chunks[expected.index];
+      return (
+        actual?.index === expected.index &&
+        actual.startPage === expected.startPage &&
+        actual.endPage === expected.endPage
+      );
+    });
+
+  if (canReuse) {
+    return {
+      ...existing,
+      localApiBaseURL,
+      chunks: existing.chunks.map((chunk) => ({ ...chunk })),
+    };
+  }
+
+  return {
+    source,
+    mode,
+    localApiBaseURL,
+    filePath,
+    pdfMtime,
+    pageCount,
+    chunkSize,
+    chunks: expectedChunks.map(
+      (chunk): TaskChunkRecord => ({
+        ...chunk,
+        status: "pending",
+      }),
+    ),
+  };
+}
+
+async function persistTaskResume(
+  task: TaskRecord,
+  resume: TaskResumeRecord,
+): Promise<void> {
+  task.resume = resume;
+  const current = taskStore.getTask(task.id);
+  const completed = resume.chunks.filter(
+    (chunk) => chunk.status === "succeeded",
+  ).length;
+  const status = current?.status === "failed" ? "failed" : "running";
+  await taskStore.upsertTask({
+    ...task,
+    ...current,
+    resume,
+    status,
+    progress: Math.round((completed / resume.chunks.length) * 100),
+    error: status === "failed" ? current?.error : undefined,
+  });
+}
+
+async function updateTaskDetail(id: string, detail: string): Promise<void> {
+  const current = taskStore.getTask(id);
+  if (!current) {
+    return;
+  }
+  await taskStore.upsertTask({ ...current, detail });
+}
+
+function getTaskResumeDirectory(attachmentID: number): string {
+  return toNativePath(
+    `${Zotero.DataDirectory.dir}/mineru-resume/${attachmentID}`,
+  );
+}
+
+async function ensureTaskResumeDirectory(path: string): Promise<void> {
+  if (typeof IOUtils === "undefined") {
+    throw new MinerUTaskError("IOUtils is unavailable for MinerU resume data");
+  }
+  await IOUtils.makeDirectory(path, { ignoreExisting: true });
+}
+
+async function resetTaskResumeDirectory(path: string): Promise<void> {
+  if (typeof IOUtils === "undefined") {
+    throw new MinerUTaskError("IOUtils is unavailable for MinerU resume data");
+  }
+  try {
+    await IOUtils.remove(path, { recursive: true });
+  } catch {
+    // A first parse has no resume directory yet.
+  }
+}
+
+async function readChunkResult(path: string): Promise<any | null> {
+  if (typeof IOUtils === "undefined") {
+    return null;
+  }
+  try {
+    if (!(await IOUtils.exists(path))) {
+      return null;
+    }
+    const content = await IOUtils.readUTF8(path);
+    const result = JSON.parse(content, reviveChunkValue);
+    return result && typeof result === "object" ? result : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeChunkResult(path: string, result: unknown): Promise<void> {
+  if (typeof IOUtils === "undefined") {
+    throw new MinerUTaskError("IOUtils is unavailable for MinerU resume data");
+  }
+  await IOUtils.writeUTF8(path, JSON.stringify(result, serializeChunkValue), {
+    tmpPath: `${path}.tmp`,
+  });
+}
+
+function serializeChunkValue(_key: string, value: unknown): unknown {
+  return value instanceof Uint8Array
+    ? { __mineruUint8Array: Array.from(value) }
+    : value;
+}
+
+function reviveChunkValue(_key: string, value: unknown): unknown {
+  if (
+    value &&
+    typeof value === "object" &&
+    "__mineruUint8Array" in value &&
+    Array.isArray(
+      (value as { __mineruUint8Array?: unknown }).__mineruUint8Array,
+    )
+  ) {
+    return new Uint8Array(
+      (value as { __mineruUint8Array: number[] }).__mineruUint8Array,
+    );
+  }
+  return value;
+}
+
+async function cleanupTaskResume(
+  taskID: string,
+  resume: TaskResumeRecord,
+): Promise<void> {
+  if (typeof IOUtils !== "undefined") {
+    for (const chunk of resume.chunks) {
+      if (chunk.resultPath) {
+        try {
+          await IOUtils.remove(chunk.resultPath);
+        } catch {
+          // Cleanup is best effort after the final result is ready.
+        }
+      }
+    }
+    try {
+      await IOUtils.remove(getTaskResumeDirectory(Number(taskID)), {
+        recursive: true,
+      });
+    } catch {
+      // The directory may already be empty or unavailable.
+    }
+  }
+  const current = taskStore.getTask(taskID);
+  if (current) {
+    await taskStore.upsertTask({
+      ...current,
+      resume: undefined,
+      detail: undefined,
+    });
+  }
+}
+
+async function downloadTaskResultWithRetry(
+  client: MinerUClient,
+  taskID: string,
+  delay: (ms: number) => Promise<void>,
+  timeoutMs: number,
+  source: ParseSource,
+  log: (...args: unknown[]) => void,
+  onRetry?: (attempt: number, waitMs: number) => Promise<void>,
+): Promise<any> {
+  const deadline = Date.now() + timeoutMs;
+  const maxAttempts = Math.max(1, Math.ceil(timeoutMs / POLL_INTERVAL_MS));
+  let attempt = 0;
+  while (true) {
+    try {
+      return await client.downloadResult(taskID);
+    } catch (error) {
+      if (
+        !isRetryableNetworkError(error, source) ||
+        Date.now() >= deadline ||
+        attempt >= maxAttempts
+      ) {
+        throw error;
+      }
+      attempt += 1;
+      const waitMs = getReconnectDelayMs(attempt);
+      log("MinerU result download interrupted; retrying", {
+        taskID,
+        attempt,
+        waitMs,
+        error,
+      });
+      await onRetry?.(attempt, waitMs);
+      await delay(Math.min(waitMs, Math.max(0, deadline - Date.now())));
+    }
+  }
+}
+
 async function waitForTask(
   client: MinerUClient,
   taskID: string,
   delay: (ms: number) => Promise<void>,
   timeoutMs: number,
   checkAbort?: () => boolean,
+  source: ParseSource = "online",
+  log: (...args: unknown[]) => void = () => {},
+  onRetry?: (attempt: number, waitMs: number) => Promise<void>,
 ): Promise<void> {
   const maxPollCount = Math.ceil(timeoutMs / POLL_INTERVAL_MS);
+  let retryAttempt = 0;
   for (let count = 0; count < maxPollCount; count += 1) {
     if (checkAbort?.()) {
       throw new MinerUTaskError("MinerU task cancelled by user");
     }
-    const result = await client.pollTask(taskID);
-    if (result.status === "succeeded") {
-      return;
+    try {
+      const result = await client.pollTask(taskID);
+      retryAttempt = 0;
+      if (result.status === "succeeded") {
+        return;
+      }
+      if (result.status === "failed") {
+        throw new MinerUTaskError(result.error || "MinerU task failed");
+      }
+      await delay(POLL_INTERVAL_MS);
+    } catch (error) {
+      if (!isRetryableNetworkError(error, source)) {
+        throw error;
+      }
+      retryAttempt += 1;
+      const waitMs = getReconnectDelayMs(retryAttempt);
+      log("MinerU task polling interrupted; retrying", {
+        taskID,
+        attempt: retryAttempt,
+        waitMs,
+        error,
+      });
+      await onRetry?.(retryAttempt, waitMs);
+      await delay(waitMs);
     }
-    if (result.status === "failed") {
-      throw new MinerUTaskError(result.error || "MinerU task failed");
-    }
-    await delay(POLL_INTERVAL_MS);
   }
   throw new MinerUTaskError("MinerU task timed out");
+}
+
+function isTaskNotFoundError(error: unknown, source: ParseSource): boolean {
+  return (
+    source === "local" &&
+    error instanceof MinerURequestError &&
+    ["local-poll", "local-download"].includes(error.stage) &&
+    error.status === 404
+  );
+}
+
+function isRetryableNetworkError(error: unknown, source: ParseSource): boolean {
+  if (source !== "local") {
+    return false;
+  }
+  if (!(error instanceof MinerURequestError)) {
+    return false;
+  }
+  return (
+    error.stage.startsWith("local-") &&
+    (error.status === 0 || error.status >= 500)
+  );
+}
+
+function getReconnectDelayMs(attempt: number): number {
+  return Math.min(30_000, 3_000 * 2 ** Math.min(attempt - 1, 3));
 }
 
 async function confirmReparse(): Promise<ReparseChoice> {
@@ -1435,6 +1930,13 @@ function getCurrentParseMode(
   return dependencies.getParseMode?.() ?? "precise";
 }
 
+function getChunkPageLimit(source: ParseSource): number {
+  // The remote Local MinerU API rejects requests above 200 pages. Keep the
+  // same conservative boundary for the other clients until their limits are
+  // handled independently.
+  return source === "local" ? LOCAL_CHUNK_PAGE_LIMIT : DEFAULT_CHUNK_PAGE_LIMIT;
+}
+
 function getPollTimeoutMs(
   source: ParseSource,
   dependencies: ParseManagerDependencies,
@@ -1504,6 +2006,13 @@ function getParseFailureMessage(
   hasReadyResult: boolean,
 ): { id: FluentMessageId; args?: Record<string, string> } {
   const message = error instanceof Error ? error.message : String(error);
+  if (
+    error instanceof MinerURequestError &&
+    ["local-poll", "local-download"].includes(error.stage) &&
+    error.status === 404
+  ) {
+    return { id: "parse-error-local-task-lost", args: { message } };
+  }
   if (error instanceof MinerURequestError && error.stage.startsWith("local-")) {
     return { id: "parse-error-local-api-unavailable", args: { message } };
   }

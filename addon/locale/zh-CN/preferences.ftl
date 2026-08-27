@@ -39,6 +39,7 @@ pref-parallel-split =
 pref-parallel-split-help = 拆分大型PDF时，并行而不是顺序解析各个部分，同时支持从任务管理器恢复失败的进度。
 pref-data-folder-title = 数据目录
 pref-open-data-folder = 打开数据文件夹
+pref-open-task-manager = 打开任务管理器
 pref-parsed-count = 已解析 PDF：{ $count }
 pref-parsed-count-error = 已解析 PDF：读取失败
 pref-data-folder-path = 数据目录：{ $path }

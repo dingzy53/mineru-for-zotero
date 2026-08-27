@@ -9,4 +9,4 @@ pref("apiToken", "");
 pref("saveImages", true);
 pref("syncFolder", "");
 pref("autoParsePageLimit", 0);
-pref("parallelSplit", true);
+pref("parallelSplit", false);

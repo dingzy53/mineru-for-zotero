@@ -365,7 +365,7 @@
 
               if (task.status === "failed") {
                 var retryBtn = document.createElement("button");
-                retryBtn.textContent = "Retry";
+                retryBtn.textContent = task.resume ? "Resume" : "Retry";
                 retryBtn.className = "clear-btn"; // reuse styling
                 retryBtn.style.padding = "2px 8px";
                 retryBtn.style.fontSize = "0.75rem";
@@ -394,11 +394,17 @@
                           addonApi =
                             globalThis.opener.Zotero.MinerUForZotero.api;
                         }
-                        if (
-                          addonApi &&
-                          typeof addonApi.retryTask === "function"
-                        ) {
-                          addonApi.retryTask(taskId);
+                        var currentTask = taskStore.getTask(taskId);
+                        if (addonApi) {
+                          if (
+                            currentTask &&
+                            currentTask.resume &&
+                            typeof addonApi.resumeTask === "function"
+                          ) {
+                            addonApi.resumeTask(taskId);
+                          } else if (typeof addonApi.retryTask === "function") {
+                            addonApi.retryTask(taskId);
+                          }
                         }
                       } catch (err) {}
                     }

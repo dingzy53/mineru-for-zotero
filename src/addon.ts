@@ -53,18 +53,41 @@ class Addon {
       syncAllToAgentFolder,
       updateAllMinerUTags,
       retryTask: this.retryTask.bind(this),
+      resumeTask: this.resumeTask.bind(this),
       cancelTask: this.cancelTask.bind(this),
     };
   }
 
-  public cancelTask(taskId: string): void {
+  public async cancelTask(taskId: string): Promise<void> {
     const existingTask = taskStore.getTask(taskId);
     if (existingTask) {
-      taskStore.upsertTask({
+      await taskStore.upsertTask({
         ...existingTask,
         status: "failed",
         error: "Cancelled by user",
       });
+    }
+  }
+
+  public async resumeTask(taskId: string): Promise<void> {
+    await taskStore.waitUntilLoaded();
+    const existingTask = taskStore.getTask(taskId);
+    if (!existingTask?.resume) {
+      await this.retryTask(taskId);
+      return;
+    }
+
+    const id = parseInt(taskId, 10);
+    if (isNaN(id)) return;
+    const item = await Zotero.Items.getAsync(id);
+    if (item && item.isAttachment()) {
+      await taskStore.upsertTask({
+        ...existingTask,
+        error: undefined,
+        detail: "Resuming saved MinerU task...",
+        status: "pending",
+      });
+      await parseAttachment(item, { force: true, resume: true });
     }
   }
 
@@ -75,7 +98,7 @@ class Addon {
     if (item && item.isAttachment()) {
       const existingTask = taskStore.getTask(taskId);
       if (existingTask) {
-        taskStore.upsertTask({
+        await taskStore.upsertTask({
           ...existingTask,
           error: undefined,
           detail: "Retrying...",
