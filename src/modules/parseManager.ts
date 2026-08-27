@@ -49,6 +49,8 @@ const POLL_INTERVAL_MS = 3000;
 const LOCAL_CHUNK_PAGE_LIMIT = 200;
 const DEFAULT_CHUNK_PAGE_LIMIT = 200;
 const DEFAULT_ONLINE_POLL_TIMEOUT_MS = 6 * 60 * 1000;
+const MAX_CONCURRENT_REQUESTS_DEFAULT = 3;
+const MAX_CONCURRENT_REQUESTS_CEILING = 10;
 const PROGRESS_WINDOW_ICON_URI = `chrome://${config.addonRef}/content/icons/favicon.png`;
 const PROGRESS_WINDOW_LABEL_LINE_HEIGHT_PX = 18;
 const PROGRESS_WINDOW_DETAIL_LEFT_OFFSET_PX = 22;
@@ -65,6 +67,7 @@ export interface ParseManagerDependencies {
   getLocalApiTimeoutMinutes?: () => number;
   getSaveImages?: () => boolean;
   getParallelSplit?: () => boolean;
+  getMaxConcurrentRequests?: () => number;
   getPdfPageCount?: (filePath: string) => Promise<number>;
   splitPdf?: (
     inputPath: string,
@@ -236,8 +239,8 @@ async function parseAttachmentsWithDependencies(
           })
         : undefined;
 
-    // Limit concurrency to 3
-    const concurrency = 3;
+    // Limit concurrent MinerU requests across attachments.
+    const concurrency = getMaxConcurrentRequests(dependencies);
     let active = 0;
     const queue = [...attachmentsToParse];
 
@@ -306,8 +309,8 @@ async function parseAttachmentsWithDependencies(
         })
       : undefined;
 
-  // Limit concurrency to 3
-  const concurrency = 3;
+  // Limit concurrent MinerU requests across attachments.
+  const concurrency = getMaxConcurrentRequests(dependencies);
   let active = 0;
   const queue = [...attachmentsToParse];
 
@@ -555,6 +558,7 @@ async function parseAttachmentWithDependencies(
     const resumeDirectory = getTaskResumeDirectory(attachment.id);
     if (!canResume) {
       await resetTaskResumeDirectory(resumeDirectory);
+      await cleanupLegacyChunkCacheFiles(attachment.id);
     }
     await ensureTaskResumeDirectory(resumeDirectory);
 
@@ -724,6 +728,7 @@ async function parseAttachmentWithDependencies(
         );
         const queue = [...chunkTasks];
         let active = 0;
+        const chunkConcurrency = getMaxConcurrentRequests(dependencies);
         await new Promise<void>((resolve, reject) => {
           let hasError = false;
           const next = () => {
@@ -737,7 +742,7 @@ async function parseAttachmentWithDependencies(
               resolve();
               return;
             }
-            while (active < 3 && queue.length > 0) {
+            while (active < chunkConcurrency && queue.length > 0) {
               const task = queue.shift()!;
               active++;
               task()
@@ -1381,6 +1386,74 @@ async function resetTaskResumeDirectory(path: string): Promise<void> {
   }
 }
 
+/**
+ * Resolve the MinerU request concurrency cap from
+ * MINERU_API_MAX_CONCURRENT_REQUESTS, falling back to the given default.
+ */
+function resolveEnvConcurrentRequestLimit(defaultLimit: number): number {
+  try {
+    const env = (
+      globalThis as { Services?: { env?: { get(name: string): string } } }
+    ).Services?.env;
+    const raw = env?.get("MINERU_API_MAX_CONCURRENT_REQUESTS");
+    if (!raw) {
+      return defaultLimit;
+    }
+    const parsed = Number.parseInt(raw, 10);
+    if (!Number.isFinite(parsed)) {
+      return defaultLimit;
+    }
+    return Math.min(MAX_CONCURRENT_REQUESTS_CEILING, Math.max(1, parsed));
+  } catch {
+    return defaultLimit;
+  }
+}
+
+function getMaxConcurrentRequests(
+  dependencies: ParseManagerDependencies,
+): number {
+  if (dependencies.getMaxConcurrentRequests) {
+    return dependencies.getMaxConcurrentRequests();
+  }
+  return resolveEnvConcurrentRequestLimit(MAX_CONCURRENT_REQUESTS_DEFAULT);
+}
+
+/**
+ * Versions before the per-attachment resume directory stored chunk result
+ * caches directly in the Zotero data directory root. Best-effort removal of
+ * those leftovers so abandoned caches do not accumulate forever.
+ */
+async function cleanupLegacyChunkCacheFiles(
+  attachmentID: number,
+): Promise<void> {
+  if (typeof IOUtils === "undefined") {
+    return;
+  }
+  try {
+    const children = await IOUtils.getChildren(Zotero.DataDirectory.dir);
+    const prefix = `mineru-part-${attachmentID}-`;
+    for (const entry of children) {
+      const file = entry as { path?: string; name?: string; type?: string };
+      if (
+        !file.path ||
+        file.type !== "file" ||
+        !file.name ||
+        !file.name.startsWith(prefix) ||
+        !file.name.endsWith("-result.json")
+      ) {
+        continue;
+      }
+      try {
+        await IOUtils.remove(file.path);
+      } catch {
+        // Best effort; leftover files are harmless.
+      }
+    }
+  } catch {
+    // The data directory may be unavailable in tests.
+  }
+}
+
 async function readChunkResult(path: string): Promise<any | null> {
   if (typeof IOUtils === "undefined") {
     return null;
@@ -1552,15 +1625,20 @@ function isTaskNotFoundError(error: unknown, source: ParseSource): boolean {
 }
 
 function isRetryableNetworkError(error: unknown, source: ParseSource): boolean {
-  if (source !== "local") {
-    return false;
-  }
   if (!(error instanceof MinerURequestError)) {
     return false;
   }
-  return (
-    error.stage.startsWith("local-") &&
-    (error.status === 0 || error.status >= 500)
+  const transient = error.status === 0 || error.status >= 500;
+  if (!transient) {
+    return false;
+  }
+  if (source === "local") {
+    return error.stage.startsWith("local-");
+  }
+  // Online: only retry idempotent GET stages (polling and downloads).
+  // Re-submitting or re-uploading could consume the daily quota twice.
+  return ["poll", "agent-poll", "download", "agent-download"].includes(
+    error.stage,
   );
 }
 
@@ -1866,6 +1944,8 @@ function createDefaultDependencies(): ParseManagerDependencies {
     getLocalApiBaseURL,
     getLocalApiTimeoutMinutes,
     getSaveImages,
+    getMaxConcurrentRequests: () =>
+      resolveEnvConcurrentRequestLimit(MAX_CONCURRENT_REQUESTS_DEFAULT),
     createStorage: () => createStorage(getMinerUStorageRoot()),
     createClient: (settings) => createMinerUClientForSettings(settings),
     showMessage,

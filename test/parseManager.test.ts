@@ -690,6 +690,49 @@ describe("parseManager", function () {
     assert.sameMembers(started, ["C:\\tmp\\a.pdf", "C:\\tmp\\b.pdf"]);
   });
 
+  it("serializes batch parsing when the concurrency cap is one", async function () {
+    const messages: string[] = [];
+    let started = 0;
+    let running = 0;
+    let maxObservedRunning = 0;
+    const manager = createParseManager({
+      ...baseDependencies(messages),
+      getMaxConcurrentRequests: () => 1,
+      client: {
+        submitPdf: async (filePath) => {
+          running += 1;
+          started += 1;
+          maxObservedRunning = Math.max(maxObservedRunning, running);
+          return { taskID: `task-${started}-${filePath}` };
+        },
+        pollTask: async () => {
+          maxObservedRunning = Math.max(maxObservedRunning, running);
+          return { status: "succeeded" };
+        },
+        downloadResult: async () => {
+          const result = preciseResultFixture();
+          running -= 1;
+          return result;
+        },
+      },
+    });
+
+    await manager.parseAttachments([
+      pdfAttachment({ id: 11, filePath: "C:/tmp/a.pdf" }),
+      pdfAttachment({ id: 12, filePath: "C:/tmp/b.pdf" }),
+      pdfAttachment({ id: 13, filePath: "C:/tmp/c.pdf" }),
+    ]);
+
+    assert.equal(started, 3);
+    assert.equal(maxObservedRunning, 1);
+    assert.include(messages, "parse-task-submitted-total");
+    assert.equal(
+      messages.filter((message) => message === "parse-task-finished-progress")
+        .length,
+      3,
+    );
+  });
+
   it("reports batch parse notices with total and completion progress", async function () {
     const notices: Array<{ id: string; args?: Record<string, string> }> = [];
     const writeOrder: number[] = [];
@@ -1770,6 +1813,59 @@ describe("parseManager", function () {
     assert.equal(submitCount, 1);
     assert.equal(pollCount, 2);
     assert.include(messages, "parse-task-finished");
+  });
+
+  it("retries transient online polling failures without resubmitting", async function () {
+    const messages: string[] = [];
+    let submitCount = 0;
+    let pollCount = 0;
+    const manager = createParseManager({
+      ...baseDependencies(messages),
+      client: {
+        submitPdf: async () => {
+          submitCount += 1;
+          return { taskID: "online-retry-task" };
+        },
+        pollTask: async () => {
+          pollCount += 1;
+          if (pollCount <= 2) {
+            throw new MinerURequestError("poll", 503, "service unavailable");
+          }
+          return { status: "succeeded" };
+        },
+        downloadResult: async () => preciseResultFixture(),
+      },
+    });
+
+    // The base delay stub is a no-op, so reconnect retries advance without
+    // wall-clock waits.
+
+    await manager.parseAttachment(pdfAttachment({ id: 7103 }));
+
+    assert.equal(submitCount, 1);
+    assert.equal(pollCount, 3);
+    assert.include(messages, "parse-task-finished");
+  });
+
+  it("does not retry online upload failures", async function () {
+    const messages: string[] = [];
+    let submitCalls = 0;
+    const manager = createParseManager({
+      ...baseDependencies(messages),
+      client: {
+        submitPdf: async () => {
+          submitCalls += 1;
+          throw new MinerURequestError("upload", 0, "offline");
+        },
+        pollTask: async () => ({ status: "succeeded" }),
+        downloadResult: async () => preciseResultFixture(),
+      },
+    });
+
+    await manager.parseAttachment(pdfAttachment({ id: 7104 }));
+
+    assert.equal(submitCalls, 1);
+    assert.include(messages, "parse-error-upload");
   });
 
   it("resumes a failed split from the first incomplete chunk", async function () {
