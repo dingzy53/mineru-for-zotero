@@ -317,7 +317,7 @@
 
         var addonApi = getAddonApi();
 
-        function t(id, fallback, args) {
+        function tmText(id, fallback, args) {
           try {
             if (addonApi && typeof addonApi.getString === "function") {
               var localized = addonApi.getString(id, args);
@@ -335,11 +335,14 @@
         // Apply static chrome labels.
         var titleEl = document.getElementById("title");
         if (titleEl) {
-          titleEl.textContent = t("task-manager-title", "MinerU Task Manager");
+          titleEl.textContent = tmText(
+            "task-manager-title",
+            "MinerU Task Manager",
+          );
         }
         var clearBtnEl = document.getElementById("clearBtn");
         if (clearBtnEl) {
-          clearBtnEl.textContent = t(
+          clearBtnEl.textContent = tmText(
             "task-manager-clear-history",
             "Clear History",
           );
@@ -352,7 +355,7 @@
           if (!taskStore) {
             listEl.innerHTML =
               '<div class="error-state">' +
-              t(
+              tmText(
                 "task-manager-store-missing",
                 "TaskStore not found. Please restart Zotero and try again.",
               ) +
@@ -366,7 +369,7 @@
           } catch (e) {
             listEl.innerHTML =
               '<div class="error-state">' +
-              t(
+              tmText(
                 "task-manager-read-error",
                 "Error reading tasks: { $message }",
                 {
@@ -380,10 +383,13 @@
           if (tasks.length === 0) {
             var emptyState = document.createElement("div");
             emptyState.className = "empty-state";
-            emptyState.textContent = t("task-manager-empty", "No tasks yet.");
+            emptyState.textContent = tmText(
+              "task-manager-empty",
+              "No tasks yet.",
+            );
             emptyState.appendChild(document.createElement("br"));
             var hint = document.createElement("small");
-            hint.textContent = t(
+            hint.textContent = tmText(
               "task-manager-empty-hint",
               "Parse a PDF and tasks will appear here.",
             );
@@ -394,9 +400,9 @@
           }
 
           var groupLabels = {
-            Running: t("task-manager-group-running", "Running"),
-            Failed: t("task-manager-group-failed", "Failed"),
-            Succeeded: t("task-manager-group-succeeded", "Succeeded"),
+            Running: tmText("task-manager-group-running", "Running"),
+            Failed: tmText("task-manager-group-failed", "Failed"),
+            Succeeded: tmText("task-manager-group-succeeded", "Succeeded"),
           };
 
           var groups = {
@@ -460,8 +466,8 @@
               if (task.status === "failed") {
                 var retryBtn = document.createElement("button");
                 retryBtn.textContent = task.resume
-                  ? t("task-manager-resume", "Resume")
-                  : t("task-manager-retry", "Retry");
+                  ? tmText("task-manager-resume", "Resume")
+                  : tmText("task-manager-retry", "Retry");
                 retryBtn.className = "clear-btn"; // reuse styling
                 retryBtn.style.padding = "2px 8px";
                 retryBtn.style.fontSize = "0.75rem";
@@ -493,7 +499,7 @@
                 task.status === "pending"
               ) {
                 var cancelBtn = document.createElement("button");
-                cancelBtn.textContent = t("task-manager-stop", "Stop");
+                cancelBtn.textContent = tmText("task-manager-stop", "Stop");
                 cancelBtn.className = "clear-btn"; // reuse styling
                 cancelBtn.style.padding = "2px 8px";
                 cancelBtn.style.fontSize = "0.75rem";
@@ -562,7 +568,7 @@
               if (task.error) {
                 var error = document.createElement("div");
                 error.className = "task-error";
-                error.textContent = t(
+                error.textContent = tmText(
                   "task-manager-error-prefix",
                   "Error: { $message }",
                   { message: task.error },
