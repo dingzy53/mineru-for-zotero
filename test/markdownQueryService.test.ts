@@ -307,6 +307,12 @@ describe("markdownQueryService", function () {
         { lastName: "Han", firstName: "Yu" },
         { name: "MDPI Publishing" },
       ],
+      fields: {
+        itemType: "journalArticle",
+        publicationTitle: "Electronics",
+        DOI: "10.3390/electronics11010001",
+        extra: "Citation Key: chen2022energy",
+      },
     });
     const service = createMarkdownQueryService(
       fakeDeps({
@@ -332,10 +338,130 @@ describe("markdownQueryService", function () {
             title: "Energy-Saving Task Scheduling",
             year: "2022",
             creators: ["Chen, Qingfeng", "Han, Yu", "MDPI Publishing"],
+            itemType: "journalArticle",
+            publication: "Electronics",
+            citekey: "chen2022energy",
+            doi: "10.3390/electronics11010001",
           },
           attachments: [],
         },
       ],
+    });
+  });
+
+  it("filters candidates by parsedOnly", async function () {
+    const parentParsed = fakeItem({
+      id: 2,
+      key: "ITEM1",
+      regular: true,
+      title: "Parsed Item",
+      attachments: [1],
+    });
+    const pdfParsed = fakeItem({
+      id: 1,
+      key: "PDF1",
+      pdf: true,
+      fileName: "parsed.pdf",
+      parentItemID: 2,
+    });
+    const parentUnparsed = fakeItem({
+      id: 4,
+      key: "ITEM2",
+      regular: true,
+      title: "Unparsed Item",
+      attachments: [3],
+    });
+    const pdfUnparsed = fakeItem({
+      id: 3,
+      key: "PDF2",
+      pdf: true,
+      fileName: "unparsed.pdf",
+      parentItemID: 4,
+    });
+
+    const service = createMarkdownQueryService({
+      items: fakeItems([parentParsed, pdfParsed, parentUnparsed, pdfUnparsed]),
+      storage: {
+        async readPreferredMarkdown() {
+          return "# Ready";
+        },
+        async readBoxes() {
+          return [];
+        },
+        async readParseStatus(ref) {
+          if (ref.key === "PDF1") {
+            return { preciseReady: true, liteReady: false };
+          }
+          return { preciseReady: false, liteReady: false };
+        },
+      },
+      searchItems: async () => [parentParsed, parentUnparsed],
+    });
+
+    const response = await service.searchByTitle({
+      libraryID: 1,
+      title: "Item",
+      parsedOnly: true,
+    });
+
+    assert.equal(response.candidates.length, 1);
+    assert.equal(response.candidates[0].item.key, "ITEM1");
+  });
+
+  it("returns libraries through getLibraries", async function () {
+    const service = createMarkdownQueryService({
+      ...fakeDeps({ markdown: "# X" }),
+      getLibraries: async () => [
+        { libraryID: 1, name: "My Library", type: "user" },
+        { libraryID: 2, name: "Lab", type: "group" },
+      ],
+    });
+
+    const result = await service.getLibraries();
+    assert.deepEqual(result, {
+      libraries: [
+        { libraryID: 1, name: "My Library", type: "user" },
+        { libraryID: 2, name: "Lab", type: "group" },
+      ],
+    });
+  });
+
+  it("returns collections through getCollections with optional filtering", async function () {
+    const service = createMarkdownQueryService({
+      ...fakeDeps({ markdown: "# X" }),
+      getCollections: async () => [
+        { id: 10, key: "COL1", name: "Root", libraryID: 1 },
+        { id: 11, key: "COL2", name: "Child", libraryID: 1, parentKey: "COL1" },
+      ],
+    });
+
+    const all = await service.getCollections({ libraryID: 1 });
+    assert.equal(all.collections.length, 2);
+
+    const filtered = await service.getCollections({
+      libraryID: 1,
+      parentKey: "COL1",
+    });
+    assert.equal(filtered.collections.length, 1);
+    assert.equal(filtered.collections[0].key, "COL2");
+  });
+
+  it("returns tags through getTags with optional limit", async function () {
+    const service = createMarkdownQueryService({
+      ...fakeDeps({ markdown: "# X" }),
+      getTags: async (_libId, limit) => {
+        const allTags = [
+          { tag: "ai", numItems: 10 },
+          { tag: "ml", numItems: 5 },
+        ];
+        return limit ? allTags.slice(0, limit) : allTags;
+      },
+    });
+
+    const tags = await service.getTags({ libraryID: 1, limit: 1 });
+    assert.deepEqual(tags, {
+      libraryID: 1,
+      tags: [{ tag: "ai", numItems: 10 }],
     });
   });
 });
@@ -376,6 +502,9 @@ function fakeDeps(input: {
         }
         return input.markdown;
       },
+      async readBoxes() {
+        return [];
+      },
       async readParseStatus() {
         return parseStatus;
       },
@@ -402,6 +531,7 @@ function fakeItem(input: {
   parentItemID?: number | false;
   attachments?: number[];
   bestAttachments?: ZoteroItemLike[];
+  fields?: Record<string, string>;
 }): ZoteroItemLike {
   return {
     id: input.id,
@@ -416,6 +546,9 @@ function fakeItem(input: {
     isPDFAttachment: () => Boolean(input.pdf),
     getDisplayTitle: () => input.title ?? input.fileName ?? input.key,
     getField: (field) => {
+      if (input.fields?.[field]) {
+        return input.fields[field];
+      }
       if (field === "title") {
         return input.title ?? "";
       }

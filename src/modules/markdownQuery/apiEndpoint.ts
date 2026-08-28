@@ -26,6 +26,9 @@ export const MARKDOWN_ENDPOINT_PATHS = [
   "/mineru-for-zotero/markdown",
   "/mineru-for-zotero/parse",
   "/mineru-for-zotero/tasks",
+  "/mineru-for-zotero/libraries",
+  "/mineru-for-zotero/collections",
+  "/mineru-for-zotero/tags",
 ] as const;
 
 /**
@@ -72,8 +75,33 @@ export function createMarkdownQueryEndpoint(service: MarkdownQueryService) {
               creator: optionalString(query.creator),
               year: parseYearParam(query.year),
               tag: optionalString(query.tag),
+              collection: optionalString(query.collection),
+              abstract: optionalString(query.abstract),
+              publication: optionalString(query.publication),
+              citekey: optionalString(query.citekey),
+              doi: optionalString(query.doi),
+              itemType: optionalString(query.itemType),
+              since: optionalString(query.since),
+              hasPdf: parseOptionalBoolean(query.hasPdf),
+              parsedOnly: parseOptionalBoolean(query.parsedOnly),
+              sortBy: parseSortBy(query.sortBy),
+              sortOrder: parseSortOrder(query.sortOrder),
               limit: parseOptionalLimit(query.limit),
             }),
+          });
+        } else if (options.pathname === "/mineru-for-zotero/libraries") {
+          payload = await service.getLibraries();
+        } else if (options.pathname === "/mineru-for-zotero/collections") {
+          payload = await service.getCollections({
+            libraryID: requireInteger(query.libraryID, "libraryID"),
+            parentKey: optionalString(
+              query.parentKey || query.parentCollectionKey,
+            ),
+          });
+        } else if (options.pathname === "/mineru-for-zotero/tags") {
+          payload = await service.getTags({
+            libraryID: requireInteger(query.libraryID, "libraryID"),
+            limit: parseOptionalLimit(query.limit),
           });
         } else if (options.pathname === "/mineru-for-zotero/parse") {
           if (options.method !== "POST")
@@ -145,8 +173,7 @@ function toZoteroEndpoint(
 }
 
 /**
- * 通过 Zotero.Search 按标题、创作者等条件模糊检索库内条目。
- * year 在检索结果上做前缀过滤，limit 在过滤后截断，保证两者语义稳定。
+ * 通过 Zotero.Search 按标题、创作者、分类等条件模糊检索库内条目。
  */
 async function searchItems(input: ItemSearchInput): Promise<ZoteroItemLike[]> {
   const search = new Zotero.Search({ libraryID: input.libraryID });
@@ -159,16 +186,126 @@ async function searchItems(input: ItemSearchInput): Promise<ZoteroItemLike[]> {
   if (input.tag) {
     search.addCondition("tag", "is", input.tag);
   }
+  if (input.abstract) {
+    search.addCondition("abstractNote", "contains", input.abstract);
+  }
+  if (input.publication) {
+    search.addCondition("publicationTitle", "contains", input.publication);
+  }
+  if (input.doi) {
+    search.addCondition("DOI", "contains", input.doi);
+  }
+  if (input.itemType) {
+    search.addCondition("itemType", "is", input.itemType);
+  }
+  if (input.collection) {
+    const col = resolveCollection(input.libraryID, input.collection);
+    if (col) {
+      search.addCondition("collectionID", "is", col.id);
+    }
+  }
+
   const ids = await search.search();
   let items = await Zotero.Items.getAsync(ids);
-  const year = input.year;
-  if (year) {
-    items = items.filter((item) => itemMatchesYear(item, year));
+
+  if (input.year) {
+    items = items.filter((item) => itemMatchesYear(item, input.year!));
   }
+  if (input.citekey) {
+    const targetKey = input.citekey.toLowerCase();
+    items = items.filter((item) => {
+      const extra = item.getField("extra") || "";
+      const match = /Citation Key:\s*([^\s\n]+)/i.exec(extra);
+      if (match && match[1].toLowerCase().includes(targetKey)) {
+        return true;
+      }
+      try {
+        const fieldKey = item.getField("citationKey");
+        if (fieldKey && fieldKey.toLowerCase().includes(targetKey)) {
+          return true;
+        }
+      } catch {
+        // ignore
+      }
+      return false;
+    });
+  }
+  if (input.since) {
+    const sinceDate = input.since.trim();
+    items = items.filter((item) => {
+      const added = item.dateAdded || item.getField("dateAdded") || "";
+      return added.startsWith(sinceDate) || added >= sinceDate;
+    });
+  }
+  if (input.hasPdf) {
+    const itemAttachments = await Promise.all(
+      items.map(async (item) => {
+        if (item.isPDFAttachment()) return { item, hasPdf: true };
+        const attIds = item.getAttachments(false);
+        if (!attIds || attIds.length === 0) return { item, hasPdf: false };
+        const atts = await Zotero.Items.getAsync(attIds);
+        return { item, hasPdf: atts.some((a) => a.isPDFAttachment()) };
+      }),
+    );
+    items = itemAttachments.filter((x) => x.hasPdf).map((x) => x.item);
+  }
+
+  if (input.sortBy) {
+    const order = input.sortOrder === "asc" ? 1 : -1;
+    items.sort((a, b) => {
+      let valA = "";
+      let valB = "";
+      if (input.sortBy === "dateAdded") {
+        valA = a.dateAdded || a.getField("dateAdded") || "";
+        valB = b.dateAdded || b.getField("dateAdded") || "";
+      } else if (input.sortBy === "dateModified") {
+        valA = a.dateModified || a.getField("dateModified") || "";
+        valB = b.dateModified || b.getField("dateModified") || "";
+      } else if (input.sortBy === "year") {
+        valA = a.getField("date") || "";
+        valB = b.getField("date") || "";
+      } else if (input.sortBy === "title") {
+        valA = a.getDisplayTitle() || a.getField("title") || "";
+        valB = b.getDisplayTitle() || b.getField("title") || "";
+      }
+      return valA.localeCompare(valB) * order;
+    });
+  }
+
   if (input.limit !== undefined) {
     items = items.slice(0, input.limit);
   }
   return items;
+}
+
+function resolveCollection(
+  libraryID: number,
+  collectionParam: string,
+): { id: number; key: string } | undefined {
+  if (
+    typeof Zotero === "undefined" ||
+    !(Zotero as any).Collections?.getByLibrary
+  ) {
+    return undefined;
+  }
+  if ((Zotero as any).Collections.getByLibraryAndKey) {
+    const byKey = (Zotero as any).Collections.getByLibraryAndKey(
+      libraryID,
+      collectionParam,
+    );
+    if (byKey) return byKey;
+  }
+  const cols = (Zotero as any).Collections.getByLibrary(libraryID);
+  if (Array.isArray(cols)) {
+    const target = collectionParam.toLowerCase();
+    const matched = cols.find(
+      (c: any) =>
+        String(c.key).toLowerCase() === target ||
+        String(c.name).toLowerCase() === target,
+    );
+    return matched;
+  }
+  return undefined;
 }
 
 /**
@@ -300,6 +437,45 @@ function parseOptionalLimit(value: string | undefined): number | undefined {
     );
   }
   return parsed;
+}
+
+/**
+ * 解析可选排序字段。
+ */
+function parseSortBy(
+  value: string | undefined,
+): "dateAdded" | "dateModified" | "title" | "year" | undefined {
+  const text = optionalString(value);
+  if (!text) {
+    return undefined;
+  }
+  if (["dateAdded", "dateModified", "title", "year"].includes(text)) {
+    return text as "dateAdded" | "dateModified" | "title" | "year";
+  }
+  throw new MarkdownQueryError(
+    "invalid-request",
+    400,
+    `Invalid sortBy parameter: ${text}`,
+  );
+}
+
+/**
+ * 解析可选排序方向。
+ */
+function parseSortOrder(value: string | undefined): "asc" | "desc" | undefined {
+  const text = optionalString(value);
+  if (!text) {
+    return undefined;
+  }
+  const lower = text.toLowerCase();
+  if (lower === "asc" || lower === "desc") {
+    return lower;
+  }
+  throw new MarkdownQueryError(
+    "invalid-request",
+    400,
+    `Invalid sortOrder parameter: ${text}`,
+  );
 }
 
 /**

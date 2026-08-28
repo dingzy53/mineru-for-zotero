@@ -7,11 +7,14 @@ import {
 } from "./markdownParser";
 import {
   AttachmentSummary,
+  CollectionSummary,
   ItemSearchInput,
   ItemSummary,
+  LibrarySummary,
   MarkdownGranularity,
   MarkdownQueryError,
   ParseStatusReader,
+  TagSummary,
   ZoteroItemsGateway,
   ZoteroItemLike,
 } from "./types";
@@ -35,7 +38,12 @@ export interface PreferredMarkdownReader extends ParseStatusReader {
  * 表示 Markdown Query API 对外提供的服务接口。
  */
 export interface MarkdownQueryService {
-  searchByTitle(input: ItemSearchInput): Promise<unknown>;
+  searchByTitle(input: ItemSearchInput): Promise<{
+    candidates: Array<{
+      item: ItemSummary;
+      attachments: AttachmentSummary[];
+    }>;
+  }>;
   queryMarkdown(input: {
     libraryID: number;
     key: string;
@@ -52,6 +60,15 @@ export interface MarkdownQueryService {
     attachmentKey?: string;
   }): Promise<unknown>;
   getTasks(): Promise<unknown>;
+  getLibraries(): Promise<{ libraries: LibrarySummary[] }>;
+  getCollections(input: {
+    libraryID: number;
+    parentKey?: string;
+  }): Promise<{ libraryID: number; collections: CollectionSummary[] }>;
+  getTags(input: {
+    libraryID: number;
+    limit?: number;
+  }): Promise<{ libraryID: number; tags: TagSummary[] }>;
 }
 
 /**
@@ -61,8 +78,92 @@ export function createMarkdownQueryService(deps: {
   items: ZoteroItemsGateway;
   storage: PreferredMarkdownReader;
   searchItems(input: ItemSearchInput): Promise<ZoteroItemLike[]>;
+  getLibraries?(): Promise<LibrarySummary[]> | LibrarySummary[];
+  getCollections?(
+    libraryID: number,
+  ): Promise<CollectionSummary[]> | CollectionSummary[];
+  getTags?(
+    libraryID: number,
+    limit?: number,
+  ): Promise<TagSummary[]> | TagSummary[];
 }): MarkdownQueryService {
   return {
+    async getLibraries() {
+      if (deps.getLibraries) {
+        const libraries = await deps.getLibraries();
+        return { libraries };
+      }
+      if (typeof Zotero !== "undefined" && (Zotero as any).Libraries?.getAll) {
+        const libs = (Zotero as any).Libraries.getAll();
+        const libraries: LibrarySummary[] = libs.map((lib: any) => ({
+          libraryID: Number(lib.id ?? lib.libraryID),
+          name: lib.name || (lib.id === 1 ? "My Library" : `Group ${lib.id}`),
+          type:
+            lib.libraryType === "user" ? "user" : ("group" as "user" | "group"),
+        }));
+        return { libraries };
+      }
+      return {
+        libraries: [{ libraryID: 1, name: "My Library", type: "user" }],
+      };
+    },
+
+    async getCollections(input) {
+      if (deps.getCollections) {
+        let collections = await deps.getCollections(input.libraryID);
+        if (input.parentKey) {
+          collections = collections.filter(
+            (col) => col.parentKey === input.parentKey,
+          );
+        }
+        return { libraryID: input.libraryID, collections };
+      }
+      if (
+        typeof Zotero !== "undefined" &&
+        (Zotero as any).Collections?.getByLibrary
+      ) {
+        const rawCols = (Zotero as any).Collections.getByLibrary(
+          input.libraryID,
+        );
+        let collections: CollectionSummary[] = rawCols.map((col: any) => ({
+          id: Number(col.id),
+          key: String(col.key),
+          name: String(col.name),
+          libraryID: Number(col.libraryID ?? input.libraryID),
+          parentKey: col.parentKey || undefined,
+          parentID: col.parentID || undefined,
+        }));
+        if (input.parentKey) {
+          collections = collections.filter(
+            (col) => col.parentKey === input.parentKey,
+          );
+        }
+        return { libraryID: input.libraryID, collections };
+      }
+      return { libraryID: input.libraryID, collections: [] };
+    },
+
+    async getTags(input) {
+      if (deps.getTags) {
+        const tags = await deps.getTags(input.libraryID, input.limit);
+        return { libraryID: input.libraryID, tags };
+      }
+      if (typeof Zotero !== "undefined" && (Zotero as any).Tags?.getAll) {
+        const rawTags = (Zotero as any).Tags.getAll(input.libraryID);
+        let tags: TagSummary[] = (Array.isArray(rawTags) ? rawTags : [])
+          .map((t: any) => ({
+            tag: typeof t === "string" ? t : String(t.tag || t.name || ""),
+            numItems: typeof t === "object" ? Number(t.numItems) : undefined,
+          }))
+          .filter((t: TagSummary) => Boolean(t.tag));
+        if (input.limit !== undefined && input.limit > 0) {
+          tags = tags.slice(0, input.limit);
+        }
+        return { libraryID: input.libraryID, tags };
+      }
+      return { libraryID: input.libraryID, tags: [] };
+    },
+
     async getTasks() {
       return { tasks: taskStore.getTasks() };
     },
@@ -92,7 +193,25 @@ export function createMarkdownQueryService(deps: {
       };
     },
     async searchByTitle(input) {
-      if (!input.title?.trim() && !input.creator?.trim()) {
+      const hasFilter = Boolean(
+        input.title?.trim() ||
+        input.creator?.trim() ||
+        input.collection?.trim() ||
+        input.tag?.trim() ||
+        input.abstract?.trim() ||
+        input.publication?.trim() ||
+        input.citekey?.trim() ||
+        input.doi?.trim() ||
+        input.itemType?.trim() ||
+        input.since?.trim() ||
+        input.year?.trim() ||
+        input.hasPdf ||
+        input.parsedOnly ||
+        input.limit !== undefined ||
+        input.sortBy,
+      );
+
+      if (!hasFilter) {
         throw new MarkdownQueryError(
           "invalid-request",
           400,
@@ -101,18 +220,26 @@ export function createMarkdownQueryService(deps: {
       }
 
       const items = await deps.searchItems(input);
-      return {
-        candidates: await Promise.all(
-          items.map(async (item) => ({
-            item: summarizeItem(item),
-            attachments: item.isRegularItem()
-              ? await summarizeAttachments(item, deps.items, deps.storage)
-              : item.isPDFAttachment()
-                ? [await summarizeAttachment(item, deps.storage)]
-                : [],
-          })),
-        ),
-      };
+      let candidates = await Promise.all(
+        items.map(async (item) => ({
+          item: summarizeItem(item),
+          attachments: item.isRegularItem()
+            ? await summarizeAttachments(item, deps.items, deps.storage)
+            : item.isPDFAttachment()
+              ? [await summarizeAttachment(item, deps.storage)]
+              : [],
+        })),
+      );
+
+      if (input.parsedOnly) {
+        candidates = candidates.filter((candidate) =>
+          candidate.attachments.some(
+            (att) => att.preciseReady || att.liteReady,
+          ),
+        );
+      }
+
+      return { candidates };
     },
 
     async queryMarkdown(input) {
@@ -236,7 +363,7 @@ export function createMarkdownQueryService(deps: {
 }
 
 /**
- * 为返回结果提取稳定的条目摘要，附带年份与创作者信息。
+ * 为返回结果提取稳定的条目摘要，附带年份与创作者信息及常用学术元数据。
  */
 function summarizeItem(item: ZoteroItemLike): ItemSummary {
   const summary: ItemSummary = {
@@ -255,7 +382,59 @@ function summarizeItem(item: ZoteroItemLike): ItemSummary {
   if (creators.length > 0) {
     summary.creators = creators;
   }
+  const itemType = extractItemType(item);
+  if (itemType) {
+    summary.itemType = itemType;
+  }
+  const publication = extractPublication(item);
+  if (publication) {
+    summary.publication = publication;
+  }
+  const citekey = extractCitekey(item);
+  if (citekey) {
+    summary.citekey = citekey;
+  }
+  const doi = extractDoi(item);
+  if (doi) {
+    summary.doi = doi;
+  }
   return summary;
+}
+
+function extractItemType(item: ZoteroItemLike): string | undefined {
+  const type =
+    item.itemType ||
+    (typeof item.getField === "function" ? item.getField("itemType") : "");
+  return type && type !== "attachment" ? type : undefined;
+}
+
+function extractPublication(item: ZoteroItemLike): string | undefined {
+  if (typeof item.getField !== "function") return undefined;
+  const pub =
+    item.getField("publicationTitle") || item.getField("proceedingsTitle");
+  return pub ? pub.trim() : undefined;
+}
+
+function extractCitekey(item: ZoteroItemLike): string | undefined {
+  if (typeof item.getField !== "function") return undefined;
+  const extra = item.getField("extra") || "";
+  const match = /Citation Key:\s*([^\s\n]+)/i.exec(extra);
+  if (match?.[1]) {
+    return match[1].trim();
+  }
+  try {
+    const directKey = item.getField("citationKey");
+    if (directKey) return directKey.trim();
+  } catch {
+    // ignore
+  }
+  return undefined;
+}
+
+function extractDoi(item: ZoteroItemLike): string | undefined {
+  if (typeof item.getField !== "function") return undefined;
+  const doi = item.getField("DOI");
+  return doi ? doi.trim() : undefined;
 }
 
 /**

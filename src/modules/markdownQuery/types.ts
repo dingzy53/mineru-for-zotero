@@ -77,8 +77,36 @@ export interface MarkdownLocateMatch {
 }
 
 /**
+ * Represents a Zotero library summary.
+ */
+export interface LibrarySummary {
+  libraryID: number;
+  name: string;
+  type: "user" | "group";
+}
+
+/**
+ * Represents a Zotero collection summary.
+ */
+export interface CollectionSummary {
+  id: number;
+  key: string;
+  name: string;
+  libraryID: number;
+  parentKey?: string;
+  parentID?: number | false;
+}
+
+/**
+ * Represents a Zotero tag summary.
+ */
+export interface TagSummary {
+  tag: string;
+  numItems?: number;
+}
+
+/**
  * 表示搜索条目时允许的组合条件。
- * title 与 creator 至少提供一个，其余条件可选。
  */
 export interface ItemSearchInput {
   libraryID: number;
@@ -87,6 +115,17 @@ export interface ItemSearchInput {
   /** 四位年份，按条目 date 字段前缀过滤。 */
   year?: string;
   tag?: string;
+  collection?: string;
+  abstract?: string;
+  publication?: string;
+  citekey?: string;
+  doi?: string;
+  itemType?: string;
+  since?: string;
+  hasPdf?: boolean;
+  parsedOnly?: boolean;
+  sortBy?: "dateAdded" | "dateModified" | "title" | "year";
+  sortOrder?: "asc" | "desc";
   limit?: number;
 }
 
@@ -107,6 +146,8 @@ export interface ZoteroItemLike {
   key: string;
   libraryID: number;
   dateAdded?: string;
+  dateModified?: string;
+  itemType?: string;
   attachmentFilename?: string;
   parentItemID?: number | false;
   isRegularItem(): boolean;
@@ -185,6 +226,10 @@ export interface ItemSummary {
   year?: string;
   /** 格式化后的创作者列表，缺失或为空时不输出。 */
   creators?: string[];
+  itemType?: string;
+  publication?: string;
+  citekey?: string;
+  doi?: string;
 }
 
 /**

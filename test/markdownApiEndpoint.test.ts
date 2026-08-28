@@ -272,7 +272,150 @@ describe("markdownApiEndpoint", function () {
       "/mineru-for-zotero/markdown",
       "/mineru-for-zotero/parse",
       "/mineru-for-zotero/tasks",
+      "/mineru-for-zotero/libraries",
+      "/mineru-for-zotero/collections",
+      "/mineru-for-zotero/tags",
     ]);
+  });
+
+  it("returns libraries through the libraries endpoint", async function () {
+    setMarkdownApiEnabled(true);
+    setMarkdownApiRequireToken(false);
+    const endpoint = createMarkdownQueryEndpoint({
+      ...fakeService(),
+      async getLibraries() {
+        return {
+          libraries: [{ libraryID: 1, name: "My Library", type: "user" }],
+        };
+      },
+    });
+
+    const response = await endpoint.init(
+      request("/mineru-for-zotero/libraries"),
+    );
+
+    assert.equal(response[0], 200);
+    assert.include(String(response[2]), '"libraries":');
+    assert.include(String(response[2]), "My Library");
+  });
+
+  it("returns collections through the collections endpoint", async function () {
+    setMarkdownApiEnabled(true);
+    setMarkdownApiRequireToken(false);
+    let captured: unknown;
+    const endpoint = createMarkdownQueryEndpoint({
+      ...fakeService(),
+      async getCollections(input) {
+        captured = input;
+        return {
+          libraryID: 1,
+          collections: [{ id: 10, key: "COL1", name: "AI", libraryID: 1 }],
+        };
+      },
+    });
+
+    const response = await endpoint.init(
+      request("/mineru-for-zotero/collections", {
+        query: { libraryID: "1", parentKey: "PARENT1" },
+      }),
+    );
+
+    assert.equal(response[0], 200);
+    assert.include(String(response[2]), '"collections":');
+    assert.include(String(response[2]), "COL1");
+    assert.deepEqual(captured, { libraryID: 1, parentKey: "PARENT1" });
+  });
+
+  it("returns tags through the tags endpoint", async function () {
+    setMarkdownApiEnabled(true);
+    setMarkdownApiRequireToken(false);
+    let captured: unknown;
+    const endpoint = createMarkdownQueryEndpoint({
+      ...fakeService(),
+      async getTags(input) {
+        captured = input;
+        return {
+          libraryID: 1,
+          tags: [{ tag: "deep-learning", numItems: 5 }],
+        };
+      },
+    });
+
+    const response = await endpoint.init(
+      request("/mineru-for-zotero/tags", {
+        query: { libraryID: "1", limit: "10" },
+      }),
+    );
+
+    assert.equal(response[0], 200);
+    assert.include(String(response[2]), '"tags":');
+    assert.include(String(response[2]), "deep-learning");
+    assert.deepEqual(captured, { libraryID: 1, limit: 10 });
+  });
+
+  it("forwards enhanced search parameters to service", async function () {
+    setMarkdownApiEnabled(true);
+    setMarkdownApiRequireToken(false);
+    const searches: unknown[] = [];
+    const endpoint = createMarkdownQueryEndpoint({
+      ...fakeService(),
+      async searchByTitle(input) {
+        searches.push(input);
+        return { candidates: [] };
+      },
+    });
+
+    const response = await endpoint.init(
+      request("/mineru-for-zotero/search", {
+        query: {
+          libraryID: "1",
+          collection: "AI",
+          abstract: "transformer",
+          publication: "NeurIPS",
+          citekey: "vaswani2017",
+          doi: "10.1000/182",
+          itemType: "journalArticle",
+          since: "2026-01-01",
+          hasPdf: "true",
+          parsedOnly: "1",
+          sortBy: "dateAdded",
+          sortOrder: "desc",
+          limit: "10",
+        },
+      }),
+    );
+
+    assert.equal(response[0], 200);
+    assert.deepEqual(searches[0], {
+      libraryID: 1,
+      collection: "AI",
+      abstract: "transformer",
+      publication: "NeurIPS",
+      citekey: "vaswani2017",
+      doi: "10.1000/182",
+      itemType: "journalArticle",
+      since: "2026-01-01",
+      hasPdf: true,
+      parsedOnly: true,
+      sortBy: "dateAdded",
+      sortOrder: "desc",
+      limit: 10,
+    });
+  });
+
+  it("rejects invalid sortBy parameters", async function () {
+    setMarkdownApiEnabled(true);
+    setMarkdownApiRequireToken(false);
+    const endpoint = createMarkdownQueryEndpoint(fakeService());
+
+    const response = await endpoint.init(
+      request("/mineru-for-zotero/search", {
+        query: { libraryID: "1", title: "Doc", sortBy: "invalidField" },
+      }),
+    );
+
+    assert.equal(response[0], 400);
+    assert.include(String(response[2]), "Invalid sortBy parameter");
   });
 
   it("returns task records through the tasks endpoint", async function () {
@@ -346,6 +489,15 @@ function fakeService() {
     },
     async getTasks() {
       return { tasks: [] };
+    },
+    async getLibraries() {
+      return { libraries: [] };
+    },
+    async getCollections() {
+      return { libraryID: 1, collections: [] };
+    },
+    async getTags() {
+      return { libraryID: 1, tags: [] };
     },
   };
 }
