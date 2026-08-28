@@ -270,7 +270,15 @@ When adding reader overlay hit-testing helpers across modules, keep helper scope
 
 The companion CLI at `mineru-for-zotero-cli/scripts/query-markdown.mjs` provides agent-readable access to parsed Markdown stored in Zotero. It communicates with the plugin's local HTTP query API.
 
-Granularity modes:
+Supported commands:
+
+- `libraries`: lists available Zotero libraries (user and group libraries).
+- `collections`: lists collections/folders within a library, with optional `--parent-key` filtering.
+- `tags`: lists library tags with item counts and optional `--limit`.
+- `search`: searches items with rich metadata filters (`--title`, `--creator`, `--collection`, `--tag`, `--abstract`, `--publication`, `--citekey`, `--doi`, `--item-type`, `--since`, `--year`, `--has-pdf`, `--parsed-only`, `--sort-by`, `--sort-order`, `--limit`).
+- `markdown`: queries saved Markdown with granularity modes (`full`, `headings`, `section`, `search`, `locate`).
+
+Granularity modes for `markdown`:
 
 - `full`: returns the entire Markdown document.
 - `headings`: returns the heading tree (document outline/index).
@@ -278,7 +286,7 @@ Granularity modes:
 - `search`: returns matching paragraphs with configurable `--context-paragraphs`.
 - `locate`: searches precise layout boxes and returns physical page numbers with bbox for a text snippet (precise results only).
 
-Search supports title, creator, or both: at least one of `--title`/`--creator` is required, and `--year <YYYY>`, `--tag`, and `--limit` refine the result. Candidate summaries include `year` and `creators` fields so author-year citations such as "Chen et al. 2022" can be resolved without asking the user for the full title.
+Candidate summaries include `year`, `creators`, `itemType`, `publication`, `citekey`, and `doi` fields when available, allowing citation matching, author-year resolution, and direct bibtex key lookups without guessing full titles.
 
 The CLI auto-detects the local HTTP server port from the Zotero profile, falling back to `23119`. Override with `--port <number>`, or set `ZOTERO_CONFIG_DIR` in tests to point profile discovery at a fixture directory. Output format defaults to `text` (agent-readable); use `--format json` for script consumption. If the plugin's "Require token" setting is enabled, pass `--token "<token>"` to all commands. Unreachable endpoints exit with a `network-error` hint that suggests starting Zotero or passing `--port`.
 

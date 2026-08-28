@@ -153,12 +153,35 @@ Zotero's local port is usually `23119`. If you changed Zotero's local server por
 
 ### HTTP Examples
 
-Search candidate items by title:
+List libraries:
+
+```shell
+curl "http://127.0.0.1:23119/mineru-for-zotero/libraries" \
+  -H "Authorization: Bearer <token>"
+```
+
+List collections in a library:
+
+```shell
+curl "http://127.0.0.1:23119/mineru-for-zotero/collections?libraryID=1" \
+  -H "Authorization: Bearer <token>"
+```
+
+List tags:
+
+```shell
+curl "http://127.0.0.1:23119/mineru-for-zotero/tags?libraryID=1&limit=50" \
+  -H "Authorization: Bearer <token>"
+```
+
+Search candidate items by title and filters:
 
 ```shell
 curl --get "http://127.0.0.1:23119/mineru-for-zotero/search" \
   --data-urlencode "libraryID=1" \
   --data-urlencode "title=retrieval augmented generation" \
+  --data-urlencode "collection=AI" \
+  --data-urlencode "parsedOnly=true" \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -201,16 +224,32 @@ curl --get "http://127.0.0.1:23119/mineru-for-zotero/markdown" \
 
 Common parameters:
 
-| Parameter           | Endpoint             | Description                                                                |
-| ------------------- | -------------------- | -------------------------------------------------------------------------- |
-| `libraryID`         | `search`, `markdown` | Zotero library ID. Personal libraries are usually `1`.                     |
-| `title`             | `search`             | Title keyword used to find candidate Zotero items.                         |
-| `key`               | `markdown`           | Zotero regular item key or PDF attachment key.                             |
-| `attachmentKey`     | `markdown`           | Selects the target PDF attachment when a regular item contains PDFs.       |
-| `granularity`       | `markdown`           | `full`, `headings`, `section`, or `search`. Defaults to `full`.            |
-| `sectionPath`       | `markdown`           | Heading path for `section` queries, for example `Introduction/Background`. |
-| `q`                 | `markdown`           | Keyword used by `search` queries.                                          |
-| `contextParagraphs` | `markdown`           | Number of context paragraphs around each `search` match.                   |
+| Parameter            | Endpoint                                    | Description                                                                |
+| -------------------- | ------------------------------------------- | -------------------------------------------------------------------------- |
+| `libraryID`          | `collections`, `tags`, `search`, `markdown` | Zotero library ID. Personal libraries are usually `1`.                     |
+| `parentKey`          | `collections`                               | Optional parent collection key.                                            |
+| `title`              | `search`                                    | Title keyword used to find candidate Zotero items.                         |
+| `creator`            | `search`                                    | Creator/author substring to match.                                         |
+| `collection`         | `search`                                    | Collection name or key to filter within a folder.                          |
+| `tag`                | `search`                                    | Exact tag to filter.                                                       |
+| `abstract`           | `search`                                    | Abstract keyword to search.                                                |
+| `publication`        | `search`                                    | Journal or conference title to match.                                      |
+| `citekey`            | `search`                                    | Citation key to match (e.g. `vaswani2017attention`).                       |
+| `doi`                | `search`                                    | DOI substring to match.                                                    |
+| `itemType`           | `search`                                    | Item type filter (e.g. `journalArticle`, `conferencePaper`).               |
+| `since`              | `search`                                    | Date added filter (`YYYY-MM-DD`).                                          |
+| `hasPdf`             | `search`                                    | Filter items that have at least one PDF attachment (`true`).               |
+| `parsedOnly`         | `search`                                    | Filter items with ready MinerU parse results (`true`).                     |
+| `sortBy`             | `search`                                    | Sort by `dateAdded`, `dateModified`, `title`, or `year`.                   |
+| `sortOrder`          | `search`                                    | Sort direction (`asc` or `desc`).                                          |
+| `limit`              | `tags`, `search`                            | Maximum number of records to return.                                       |
+| `key`                | `markdown`                                  | Zotero regular item key or PDF attachment key.                             |
+| `attachmentKey`      | `markdown`                                  | Selects the target PDF attachment when a regular item contains PDFs.       |
+| `granularity`        | `markdown`                                  | `full`, `headings`, `section`, `search`, or `locate`. Defaults to `full`.  |
+| `sectionPath`        | `markdown`                                  | Heading path for `section` queries, for example `Introduction/Background`. |
+| `includeSubsections` | `markdown`                                  | Extend section scope to same-level numbered subsections (`true`).          |
+| `q`                  | `markdown`                                  | Keyword used by `search` or `locate` queries.                              |
+| `contextParagraphs`  | `markdown`                                  | Number of context paragraphs around each `search` match.                   |
 
 Common error codes:
 
