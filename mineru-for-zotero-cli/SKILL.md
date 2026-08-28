@@ -29,25 +29,47 @@ node scripts/query-markdown.mjs <command> [options]
 
 ### Commands
 
-| Command    | Description                                                                 | Example                                                                                                       |
-| ---------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `search`   | Search Zotero items by title and/or creator and return matching candidates. | `node scripts/query-markdown.mjs search --library-id 1 --title "keyword" --format json`                       |
-| `markdown` | Query saved MinerU Markdown for an item key, with selectable granularity.   | `node scripts/query-markdown.mjs markdown --library-id 1 --key ABCD1234 --granularity headings --format text` |
+| Command       | Description                                                                    | Example                                                                                                       |
+| ------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `libraries`   | List available Zotero libraries (personal and group libraries).                | `node scripts/query-markdown.mjs libraries`                                                                   |
+| `collections` | List collections/folders within a specified library.                           | `node scripts/query-markdown.mjs collections --library-id 1`                                                  |
+| `tags`        | List tags in a specified library.                                              | `node scripts/query-markdown.mjs tags --library-id 1 --limit 50`                                              |
+| `search`      | Search Zotero items with rich metadata filters and return matching candidates. | `node scripts/query-markdown.mjs search --library-id 1 --title "keyword" --format json`                       |
+| `markdown`    | Query saved MinerU Markdown for an item key, with selectable granularity.      | `node scripts/query-markdown.mjs markdown --library-id 1 --key ABCD1234 --granularity headings --format text` |
 
 ### Common Options
 
-- `--library-id <id>` — Zotero library ID; required for both `search` and `markdown`
+- `--library-id <id>` — Zotero library ID; required for `collections`, `tags`, `search`, and `markdown`
 - `--port <number>` — Zotero local server port; default is auto-detected from the Zotero profile, then 23119
 - `--token <token>` — API token, sent as Authorization: Bearer
 - `--format <text|json>` — Output format; default is text, use `--format text` for agent-readable text. use `--format json` when another script or pipeline needs structured output.
 - `--timeout-ms <number>` — Request timeout; default is 30000
 
+### Collections options
+
+- `--parent-key <key>` — Optional parent collection key to list only its direct subcollections.
+
+### Tags options
+
+- `--limit <n>` — Maximum number of tags to return.
+
 ### Search options
 
-- `--title <text>` — Title substring to match. Optional when `--creator` is provided; at least one of `--title`/`--creator` is required.
-- `--creator <text>` — Creator substring to match. Use this for author-year citations such as “Chen et al. 2022” where the author name does not appear in the title.
-- `--year <YYYY>` — Four-digit year filter applied after the search. Candidate summaries include a `year:` line when available.
+- `--title <text>` — Title substring to match.
+- `--creator <text>` — Creator substring to match (author-year citations such as "Chen et al. 2022").
+- `--collection <name|key>` — Collection name or key to filter items within a specific folder.
 - `--tag <tag>` — Exact tag filter.
+- `--abstract <text>` — Abstract substring to match.
+- `--publication <text>` — Publication or conference title to match.
+- `--citekey <key>` — BibTeX citation key substring to match (e.g. `vaswani2017attention`).
+- `--doi <doi>` — DOI substring to match.
+- `--item-type <type>` — Item type filter (e.g. `journalArticle`, `conferencePaper`, `book`, `preprint`).
+- `--since <date>` — Filter items added on or after date (`YYYY-MM-DD`).
+- `--year <YYYY>` — Four-digit year filter applied after search.
+- `--has-pdf` — Boolean flag; only return items that have at least one PDF attachment.
+- `--parsed-only` — Boolean flag; only return items with ready MinerU parse results (precise or lite).
+- `--sort-by <field>` — Sort by `dateAdded`, `dateModified`, `title`, or `year`.
+- `--sort-order <asc|desc>` — Sort direction (`desc` by default for dates/years, `asc` for title).
 - `--limit <n>` — Maximum number of candidates to return.
 
 ### Markdown options

@@ -10,6 +10,9 @@ const DEFAULT_FORMAT = "text";
 const DEFAULT_TIMEOUT_MS = 30000;
 const SEARCH_ENDPOINT = "/mineru-for-zotero/search";
 const MARKDOWN_ENDPOINT = "/mineru-for-zotero/markdown";
+const LIBRARIES_ENDPOINT = "/mineru-for-zotero/libraries";
+const COLLECTIONS_ENDPOINT = "/mineru-for-zotero/collections";
+const TAGS_ENDPOINT = "/mineru-for-zotero/tags";
 const VALID_FORMATS = new Set(["text", "json"]);
 const VALID_GRANULARITIES = new Set([
   "full",
@@ -18,12 +21,18 @@ const VALID_GRANULARITIES = new Set([
   "search",
   "locate",
 ]);
+const VALID_SORT_BY = new Set(["dateAdded", "dateModified", "title", "year"]);
+const VALID_SORT_ORDER = new Set(["asc", "desc"]);
 const YEAR_PATTERN = /^\d{4}$/;
 
 /**
  * Flags that act as switches and do not consume a value.
  */
-const BOOLEAN_FLAGS = new Set(["--include-subsections"]);
+const BOOLEAN_FLAGS = new Set([
+  "--include-subsections",
+  "--has-pdf",
+  "--parsed-only",
+]);
 
 /**
  * Runs the CLI entry point and maps failures to stable process output.
@@ -70,7 +79,14 @@ function parseCommand(argv) {
   }
 
   const [command, ...rest] = argv;
-  if (command !== "search" && command !== "markdown") {
+  const validCommands = new Set([
+    "search",
+    "markdown",
+    "libraries",
+    "collections",
+    "tags",
+  ]);
+  if (!validCommands.has(command)) {
     throw new CliArgumentError(`Unknown command: ${command}`);
   }
 
@@ -87,8 +103,56 @@ function parseCommand(argv) {
     "--timeout-ms",
   );
   const token = getFlag(flags, "--token");
+
+  if (command === "libraries") {
+    return {
+      command,
+      endpoint: LIBRARIES_ENDPOINT,
+      listenPort,
+      baseUrl,
+      format,
+      timeoutMs,
+      token,
+      params: {},
+    };
+  }
+
   const libraryID = getRequiredFlag(flags, "--library-id");
   parseInteger(libraryID, "--library-id");
+
+  if (command === "collections") {
+    const params = { libraryID };
+    addOptionalParam(params, "parentKey", getFlag(flags, "--parent-key"));
+    return {
+      command,
+      endpoint: COLLECTIONS_ENDPOINT,
+      listenPort,
+      baseUrl,
+      format,
+      timeoutMs,
+      token,
+      params,
+    };
+  }
+
+  if (command === "tags") {
+    const params = { libraryID };
+    const limit = getFlag(flags, "--limit");
+    if (limit !== undefined) {
+      parsePositiveInteger(limit, "--limit");
+      params.limit = limit;
+    }
+    return {
+      command,
+      endpoint: TAGS_ENDPOINT,
+      listenPort,
+      baseUrl,
+      format,
+      timeoutMs,
+      token,
+      params,
+    };
+  }
 
   if (command === "search") {
     return {
@@ -172,25 +236,62 @@ function parseFlags(args) {
 }
 
 /**
- * Builds the search request parameters, requiring a title or creator.
+ * Builds the search request parameters, requiring at least one search filter.
  */
 function parseSearchParams(flags, libraryID) {
   const title = getFlag(flags, "--title");
   const creator = getFlag(flags, "--creator");
-  if (!hasValue(title) && !hasValue(creator)) {
+  const collection = getFlag(flags, "--collection");
+  const tag = getFlag(flags, "--tag");
+  const abstract = getFlag(flags, "--abstract");
+  const publication = getFlag(flags, "--publication");
+  const citekey = getFlag(flags, "--citekey");
+  const doi = getFlag(flags, "--doi");
+  const itemType = getFlag(flags, "--item-type");
+  const since = getFlag(flags, "--since");
+  const year = getFlag(flags, "--year");
+  const hasPdf = flags.has("--has-pdf");
+  const parsedOnly = flags.has("--parsed-only");
+  const sortBy = getFlag(flags, "--sort-by");
+  const sortOrder = getFlag(flags, "--sort-order");
+  const limit = getFlag(flags, "--limit");
+
+  const hasAnyFilter =
+    hasValue(title) ||
+    hasValue(creator) ||
+    hasValue(collection) ||
+    hasValue(tag) ||
+    hasValue(abstract) ||
+    hasValue(publication) ||
+    hasValue(citekey) ||
+    hasValue(doi) ||
+    hasValue(itemType) ||
+    hasValue(since) ||
+    hasValue(year) ||
+    hasPdf ||
+    parsedOnly ||
+    hasValue(sortBy) ||
+    hasValue(limit);
+
+  if (!hasAnyFilter) {
     throw new CliArgumentError("Missing required option: --title or --creator");
   }
 
   const params = { libraryID };
-  if (hasValue(title)) {
-    params.title = title.trim();
-  }
-  if (hasValue(creator)) {
-    params.creator = creator.trim();
-  }
-  addOptionalParam(params, "tag", getFlag(flags, "--tag"));
+  if (hasValue(title)) params.title = title.trim();
+  if (hasValue(creator)) params.creator = creator.trim();
+  if (hasValue(collection)) params.collection = collection.trim();
+  if (hasValue(tag)) params.tag = tag.trim();
+  if (hasValue(abstract)) params.abstract = abstract.trim();
+  if (hasValue(publication)) params.publication = publication.trim();
+  if (hasValue(citekey)) params.citekey = citekey.trim();
+  if (hasValue(doi)) params.doi = doi.trim();
+  if (hasValue(itemType)) params.itemType = itemType.trim();
+  if (hasValue(since)) params.since = since.trim();
 
-  const year = getFlag(flags, "--year");
+  if (hasPdf) params.hasPdf = "true";
+  if (parsedOnly) params.parsedOnly = "true";
+
   if (year !== undefined) {
     const normalizedYear = year.trim();
     if (!YEAR_PATTERN.test(normalizedYear)) {
@@ -201,7 +302,22 @@ function parseSearchParams(flags, libraryID) {
     params.year = normalizedYear;
   }
 
-  const limit = getFlag(flags, "--limit");
+  if (sortBy !== undefined) {
+    if (!VALID_SORT_BY.has(sortBy)) {
+      throw new CliArgumentError(
+        "Invalid --sort-by. Expected dateAdded, dateModified, title, or year.",
+      );
+    }
+    params.sortBy = sortBy;
+  }
+
+  if (sortOrder !== undefined) {
+    if (!VALID_SORT_ORDER.has(sortOrder.toLowerCase())) {
+      throw new CliArgumentError("Invalid --sort-order. Expected asc or desc.");
+    }
+    params.sortOrder = sortOrder.toLowerCase();
+  }
+
   if (limit !== undefined) {
     parsePositiveInteger(limit, "--limit");
     params.limit = limit;
@@ -329,7 +445,86 @@ function formatTextSuccess(options, data) {
   if (options.command === "search") {
     return formatSearchText(options, data);
   }
+  if (options.command === "libraries") {
+    return formatLibrariesText(options, data);
+  }
+  if (options.command === "collections") {
+    return formatCollectionsText(options, data);
+  }
+  if (options.command === "tags") {
+    return formatTagsText(options, data);
+  }
   return formatMarkdownText(options, data);
+}
+
+/**
+ * Formats libraries list.
+ */
+function formatLibrariesText(options, data) {
+  const libraries = Array.isArray(data.libraries) ? data.libraries : [];
+  const lines = ["Zotero Libraries", `Count: ${libraries.length}`];
+
+  libraries.forEach((lib, index) => {
+    lines.push(
+      "",
+      `${index + 1}. ${valueOrUnknown(lib.name)}`,
+      `   libraryID: ${valueOrUnknown(lib.libraryID)}`,
+      `   type: ${valueOrUnknown(lib.type)}`,
+    );
+  });
+
+  return lines.join("\n");
+}
+
+/**
+ * Formats collections list.
+ */
+function formatCollectionsText(options, data) {
+  const collections = Array.isArray(data.collections) ? data.collections : [];
+  const lines = [
+    "Zotero Collections",
+    `Library: ${options.params?.libraryID ?? "unknown"}`,
+    `Collections: ${collections.length}`,
+  ];
+
+  collections.forEach((col, index) => {
+    lines.push(
+      "",
+      `${index + 1}. ${valueOrUnknown(col.name)}`,
+      `   id: ${valueOrUnknown(col.id)}`,
+      `   key: ${valueOrUnknown(col.key)}`,
+    );
+    if (col.parentKey) {
+      lines.push(`   parentKey: ${col.parentKey}`);
+    }
+  });
+
+  return lines.join("\n");
+}
+
+/**
+ * Formats tags list.
+ */
+function formatTagsText(options, data) {
+  const tags = Array.isArray(data.tags) ? data.tags : [];
+  const lines = [
+    "Zotero Tags",
+    `Library: ${options.params?.libraryID ?? "unknown"}`,
+    `Tags: ${tags.length}`,
+    "",
+  ];
+
+  if (tags.length === 0) {
+    lines.push("(none)");
+  } else {
+    tags.forEach((tagItem) => {
+      const countStr =
+        tagItem.numItems !== undefined ? ` (${tagItem.numItems} items)` : "";
+      lines.push(`- ${tagItem.tag}${countStr}`);
+    });
+  }
+
+  return lines.join("\n");
 }
 
 /**
@@ -340,7 +535,6 @@ function formatSearchText(options, data) {
   const lines = [
     "Markdown Query Search",
     `Library: ${options.params.libraryID}`,
-    `Title: ${options.params.title}`,
     `Candidates: ${candidates.length}`,
   ];
 
@@ -362,6 +556,18 @@ function formatSearchText(options, data) {
     const creators = Array.isArray(item.creators) ? item.creators : [];
     if (creators.length > 0) {
       lines.push(`   creators: ${creators.join("; ")}`);
+    }
+    if (item.itemType) {
+      lines.push(`   itemType: ${item.itemType}`);
+    }
+    if (item.publication) {
+      lines.push(`   publication: ${item.publication}`);
+    }
+    if (item.citekey) {
+      lines.push(`   citekey: ${item.citekey}`);
+    }
+    if (item.doi) {
+      lines.push(`   doi: ${item.doi}`);
     }
     lines.push("   attachments:");
 
@@ -564,8 +770,11 @@ function writeArgumentError(error) {
 function helpText() {
   return [
     "Usage:",
-    "  node skill/scripts/query-markdown.mjs search --library-id <id> [--title <text> | --creator <text>] [--year YYYY] [--tag <tag>] [--limit <n>] [--format text|json]",
-    "  node skill/scripts/query-markdown.mjs markdown --library-id <id> --key <key> [--granularity full|headings|section|search|locate] [--format text|json]",
+    "  node mineru-for-zotero-cli/scripts/query-markdown.mjs libraries [--port <number>] [--token <token>] [--format text|json]",
+    "  node mineru-for-zotero-cli/scripts/query-markdown.mjs collections --library-id <id> [--parent-key <key>] [--port <number>] [--token <token>] [--format text|json]",
+    "  node mineru-for-zotero-cli/scripts/query-markdown.mjs tags --library-id <id> [--limit <n>] [--port <number>] [--token <token>] [--format text|json]",
+    "  node mineru-for-zotero-cli/scripts/query-markdown.mjs search --library-id <id> [--title <text>] [--creator <text>] [--collection <name|key>] [--tag <tag>] [--abstract <text>] [--publication <text>] [--citekey <key>] [--doi <doi>] [--item-type <type>] [--since <date>] [--year YYYY] [--has-pdf] [--parsed-only] [--sort-by dateAdded|dateModified|title|year] [--sort-order asc|desc] [--limit <n>] [--format text|json]",
+    "  node mineru-for-zotero-cli/scripts/query-markdown.mjs markdown --library-id <id> --key <key> [--granularity full|headings|section|search|locate] [--format text|json]",
     "",
     "Common options:",
     "  --port <number>              Zotero local server port. Default: auto-detect from Zotero profile, then 23119",
@@ -574,10 +783,21 @@ function helpText() {
     "  --timeout-ms <number>        Request timeout. Default: 30000",
     "",
     "Search options:",
-    "  --title <text>               Title substring to match (at least one of --title/--creator is required)",
-    "  --creator <text>             Creator substring to match, for author-year citations such as Chen et al. 2022",
-    "  --year <YYYY>                Four-digit year filter applied after search",
+    "  --title <text>               Title substring to match",
+    "  --creator <text>             Creator substring to match",
+    "  --collection <name|key>      Collection name or key to filter",
     "  --tag <tag>                  Exact tag filter",
+    "  --abstract <text>            Abstract substring to match",
+    "  --publication <text>         Publication or conference title to match",
+    "  --citekey <key>              Citation key substring to match",
+    "  --doi <doi>                  DOI substring to match",
+    "  --item-type <type>           Item type filter (e.g. journalArticle, conferencePaper)",
+    "  --since <date>               Filter items added on or after date (YYYY-MM-DD)",
+    "  --year <YYYY>                Four-digit year filter applied after search",
+    "  --has-pdf                    Only return items with at least one PDF attachment",
+    "  --parsed-only                Only return items with available MinerU parse results",
+    "  --sort-by <field>            Sort by dateAdded, dateModified, title, or year",
+    "  --sort-order <asc|desc>      Sort direction (default: desc for dates/year, asc for title)",
     "  --limit <n>                  Maximum number of candidates to return",
     "",
     "Markdown options:",

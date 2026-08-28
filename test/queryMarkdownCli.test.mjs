@@ -406,6 +406,188 @@ test("sends include-subsections switch to the API", async () => {
   );
 });
 
+test("formats libraries as agent-friendly text", async () => {
+  await withServer(
+    {
+      status: 200,
+      body: {
+        libraries: [
+          { libraryID: 1, name: "My Library", type: "user" },
+          { libraryID: 2, name: "Lab Group", type: "group" },
+        ],
+      },
+    },
+    async ({ port, requests }) => {
+      const result = await runCli([
+        "libraries",
+        "--port",
+        String(port),
+        "--format",
+        "text",
+      ]);
+
+      assert.equal(result.code, 0);
+      assert.match(result.stdout, /Zotero Libraries/);
+      assert.match(result.stdout, /Count: 2/);
+      assert.match(result.stdout, /1\. My Library/);
+      assert.match(result.stdout, /2\. Lab Group/);
+      assert.equal(requests[0].pathname, "/mineru-for-zotero/libraries");
+    },
+  );
+});
+
+test("formats collections as agent-friendly text", async () => {
+  await withServer(
+    {
+      status: 200,
+      body: {
+        libraryID: 1,
+        collections: [
+          { id: 10, key: "COL1", name: "AI", libraryID: 1 },
+          { id: 11, key: "COL2", name: "LLM", libraryID: 1, parentKey: "COL1" },
+        ],
+      },
+    },
+    async ({ port, requests }) => {
+      const result = await runCli([
+        "collections",
+        "--port",
+        String(port),
+        "--library-id",
+        "1",
+        "--parent-key",
+        "COL1",
+        "--format",
+        "text",
+      ]);
+
+      assert.equal(result.code, 0);
+      assert.match(result.stdout, /Zotero Collections/);
+      assert.match(result.stdout, /1\. AI/);
+      assert.match(result.stdout, /2\. LLM/);
+      assert.match(result.stdout, /parentKey: COL1/);
+      assert.equal(requests[0].pathname, "/mineru-for-zotero/collections");
+      assert.equal(requests[0].searchParams.libraryID, "1");
+      assert.equal(requests[0].searchParams.parentKey, "COL1");
+    },
+  );
+});
+
+test("formats tags as agent-friendly text", async () => {
+  await withServer(
+    {
+      status: 200,
+      body: {
+        libraryID: 1,
+        tags: [{ tag: "deep-learning", numItems: 15 }, { tag: "nlp" }],
+      },
+    },
+    async ({ port, requests }) => {
+      const result = await runCli([
+        "tags",
+        "--port",
+        String(port),
+        "--library-id",
+        "1",
+        "--limit",
+        "20",
+        "--format",
+        "text",
+      ]);
+
+      assert.equal(result.code, 0);
+      assert.match(result.stdout, /Zotero Tags/);
+      assert.match(result.stdout, /- deep-learning \(15 items\)/);
+      assert.match(result.stdout, /- nlp/);
+      assert.equal(requests[0].pathname, "/mineru-for-zotero/tags");
+      assert.equal(requests[0].searchParams.libraryID, "1");
+      assert.equal(requests[0].searchParams.limit, "20");
+    },
+  );
+});
+
+test("forwards rich search options to the search endpoint", async () => {
+  await withServer(
+    {
+      status: 200,
+      body: {
+        candidates: [
+          {
+            item: {
+              itemID: 123,
+              libraryID: 1,
+              key: "ABCD1234",
+              type: "regular",
+              title: "Attention Is All You Need",
+              year: "2017",
+              creators: ["Vaswani, Ashish"],
+              itemType: "conferencePaper",
+              publication: "NeurIPS",
+              citekey: "vaswani2017attention",
+              doi: "10.48550/arXiv.1706.03762",
+            },
+            attachments: [],
+          },
+        ],
+      },
+    },
+    async ({ port, requests }) => {
+      const result = await runCli([
+        "search",
+        "--port",
+        String(port),
+        "--library-id",
+        "1",
+        "--collection",
+        "AI",
+        "--abstract",
+        "transformer",
+        "--publication",
+        "NeurIPS",
+        "--citekey",
+        "vaswani2017attention",
+        "--doi",
+        "10.48550",
+        "--item-type",
+        "conferencePaper",
+        "--since",
+        "2026-01-01",
+        "--has-pdf",
+        "--parsed-only",
+        "--sort-by",
+        "dateAdded",
+        "--sort-order",
+        "desc",
+        "--limit",
+        "10",
+        "--format",
+        "text",
+      ]);
+
+      assert.equal(result.code, 0);
+      assert.match(result.stdout, /1\. Attention Is All You Need/);
+      assert.match(result.stdout, /itemType: conferencePaper/);
+      assert.match(result.stdout, /publication: NeurIPS/);
+      assert.match(result.stdout, /citekey: vaswani2017attention/);
+      assert.match(result.stdout, /doi: 10\.48550\/arXiv\.1706\.03762/);
+
+      const params = requests[0].searchParams;
+      assert.equal(params.collection, "AI");
+      assert.equal(params.abstract, "transformer");
+      assert.equal(params.publication, "NeurIPS");
+      assert.equal(params.citekey, "vaswani2017attention");
+      assert.equal(params.doi, "10.48550");
+      assert.equal(params.itemType, "conferencePaper");
+      assert.equal(params.since, "2026-01-01");
+      assert.equal(params.hasPdf, "true");
+      assert.equal(params.parsedOnly, "true");
+      assert.equal(params.sortBy, "dateAdded");
+      assert.equal(params.sortOrder, "desc");
+      assert.equal(params.limit, "10");
+    },
+  );
+});
+
 test("hints at Zotero availability when the API is unreachable", async () => {
   // 端口 1 上通常没有监听者，连接会立即被拒绝。
   const result = await runCli([
