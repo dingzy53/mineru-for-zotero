@@ -70,7 +70,7 @@ If the connector stops detecting Zotero after development work, first fully exit
 
 `parseAttachmentWithDependencies()` must keep every external boundary behind `ParseManagerDependencies`: item/title lookups (`getAttachmentTitle`), window opening (`openTaskManager`), page counting (`getPdfPageCount`), storage, clients, notices, and parse-column callbacks. Do not call `Zotero.Items.getAsync`, `attachment.getField()`, `attachment.getFilePath()`, `openTaskManagerWindow()`, or `pdfSplitter` helpers directly inside the parse flow — unit tests inject fakes and must never touch the real Zotero database or open real windows.
 
-Parse notices are part of the contract: emit submitted/finished notices through `showParseNotice(dependencies, createParseSubmittedNotice(...))` / `createParseFinishedNotice(...)`; surface empty-boxes and empty-lite results as user messages and mark the taskStore record failed in those paths; report caught failures with `dependencies.showMessage(failure.id, failure.args)`. When a single (non-split) parse completes, pass the original `rawResult` and `images` through to storage instead of wrapping them in a one-element array.
+Parse notices are failure-only: task submitted and finished states do not emit user-facing notices, while errors (empty-boxes, empty-lite markdown, file access errors, and caught failures) report user messages via `dependencies.showMessage(failure.id, failure.args)` and mark the taskStore record failed. When a single (non-split) parse completes, pass the original `rawResult` and `images` through to storage instead of wrapping them in a one-element array.
 
 ### Client Selection & API Limits
 
@@ -217,9 +217,7 @@ Reparse prompts must be non-destructive by default. For Zotero/Firefox prompt di
 
 The item context menu intentionally targets PDF attachment selections only. Do not reintroduce the old regular-item submenu path unless the requirement changes explicitly.
 
-Multi-PDF parsing starts from one attachment-only menu command and shares one `ParseNoticeContext`. Keep batch notice counts in `parseNotice.ts`; avoid spreading completion-count mutation across `parseManager.ts` call sites.
-
-Batch parse notices should submit once for the whole batch, then report completion progress as each attachment finishes. Keep source/mode notice arguments in Fluent strings and update `typings/i10n.d.ts` with locale keys.
+Multi-PDF parsing starts from one attachment-only menu command. Task submission and completion do not show notifications to the user; only parse failures and errors surface user-facing notices.
 
 When registering item context menu commands through `Zotero.MenuManager`, keep the lifecycle aligned with Zotero's localization resources. If a menu item uses keys from `*-mainWindow.ftl`, remove the inserted main-window Fluent link during window unload and shutdown before the plugin chrome is destructed; otherwise Zotero can keep trying to resolve an unloaded `mainWindow.ftl` and break later right-click menu refreshes.
 

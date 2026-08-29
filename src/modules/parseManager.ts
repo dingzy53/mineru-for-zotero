@@ -9,12 +9,6 @@ import {
   MinerUTaskError,
   type MinerUClient,
 } from "./mineruClient";
-import {
-  createParseFinishedNotice,
-  createParseNoticeContext,
-  createParseSubmittedNotice,
-  type ParseNoticeContext,
-} from "./parseNotice";
 import { toNativePath } from "./mineruClient/path";
 import {
   clearAttachmentParseRunning,
@@ -230,15 +224,6 @@ async function parseAttachmentsWithDependencies(
       return;
     }
 
-    const noticeContext =
-      attachmentsToParse.length > 1
-        ? createParseNoticeContext({
-            source,
-            mode,
-            total: attachmentsToParse.length,
-          })
-        : undefined;
-
     // Limit concurrent MinerU requests across attachments.
     const concurrency = getMaxConcurrentRequests(dependencies);
     let active = 0;
@@ -263,7 +248,6 @@ async function parseAttachmentsWithDependencies(
             attachment,
             options,
             dependencies,
-            noticeContext,
           ).finally(() => {
             active--;
             next();
@@ -300,15 +284,6 @@ async function parseAttachmentsWithDependencies(
     return;
   }
 
-  const noticeContext =
-    attachmentsToParse.length > 1
-      ? createParseNoticeContext({
-          source,
-          mode,
-          total: attachmentsToParse.length,
-        })
-      : undefined;
-
   // Limit concurrent MinerU requests across attachments.
   const concurrency = getMaxConcurrentRequests(dependencies);
   let active = 0;
@@ -334,7 +309,6 @@ async function parseAttachmentsWithDependencies(
           attachment,
           { ...options, force: true },
           dependencies,
-          noticeContext,
         ).finally(() => {
           active--;
           next();
@@ -427,7 +401,6 @@ async function parseAttachmentWithDependencies(
   attachment: Zotero.Item,
   options: ParseAttachmentOptions | undefined,
   dependencies: ParseManagerDependencies,
-  noticeContext?: ParseNoticeContext,
 ): Promise<void> {
   if (!attachment.isPDFAttachment()) {
     dependencies.showMessage("parse-error-not-pdf");
@@ -452,8 +425,6 @@ async function parseAttachmentWithDependencies(
   const mode = getCurrentParseMode(dependencies);
   const apiKey = dependencies.getApiKey().trim();
   const localApiBaseURL = dependencies.getLocalApiBaseURL?.() ?? "";
-  const currentNoticeContext =
-    noticeContext ?? createParseNoticeContext({ source, mode });
   if (requiresApiKey(source, mode) && !apiKey) {
     dependencies.showMessage("parse-error-missing-api-key");
     return;
@@ -524,7 +495,6 @@ async function parseAttachmentWithDependencies(
     await updateParseColumnStatus(dependencies, "running", attachmentRef, mode);
     parseColumnRunning = true;
     phase = "submit";
-    let submittedNoticeShown = false;
 
     const pageCount = dependencies.getPdfPageCount
       ? await dependencies.getPdfPageCount(filePath)
@@ -611,13 +581,6 @@ async function parseAttachmentWithDependencies(
           chunk.status = "submitted";
           taskIDs[i] = chunk.taskID;
           await persistTaskResume(task, resume);
-          if (!submittedNoticeShown) {
-            showParseNotice(
-              dependencies,
-              createParseSubmittedNotice(currentNoticeContext),
-            );
-            submittedNoticeShown = true;
-          }
         };
 
         // If the previous Zotero run already submitted this chunk, keep the
@@ -795,13 +758,6 @@ async function parseAttachmentWithDependencies(
           chunk.status = "submitted";
           taskIDs[0] = chunk.taskID;
           await persistTaskResume(task, resume);
-          if (!submittedNoticeShown) {
-            showParseNotice(
-              dependencies,
-              createParseSubmittedNotice(currentNoticeContext),
-            );
-            submittedNoticeShown = true;
-          }
         };
         if (!chunk.taskID) {
           await submitSingle();
@@ -987,10 +943,6 @@ async function parseAttachmentWithDependencies(
         "lite",
       );
       parseColumnRunning = false;
-      showParseNotice(
-        dependencies,
-        createParseFinishedNotice(currentNoticeContext),
-      );
 
       // Update Tags
       try {
@@ -1065,10 +1017,6 @@ async function parseAttachmentWithDependencies(
       "precise",
     );
     parseColumnRunning = false;
-    showParseNotice(
-      dependencies,
-      createParseFinishedNotice(currentNoticeContext),
-    );
 
     // Update Tags
     try {
@@ -1986,16 +1934,6 @@ function getClient(
     return dependencies.createClient(settings);
   }
   throw new Error("Parse manager client dependency is missing");
-}
-
-function showParseNotice(
-  dependencies: ParseManagerDependencies,
-  notice: { id: FluentMessageId; args: Record<string, string> } | null,
-): void {
-  if (!notice) {
-    return;
-  }
-  dependencies.showMessage(notice.id, notice.args);
 }
 
 function getCurrentParseSource(

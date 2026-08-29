@@ -303,7 +303,7 @@ describe("parseManager", function () {
     );
   });
 
-  it("reports online precise parse notices with source and mode context", async function () {
+  it("does not emit submitted or finished notices on successful parse", async function () {
     const notices: Array<{
       id: string;
       args?: Record<string, string>;
@@ -322,25 +322,10 @@ describe("parseManager", function () {
 
     await manager.parseAttachment(pdfAttachment());
 
-    assert.deepEqual(notices, [
-      {
-        id: "parse-task-submitted",
-        args: {
-          source: "online",
-          mode: "precise",
-        },
-      },
-      {
-        id: "parse-task-finished",
-        args: {
-          source: "online",
-          mode: "precise",
-        },
-      },
-    ]);
+    assert.deepEqual(notices, []);
   });
 
-  it("reports all source and mode combinations in parse notices", async function () {
+  it("does not emit parse notices across all source and mode combinations on success", async function () {
     const cases: Array<{
       source: "online" | "local";
       mode: "precise" | "lite";
@@ -392,19 +377,7 @@ describe("parseManager", function () {
 
       await manager.parseAttachment(pdfAttachment());
 
-      assert.deepEqual(
-        notices.map((notice) => notice.args),
-        [
-          {
-            source: entry.source,
-            mode: entry.mode,
-          },
-          {
-            source: entry.source,
-            mode: entry.mode,
-          },
-        ],
-      );
+      assert.deepEqual(notices, []);
     }
   });
 
@@ -552,7 +525,7 @@ describe("parseManager", function () {
     await manager.parseAttachment(pdfAttachment());
 
     assert.isTrue(submitCalled);
-    assert.include(messages, "parse-task-finished");
+    assert.isEmpty(messages);
     assert.equal(logs[0][0], "failed to update MinerU parse column");
   });
 
@@ -572,8 +545,7 @@ describe("parseManager", function () {
 
     await manager.parseAttachment(pdfAttachment());
 
-    assert.include(messages, "parse-task-finished");
-    assert.notInclude(messages, "parse-error-generic");
+    assert.isEmpty(messages);
     assert.equal(logs[0][0], "failed to update MinerU parse column");
   });
 
@@ -725,21 +697,12 @@ describe("parseManager", function () {
 
     assert.equal(started, 3);
     assert.equal(maxObservedRunning, 1);
-    assert.include(messages, "parse-task-submitted-total");
-    assert.equal(
-      messages.filter((message) => message === "parse-task-finished-progress")
-        .length,
-      3,
-    );
+    assert.isEmpty(messages);
   });
 
-  it("reports batch parse notices with total and completion progress", async function () {
+  it("parses batch attachments without emitting submitted or finished notices", async function () {
     const notices: Array<{ id: string; args?: Record<string, string> }> = [];
     const writeOrder: number[] = [];
-    const completionEvents: Array<{
-      attachmentID: number;
-      completed: string;
-    }> = [];
     const startedPolls: string[] = [];
     let releasePollStart: (() => void) | undefined;
     const bothPollsStarted = new Promise<void>((resolve) => {
@@ -759,13 +722,6 @@ describe("parseManager", function () {
       ...baseDependencies([]),
       showMessage: (id, args) => {
         notices.push({ id, args });
-        if (id === "parse-task-finished-progress" && args) {
-          const attachmentID = writeOrder[completionEvents.length];
-          completionEvents.push({
-            attachmentID,
-            completed: args.completed,
-          });
-        }
       },
       storage: {
         ...baseStorage(),
@@ -798,46 +754,8 @@ describe("parseManager", function () {
     releaseByPath.get("C:\\tmp\\a.pdf")?.();
     await parsing;
 
-    assert.deepEqual(
-      notices.filter((notice) => notice.id === "parse-task-submitted-total"),
-      [
-        {
-          id: "parse-task-submitted-total",
-          args: {
-            source: "online",
-            mode: "precise",
-            total: "2",
-          },
-        },
-      ],
-    );
-    assert.deepEqual(
-      notices.filter((notice) => notice.id === "parse-task-finished-progress"),
-      [
-        {
-          id: "parse-task-finished-progress",
-          args: {
-            source: "online",
-            mode: "precise",
-            total: "2",
-            completed: "1",
-          },
-        },
-        {
-          id: "parse-task-finished-progress",
-          args: {
-            source: "online",
-            mode: "precise",
-            total: "2",
-            completed: "2",
-          },
-        },
-      ],
-    );
-    assert.deepEqual(completionEvents, [
-      { attachmentID: 2, completed: "1" },
-      { attachmentID: 1, completed: "2" },
-    ]);
+    assert.deepEqual(notices, []);
+    assert.deepEqual(writeOrder, [2, 1]);
   });
 
   it("excludes skipped existing results from batch notice totals", async function () {
@@ -862,20 +780,6 @@ describe("parseManager", function () {
 
     assert.deepEqual(notices, [
       { id: "parse-use-existing-result", args: undefined },
-      {
-        id: "parse-task-submitted",
-        args: {
-          source: "online",
-          mode: "precise",
-        },
-      },
-      {
-        id: "parse-task-finished",
-        args: {
-          source: "online",
-          mode: "precise",
-        },
-      },
     ]);
   });
 
@@ -938,30 +842,8 @@ describe("parseManager", function () {
     ]);
 
     assert.deepEqual(submitted, ["C:\\tmp\\b.pdf"]);
-    assert.notInclude(
-      notices.map((notice) => notice.id),
-      "parse-task-submitted-total",
-    );
-    assert.notInclude(
-      notices.map((notice) => notice.id),
-      "parse-task-finished-progress",
-    );
     assert.deepEqual(notices, [
       { id: "parse-error-file-access", args: undefined },
-      {
-        id: "parse-task-submitted",
-        args: {
-          source: "online",
-          mode: "precise",
-        },
-      },
-      {
-        id: "parse-task-finished",
-        args: {
-          source: "online",
-          mode: "precise",
-        },
-      },
     ]);
   });
 
@@ -1722,7 +1604,7 @@ describe("parseManager", function () {
     }
   });
 
-  it("counts only successful completions in batch progress notices", async function () {
+  it("reports failure notice when a batch task fails", async function () {
     const notices: Array<{ id: string; args?: Record<string, string> }> = [];
     const manager = createParseManager({
       ...baseDependencies([]),
@@ -1746,20 +1628,12 @@ describe("parseManager", function () {
       pdfAttachment({ id: 2, filePath: "C:/tmp/b.pdf" }),
     ]);
 
-    assert.deepEqual(
-      notices.filter((notice) => notice.id === "parse-task-finished-progress"),
-      [
-        {
-          id: "parse-task-finished-progress",
-          args: {
-            source: "online",
-            mode: "precise",
-            total: "2",
-            completed: "1",
-          },
-        },
-      ],
-    );
+    assert.deepEqual(notices, [
+      {
+        id: "parse-error-mineru",
+        args: { message: "parse failed" },
+      },
+    ]);
   });
 
   it("maps local API request failures to local unavailable messages", async function () {
@@ -1812,7 +1686,7 @@ describe("parseManager", function () {
 
     assert.equal(submitCount, 1);
     assert.equal(pollCount, 2);
-    assert.include(messages, "parse-task-finished");
+    assert.isEmpty(messages);
   });
 
   it("retries transient online polling failures without resubmitting", async function () {
@@ -1844,7 +1718,7 @@ describe("parseManager", function () {
 
     assert.equal(submitCount, 1);
     assert.equal(pollCount, 3);
-    assert.include(messages, "parse-task-finished");
+    assert.isEmpty(messages);
   });
 
   it("does not retry online upload failures", async function () {
@@ -1921,7 +1795,7 @@ describe("parseManager", function () {
     // saved task ID without re-uploading, and submits the pending chunk 2.
     assert.lengthOf(submitted, 3);
     assert.lengthOf(splitPaths, 3);
-    assert.include(messages, "parse-task-finished");
+    assert.deepEqual(messages, ["parse-error-local-api-unavailable"]);
   });
 
   it("uses the configured local API timeout for long-running local tasks", async function () {
@@ -1951,7 +1825,7 @@ describe("parseManager", function () {
 
     assert.equal(pollCount, 121);
     assert.lengthOf(delays, 120);
-    assert.include(messages, "parse-task-finished");
+    assert.isEmpty(messages);
   });
 });
 
