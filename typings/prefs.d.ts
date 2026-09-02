@@ -19,6 +19,7 @@ declare namespace _ZoteroTypes {
       "syncFolder": string;
       "autoParsePageLimit": number;
       "parallelSplit": boolean;
+      "attachLayoutPdf": boolean;
     };
   }
 }

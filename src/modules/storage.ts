@@ -28,6 +28,9 @@ export interface StorageAdapter {
     ref: AttachmentKeyRef,
     imageMarkdownPath: string,
   ): Promise<string | null>;
+  hasLayoutPdf(ref: AttachmentKeyRef): Promise<boolean>;
+  readLayoutPdf(ref: AttachmentKeyRef): Promise<Uint8Array | null>;
+  writeLayoutPdf(ref: AttachmentKeyRef, bytes: Uint8Array): Promise<string>;
   writeResult(input: {
     attachment: AttachmentRef;
     mineruTaskID: string;
@@ -61,6 +64,7 @@ const LITE_CONTENT_FILE = "lite-content.md";
 const LITE_MANIFEST_FILE = "lite-manifest.json";
 const BOXES_FILE = "boxes.normalized.json";
 const IMAGES_DIR = "images";
+const LAYOUT_PDF_FILE = "layout.pdf";
 
 export function createStorage(rootDir: string): StorageAdapter {
   const root = normalizePath(rootDir);
@@ -149,6 +153,27 @@ export function createStorage(rootDir: string): StorageAdapter {
         getAttachmentDir(fsRoot, ref),
         imageMarkdownPath,
       );
+    },
+
+    async hasLayoutPdf(ref) {
+      const filePath = joinPath(getAttachmentDir(fsRoot, ref), LAYOUT_PDF_FILE);
+      return await exists(filePath);
+    },
+
+    async readLayoutPdf(ref) {
+      const filePath = joinPath(getAttachmentDir(fsRoot, ref), LAYOUT_PDF_FILE);
+      if (!(await exists(filePath))) {
+        return null;
+      }
+      return await readBytes(filePath);
+    },
+
+    async writeLayoutPdf(ref, bytes) {
+      const dir = getAttachmentDir(fsRoot, ref);
+      await makeDir(dir);
+      const filePath = joinPath(dir, LAYOUT_PDF_FILE);
+      await writeBytes(filePath, bytes);
+      return toNativePath(filePath);
     },
 
     async writeResult(input) {

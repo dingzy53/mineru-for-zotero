@@ -532,6 +532,31 @@ describe("storage", function () {
     );
   });
 
+  it("writes, checks, and reads layout PDF files", async function () {
+    const storage = createStorage(rootDir);
+    const attachment = {
+      id: 1,
+      key: "LAYOUT_PDF_TEST",
+      libraryID: 12,
+      fileName: "a.pdf",
+      filePath: "a.pdf",
+      mtime: 1,
+    };
+
+    assert.isFalse(await storage.hasLayoutPdf(attachment));
+    assert.isNull(await storage.readLayoutPdf(attachment));
+
+    const sampleBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31]); // %PDF-1
+    const savedPath = await storage.writeLayoutPdf(attachment, sampleBytes);
+
+    assert.isString(savedPath);
+    assert.isTrue(await storage.hasLayoutPdf(attachment));
+
+    const readBytes = await storage.readLayoutPdf(attachment);
+    assert.isNotNull(readBytes);
+    assert.deepEqual(readBytes, sampleBytes);
+  });
+
   it("replaces old results when writing the same attachment again", async function () {
     const storage = createStorage(rootDir);
     const attachment = {

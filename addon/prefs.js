@@ -10,3 +10,4 @@ pref("saveImages", true);
 pref("syncFolder", "");
 pref("autoParsePageLimit", 0);
 pref("parallelSplit", false);
+pref("attachLayoutPdf", false);

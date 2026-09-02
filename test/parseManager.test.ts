@@ -1827,6 +1827,81 @@ describe("parseManager", function () {
     assert.lengthOf(delays, 120);
     assert.isEmpty(messages);
   });
+
+  it("generates and attaches layout PDF when getAttachLayoutPdf returns true", async function () {
+    const messages: string[] = [];
+    let layoutPdfGenerated = false;
+    let layoutPdfWritten = false;
+    let attachedPath = "";
+    let attachedTitle = "";
+
+    const manager = createParseManager({
+      ...baseDependencies(messages),
+      getAttachLayoutPdf: () => true,
+      readFileBytes: async () => new Uint8Array([1, 2, 3]),
+      generateLayoutPdf: async (bytes, boxes) => {
+        layoutPdfGenerated = true;
+        assert.deepEqual(bytes, new Uint8Array([1, 2, 3]));
+        assert.isNotEmpty(boxes);
+        return new Uint8Array([4, 5, 6]);
+      },
+      storage: {
+        ...baseStorage(),
+        writeResult: async () => {},
+        writeLayoutPdf: async (_ref, bytes) => {
+          layoutPdfWritten = true;
+          assert.deepEqual(bytes, new Uint8Array([4, 5, 6]));
+          return "C:/tmp/layout.pdf";
+        },
+      },
+      attachLayoutPdfToItem: async (att, path, title) => {
+        attachedPath = path;
+        attachedTitle = title ?? "";
+        return att;
+      },
+      client: successfulPreciseClient(),
+    });
+
+    await manager.parseAttachment(
+      pdfAttachment({ id: 99, fileName: "test.pdf" }),
+    );
+
+    assert.isTrue(layoutPdfGenerated);
+    assert.isTrue(layoutPdfWritten);
+    assert.equal(attachedPath, "C:/tmp/layout.pdf");
+    assert.include(attachedTitle, "MinerU Layout");
+    assert.isEmpty(messages);
+  });
+
+  it("does not generate or attach layout PDF when getAttachLayoutPdf is false", async function () {
+    const messages: string[] = [];
+    let layoutPdfGenerated = false;
+    let attached = false;
+
+    const manager = createParseManager({
+      ...baseDependencies(messages),
+      getAttachLayoutPdf: () => false,
+      generateLayoutPdf: async () => {
+        layoutPdfGenerated = true;
+        return new Uint8Array([]);
+      },
+      attachLayoutPdfToItem: async () => {
+        attached = true;
+        return null;
+      },
+      storage: {
+        ...baseStorage(),
+        writeResult: async () => {},
+      },
+      client: successfulPreciseClient(),
+    });
+
+    await manager.parseAttachment(pdfAttachment());
+
+    assert.isFalse(layoutPdfGenerated);
+    assert.isFalse(attached);
+    assert.isEmpty(messages);
+  });
 });
 
 function successfulPreciseClient(): NonNullable<

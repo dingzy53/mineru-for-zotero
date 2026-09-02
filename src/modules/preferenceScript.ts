@@ -21,6 +21,8 @@ import {
   setSyncFolder,
   getAutoParsePageLimit,
   setAutoParsePageLimit,
+  getAttachLayoutPdf,
+  setAttachLayoutPdf,
   getPdftkPath,
   setPdftkPath,
   type ParseMode,
@@ -598,6 +600,12 @@ export function registerPreferenceValueSync(document: Document): void {
     `zotero-prefpane-${config.addonRef}-save-images`,
     getSaveImages,
     setSaveImages,
+  );
+  registerCheckboxPreferenceSync(
+    document,
+    `zotero-prefpane-${config.addonRef}-attach-layout-pdf`,
+    getAttachLayoutPdf,
+    setAttachLayoutPdf,
   );
   registerTextPreferenceSync(
     document,

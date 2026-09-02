@@ -1,7 +1,8 @@
-import type { AttachmentRef } from "./domain";
+import type { AttachmentRef, NormalizedBox } from "./domain";
 import type { FluentMessageId } from "../../typings/i10n";
 import { config } from "../../package.json";
 import { normalizeMinerUBoxes } from "./boxNormalizer";
+import { generateLayoutPdf } from "./layoutPdfGenerator";
 import {
   createMinerUClientForSettings,
   MinerUFileAccessError,
@@ -9,6 +10,7 @@ import {
   MinerUTaskError,
   type MinerUClient,
 } from "./mineruClient";
+import { readFileBytes } from "./mineruClient/file";
 import { toNativePath } from "./mineruClient/path";
 import {
   clearAttachmentParseRunning,
@@ -34,6 +36,7 @@ import {
   getParseSource,
   getSaveImages,
   getParallelSplit,
+  getAttachLayoutPdf,
   type ParseMode,
   type ParseSource,
 } from "../utils/prefs";
@@ -61,6 +64,17 @@ export interface ParseManagerDependencies {
   getLocalApiTimeoutMinutes?: () => number;
   getSaveImages?: () => boolean;
   getParallelSplit?: () => boolean;
+  getAttachLayoutPdf?: () => boolean;
+  generateLayoutPdf?: (
+    pdfBytes: Uint8Array,
+    boxes: NormalizedBox[],
+  ) => Promise<Uint8Array>;
+  readFileBytes?: (filePath: string) => Promise<Uint8Array>;
+  attachLayoutPdfToItem?: (
+    attachment: Zotero.Item,
+    layoutPdfPath: string,
+    title?: string,
+  ) => Promise<Zotero.Item | null>;
   getMaxConcurrentRequests?: () => number;
   getPdfPageCount?: (filePath: string) => Promise<number>;
   splitPdf?: (
@@ -1010,6 +1024,31 @@ async function parseAttachmentWithDependencies(
         dependencies.getSaveImages?.() !== false ? result.images : undefined,
     });
     await cleanupTaskResume(String(attachment.id), resume);
+
+    // Generate and attach layout PDF if enabled
+    if (dependencies.getAttachLayoutPdf?.()) {
+      try {
+        const readBinary = dependencies.readFileBytes ?? readFileBytes;
+        const generatePdf = dependencies.generateLayoutPdf ?? generateLayoutPdf;
+        const pdfBytes = await readBinary(filePath);
+        const layoutPdfBytes = await generatePdf(pdfBytes, boxes);
+        const layoutPdfPath = await storage.writeLayoutPdf(
+          attachmentRef,
+          layoutPdfBytes,
+        );
+        if (dependencies.attachLayoutPdfToItem) {
+          const defaultTitle = `${attachmentTitle || "Document"} (MinerU Layout)`;
+          await dependencies.attachLayoutPdfToItem(
+            attachment,
+            layoutPdfPath,
+            defaultTitle,
+          );
+        }
+      } catch (err) {
+        dependencies.log("Failed to generate or attach layout PDF", err);
+      }
+    }
+
     await updateParseColumnStatus(
       dependencies,
       "ready",
@@ -1884,6 +1923,64 @@ function resolveParseNoticeSourceLabel(
     : resolveMessage("parse-notice-source-online");
 }
 
+export async function defaultAttachLayoutPdfToItem(
+  attachment: Zotero.Item,
+  layoutPdfPath: string,
+  title?: string,
+): Promise<Zotero.Item | null> {
+  try {
+    const parentItem = attachment.parentItem;
+    const parentItemID = parentItem ? parentItem.id : undefined;
+    const libraryID = attachment.libraryID;
+    const defaultTitle =
+      title ||
+      `${(attachment.getField?.("title") as string) || "Document"} (MinerU Layout)`;
+
+    if (parentItem) {
+      try {
+        const attIDs = (await parentItem.getAttachments?.()) || [];
+        for (const attID of attIDs) {
+          const att = await Zotero.Items.getAsync(attID);
+          if (
+            att &&
+            att.isAttachment?.() &&
+            (att.getField?.("title") === defaultTitle ||
+              att.getTags?.().some((t: any) => t.tag === "MinerU: Layout"))
+          ) {
+            try {
+              await att.eraseTx();
+            } catch {
+              // Ignore erase failure
+            }
+          }
+        }
+      } catch {
+        // Ignore attachment query failure
+      }
+    }
+
+    const newAtt = await Zotero.Attachments.importFromFile({
+      file: layoutPdfPath,
+      parentItemID,
+      libraryID,
+      title: defaultTitle,
+      contentType: "application/pdf",
+    });
+    if (newAtt) {
+      try {
+        newAtt.addTag("MinerU: Layout", 1);
+        await newAtt.saveTx();
+      } catch {
+        // Ignore tag error
+      }
+    }
+    return newAtt;
+  } catch (e) {
+    ztoolkit.log("Failed to attach layout PDF to Zotero item", e);
+    return null;
+  }
+}
+
 function createDefaultDependencies(): ParseManagerDependencies {
   return {
     getApiKey,
@@ -1892,6 +1989,10 @@ function createDefaultDependencies(): ParseManagerDependencies {
     getLocalApiBaseURL,
     getLocalApiTimeoutMinutes,
     getSaveImages,
+    getAttachLayoutPdf,
+    generateLayoutPdf,
+    readFileBytes,
+    attachLayoutPdfToItem: defaultAttachLayoutPdfToItem,
     getMaxConcurrentRequests: () =>
       resolveEnvConcurrentRequestLimit(MAX_CONCURRENT_REQUESTS_DEFAULT),
     createStorage: () => createStorage(getMinerUStorageRoot()),

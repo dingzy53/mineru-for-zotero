@@ -212,6 +212,15 @@ export function setParallelSplit(value: boolean) {
   return setPref("parallelSplit" as keyof PluginPrefsMap, value);
 }
 
+export function getAttachLayoutPdf(): boolean {
+  const value = getPref("attachLayoutPdf" as keyof PluginPrefsMap);
+  return value === true;
+}
+
+export function setAttachLayoutPdf(value: boolean) {
+  return setPref("attachLayoutPdf" as keyof PluginPrefsMap, value);
+}
+
 export function getPdftkPath(): string {
   const value = getPref("pdftkPath" as keyof PluginPrefsMap);
   return typeof value === "string" ? value : DEFAULT_PDFTK_PATH;
