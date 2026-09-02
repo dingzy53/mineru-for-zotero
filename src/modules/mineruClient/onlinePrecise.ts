@@ -33,7 +33,11 @@ import {
   xhrUploadBinary,
 } from "./http";
 import { basename, normalizeBaseURL } from "./path";
-import { readImagesFromZip, readRawResultFromZip } from "./result";
+import {
+  readImagesFromZip,
+  readLayoutPdfFromZip,
+  readRawResultFromZip,
+} from "./result";
 import type {
   FileUrlsBatchResponse,
   MinerUClient,
@@ -169,6 +173,7 @@ export function createOnlinePreciseMinerUClient(
             ? decodeText(zip.get("full.md")?.bytes ?? new Uint8Array())
             : "",
           images: readImagesFromZip(zip),
+          layoutPdf: readLayoutPdfFromZip(zip) ?? undefined,
         };
       }
 

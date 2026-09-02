@@ -48,11 +48,31 @@ export function readImagesFromZip(
 }
 
 /**
+ * 从 MinerU 结果 ZIP 中提取包含的 layout.pdf (如果存在)。
+ */
+export function readLayoutPdfFromZip(zip: ZipEntries): Uint8Array | null {
+  for (const [name, entry] of zip) {
+    const normalized = name.replace(/\\/g, "/");
+    if (
+      normalized.endsWith("_layout.pdf") ||
+      normalized.endsWith("/layout.pdf") ||
+      normalized === "layout.pdf"
+    ) {
+      return entry.bytes;
+    }
+  }
+  return null;
+}
+
+/**
  * 判断 ZIP 条目是否属于 Markdown、JSON 或图片结果。
  */
 export function shouldKeepZipEntry(name: string): boolean {
   return (
-    name.endsWith(".md") || name.endsWith(".json") || isZipImageEntry(name)
+    name.endsWith(".md") ||
+    name.endsWith(".json") ||
+    name.endsWith(".pdf") ||
+    isZipImageEntry(name)
   );
 }
 
@@ -68,10 +88,11 @@ export function isZipImageEntry(name: string): boolean {
  */
 export function getZipImagePath(name: string): string | null {
   const normalized = name.replace(/\\/g, "/");
-  if (!normalized.startsWith("images/")) {
+  const match = normalized.match(/(?:^|\/)images\/(.+)$/);
+  if (!match) {
     return null;
   }
-  const relative = normalized.slice("images/".length);
+  const relative = match[1];
   if (!isSafeRelativePath(relative)) {
     return null;
   }

@@ -259,6 +259,7 @@ function shouldReadZipEntry(name: string): boolean {
   return (
     name.endsWith(".md") ||
     name.endsWith(".json") ||
+    name.endsWith(".pdf") ||
     isReadableZipImageEntry(name)
   );
 }
@@ -268,10 +269,11 @@ function shouldReadZipEntry(name: string): boolean {
  */
 function isReadableZipImageEntry(name: string): boolean {
   const normalized = name.replace(/\\/g, "/");
-  if (!normalized.startsWith("images/")) {
+  const match = normalized.match(/(?:^|\/)images\/(.+)$/);
+  if (!match) {
     return false;
   }
-  return isSafeRelativePath(normalized.slice("images/".length));
+  return isSafeRelativePath(match[1]);
 }
 
 /**

@@ -8,6 +8,7 @@ export type MinerUPreciseResult = {
   rawResult: unknown;
   markdown: string;
   images?: MinerUImageFile[];
+  layoutPdf?: Uint8Array;
 };
 
 export type MinerULiteResult = {

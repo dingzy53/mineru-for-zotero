@@ -1069,6 +1069,42 @@ describe("mineruClient", function () {
     ]);
   });
 
+  it("extracts nested images and layout pdf from local mineru zip", async function () {
+    const client = createMinerUClientForSettings({
+      apiKey: "secret-token",
+      source: "local",
+      mode: "precise",
+      localApiBaseURL: "http://127.0.0.1:8000",
+      fetch: async () => {
+        return new Response(
+          createStoredZipBytes({
+            "hybrid_auto/full.md": "# Title\n![A](images/sub.png)",
+            "hybrid_auto/doc_middle.json": JSON.stringify({
+              pdf_info: [{ para_blocks: [{ bbox: [0, 0, 10, 10] }] }],
+            }),
+            "hybrid_auto/doc_layout.pdf": new Uint8Array([37, 80, 68, 70]),
+            "hybrid_auto/images/sub.png": new Uint8Array([137, 80, 78, 71]),
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/zip" },
+          },
+        );
+      },
+    });
+
+    const result = await client.downloadResult("task-1");
+
+    assert.equal(result.kind, "precise");
+    if (result.kind !== "precise") {
+      assert.fail("Expected precise result");
+    }
+    assert.deepEqual(result.images, [
+      { path: "sub.png", bytes: new Uint8Array([137, 80, 78, 71]) },
+    ]);
+    assert.deepEqual(result.layoutPdf, new Uint8Array([37, 80, 68, 70]));
+  });
+
   it("prefers the zip json that contains page box data", async function () {
     const client = createMinerUClient({
       apiKey: "secret-token",

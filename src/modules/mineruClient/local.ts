@@ -4,7 +4,7 @@ import { readFileBytes, readPdfBytes } from "./file";
 import { buildLocalTaskFormData } from "./formData";
 import { createFormDataRequest, normalizeBinary } from "./http";
 import { normalizeBaseURL } from "./path";
-import { readImagesFromZip } from "./result";
+import { readImagesFromZip, readLayoutPdfFromZip } from "./result";
 import type {
   MinerUClient,
   MinerUClientOptions,
@@ -134,6 +134,7 @@ export function createLocalMinerUClient(
           markdown,
           rawResult: readLocalZipRawResult(zip),
           images: readImagesFromZip(zip),
+          layoutPdf: readLayoutPdfFromZip(zip) ?? undefined,
         };
       }
 

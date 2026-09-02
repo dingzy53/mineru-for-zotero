@@ -1026,24 +1026,28 @@ async function parseAttachmentWithDependencies(
     await cleanupTaskResume(String(attachment.id), resume);
 
     // Generate and attach layout PDF if enabled
-    if (dependencies.getAttachLayoutPdf?.()) {
+    const shouldAttachLayoutPdf = dependencies.getAttachLayoutPdf
+      ? dependencies.getAttachLayoutPdf()
+      : getAttachLayoutPdf();
+    if (shouldAttachLayoutPdf) {
       try {
-        const readBinary = dependencies.readFileBytes ?? readFileBytes;
-        const generatePdf = dependencies.generateLayoutPdf ?? generateLayoutPdf;
-        const pdfBytes = await readBinary(filePath);
-        const layoutPdfBytes = await generatePdf(pdfBytes, boxes);
+        let layoutPdfBytes =
+          result.kind === "precise" ? result.layoutPdf : undefined;
+        if (!layoutPdfBytes) {
+          const readBinary = dependencies.readFileBytes ?? readFileBytes;
+          const generatePdf =
+            dependencies.generateLayoutPdf ?? generateLayoutPdf;
+          const pdfBytes = await readBinary(filePath);
+          layoutPdfBytes = await generatePdf(pdfBytes, boxes);
+        }
         const layoutPdfPath = await storage.writeLayoutPdf(
           attachmentRef,
           layoutPdfBytes,
         );
-        if (dependencies.attachLayoutPdfToItem) {
-          const defaultTitle = `${attachmentTitle || "Document"} (MinerU Layout)`;
-          await dependencies.attachLayoutPdfToItem(
-            attachment,
-            layoutPdfPath,
-            defaultTitle,
-          );
-        }
+        const attachToItem =
+          dependencies.attachLayoutPdfToItem ?? defaultAttachLayoutPdfToItem;
+        const defaultTitle = `${attachmentTitle || "Document"} (MinerU Layout)`;
+        await attachToItem(attachment, layoutPdfPath, defaultTitle);
       } catch (err) {
         dependencies.log("Failed to generate or attach layout PDF", err);
       }
@@ -1929,20 +1933,35 @@ export async function defaultAttachLayoutPdfToItem(
   title?: string,
 ): Promise<Zotero.Item | null> {
   try {
-    const parentItem = attachment.parentItem;
-    const parentItemID = parentItem ? parentItem.id : undefined;
+    const parentItemID =
+      attachment.parentItemID ||
+      (typeof attachment.parentItem === "object"
+        ? attachment.parentItem?.id
+        : undefined);
+    const parentItem =
+      (typeof attachment.parentItem === "object" && attachment.parentItem) ||
+      (parentItemID ? await Zotero.Items.getAsync(parentItemID) : undefined);
     const libraryID = attachment.libraryID;
     const defaultTitle =
       title ||
-      `${(attachment.getField?.("title") as string) || "Document"} (MinerU Layout)`;
+      `${
+        (parentItem?.getField?.("title") as string) ||
+        (attachment.getField?.("title") as string) ||
+        "Document"
+      } (MinerU Layout)`;
 
     if (parentItem) {
       try {
-        const attIDs = (await parentItem.getAttachments?.()) || [];
+        const attIDs = (
+          typeof parentItem.getAttachments === "function"
+            ? await parentItem.getAttachments()
+            : []
+        ) as number[];
         for (const attID of attIDs) {
           const att = await Zotero.Items.getAsync(attID);
           if (
             att &&
+            att.id !== attachment.id &&
             att.isAttachment?.() &&
             (att.getField?.("title") === defaultTitle ||
               att.getTags?.().some((t: any) => t.tag === "MinerU: Layout"))
@@ -1961,7 +1980,7 @@ export async function defaultAttachLayoutPdfToItem(
 
     const newAtt = await Zotero.Attachments.importFromFile({
       file: layoutPdfPath,
-      parentItemID,
+      parentItemID: parentItem ? parentItem.id : undefined,
       libraryID,
       title: defaultTitle,
       contentType: "application/pdf",
