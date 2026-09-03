@@ -13,6 +13,7 @@ interface AgentSyncItem {
   authors?: string;
   pdfPath?: string;
   markdownPath?: string;
+  layoutPdfPath?: string;
 }
 
 export async function syncResultToAgentFolder(
@@ -101,6 +102,17 @@ export async function syncResultToAgentFolder(
     }
 
     // 2. Update global index
+    const hasLayout = await IOUtils.exists(`${targetDir}/layout.pdf`);
+    if (hasLayout) {
+      try {
+        await IOUtils.copy(
+          `${targetDir}/layout.pdf`,
+          `${targetDir}/${folderName}_layout.pdf`,
+        );
+      } catch {
+        // Ignore copy error
+      }
+    }
     await updateGlobalIndex(syncRoot, {
       id: parent.id,
       key: parent.key,
@@ -110,6 +122,7 @@ export async function syncResultToAgentFolder(
       authors: getCreatorsString(parent),
       pdfPath: attachment.getFilePath() || "",
       markdownPath: `${folderName}/content.md`,
+      layoutPdfPath: hasLayout ? `${folderName}/layout.pdf` : undefined,
     });
   } catch (error) {
     ztoolkit.log("Failed to sync MinerU result to agent folder", error);

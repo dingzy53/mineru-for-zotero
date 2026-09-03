@@ -1,6 +1,6 @@
 import { config } from "../../package.json";
 import { getLocaleID } from "../utils/locale";
-import { parseAttachments } from "./parseManager";
+import { isMinerUGeneratedAttachment, parseAttachments } from "./parseManager";
 
 const PARSE_PDF_MENU_ID = `${config.addonRef}-parse-pdf`;
 
@@ -71,6 +71,9 @@ export function shouldShowParsePdfMenu(items: Zotero.Item[]): boolean {
 }
 
 function isPdfAttachment(item: Zotero.Item): boolean {
+  if (isMinerUGeneratedAttachment(item)) {
+    return false;
+  }
   return (
     typeof item.isAttachment === "function" &&
     typeof item.isPDFAttachment === "function" &&

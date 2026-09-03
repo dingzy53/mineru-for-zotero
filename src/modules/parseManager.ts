@@ -878,6 +878,7 @@ async function parseAttachmentWithDependencies(
         rawResult: single.rawResult,
         markdown: single.markdown,
         images: single.images || [],
+        layoutPdf: single.layoutPdf,
         _mergedBoxes: normalizeMinerUBoxes(single.rawResult),
       };
     } else {
@@ -1050,6 +1051,14 @@ async function parseAttachmentWithDependencies(
         await attachToItem(attachment, layoutPdfPath, defaultTitle);
       } catch (err) {
         dependencies.log("Failed to generate or attach layout PDF", err);
+        const errDetail =
+          err instanceof Error ? `${err.message}\n${err.stack}` : String(err);
+        if (typeof Zotero !== "undefined") {
+          Zotero.debug(
+            `[MinerU] Failed to generate or attach layout PDF: ${errDetail}`,
+          );
+        }
+        console.error("[MinerU] Failed to generate or attach layout PDF", err);
       }
     }
 
@@ -1927,6 +1936,50 @@ function resolveParseNoticeSourceLabel(
     : resolveMessage("parse-notice-source-online");
 }
 
+const recentlyCreatedLayoutAttachmentIDs = new Set<number>();
+
+export function isMinerUGeneratedAttachment(item: Zotero.Item): boolean {
+  if (!item) {
+    return false;
+  }
+  if (
+    typeof item.id === "number" &&
+    recentlyCreatedLayoutAttachmentIDs.has(item.id)
+  ) {
+    return true;
+  }
+  if (typeof item.isAttachment === "function" && !item.isAttachment()) {
+    return false;
+  }
+  try {
+    const title = (item.getField?.("title") as string) || "";
+    if (title.includes("(MinerU Layout)") || title.includes("(MinerU Span)")) {
+      return true;
+    }
+    const filename = item.attachmentFilename || "";
+    if (
+      filename.toLowerCase() === "layout.pdf" ||
+      filename.toLowerCase().endsWith("_layout.pdf")
+    ) {
+      return true;
+    }
+    const tags = item.getTags?.() || [];
+    if (
+      tags.some(
+        (t: any) =>
+          t.tag === "MinerU: Layout" ||
+          t.tag === "MinerU: Span" ||
+          t.tag === "MinerU",
+      )
+    ) {
+      return true;
+    }
+  } catch {
+    // Ignore error
+  }
+  return false;
+}
+
 export async function defaultAttachLayoutPdfToItem(
   attachment: Zotero.Item,
   layoutPdfPath: string,
@@ -1940,7 +1993,9 @@ export async function defaultAttachLayoutPdfToItem(
         : undefined);
     const parentItem =
       (typeof attachment.parentItem === "object" && attachment.parentItem) ||
-      (parentItemID ? await Zotero.Items.getAsync(parentItemID) : undefined);
+      (parentItemID
+        ? await Zotero.Items.getAsync(parentItemID as number)
+        : undefined);
     const libraryID = attachment.libraryID;
     const defaultTitle =
       title ||
@@ -1986,6 +2041,9 @@ export async function defaultAttachLayoutPdfToItem(
       contentType: "application/pdf",
     });
     if (newAtt) {
+      if (typeof newAtt.id === "number") {
+        recentlyCreatedLayoutAttachmentIDs.add(newAtt.id);
+      }
       try {
         newAtt.addTag("MinerU: Layout", 1);
         await newAtt.saveTx();
@@ -1996,6 +2054,13 @@ export async function defaultAttachLayoutPdfToItem(
     return newAtt;
   } catch (e) {
     ztoolkit.log("Failed to attach layout PDF to Zotero item", e);
+    const errText = e instanceof Error ? `${e.message}\n${e.stack}` : String(e);
+    if (typeof Zotero !== "undefined") {
+      Zotero.debug(
+        `[MinerU] Failed to attach layout PDF to Zotero item: ${errText}`,
+      );
+    }
+    console.error("[MinerU] Failed to attach layout PDF to Zotero item", e);
     return null;
   }
 }

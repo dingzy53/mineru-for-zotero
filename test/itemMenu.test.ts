@@ -12,6 +12,7 @@ describe("itemMenu", function () {
     assert.isFalse(shouldShowParsePdfMenu([regularItem()]));
     assert.isFalse(shouldShowParsePdfMenu([pdfAttachment(), regularItem()]));
     assert.isFalse(shouldShowParsePdfMenu([nonPdfAttachment()]));
+    assert.isFalse(shouldShowParsePdfMenu([layoutPdfAttachment()]));
     assert.isFalse(shouldShowParsePdfMenu([{} as Zotero.Item]));
   });
 
@@ -109,5 +110,15 @@ function regularItem(): Zotero.Item {
   return {
     isAttachment: () => false,
     isPDFAttachment: () => false,
+  } as unknown as Zotero.Item;
+}
+
+function layoutPdfAttachment(): Zotero.Item {
+  return {
+    isAttachment: () => true,
+    isPDFAttachment: () => true,
+    getField: (field: string) =>
+      field === "title" ? "Paper (MinerU Layout)" : "",
+    getTags: () => [{ tag: "MinerU: Layout" }],
   } as unknown as Zotero.Item;
 }

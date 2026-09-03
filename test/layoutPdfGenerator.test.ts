@@ -113,4 +113,67 @@ describe("layoutPdfGenerator", function () {
     const reloadedDoc = await PDFDocument.load(resultBytes);
     expect(reloadedDoc.getPageCount()).to.equal(1);
   });
+
+  it("handles Uint8Array views with offset and foreign buffers cleanly", async function () {
+    const doc = await PDFDocument.create();
+    doc.addPage([400, 600]);
+    const bytes = await doc.save();
+    // Simulate a sliced view with byteOffset
+    const padded = new Uint8Array(bytes.length + 32);
+    padded.set(bytes, 16);
+    const view = new Uint8Array(padded.buffer, 16, bytes.length);
+
+    const result = await generateLayoutPdf(view, [
+      {
+        rawIndex: 0,
+        page: 1,
+        type: "title",
+        bbox: { x: 0.1, y: 0.1, width: 0.5, height: 0.1 },
+        markdown: "Title",
+        formula: null,
+      },
+    ]);
+    expect(result).to.be.instanceOf(Uint8Array);
+    const reloaded = await PDFDocument.load(result);
+    expect(reloaded.getPageCount()).to.equal(1);
+  });
+
+  it("draws sequential numbers on each page for layout blocks", async function () {
+    const doc = await PDFDocument.create();
+    doc.addPage([500, 700]);
+    doc.addPage([500, 700]);
+    const originalBytes = await doc.save();
+
+    const boxes: NormalizedBox[] = [
+      {
+        rawIndex: 0,
+        page: 1,
+        type: "title",
+        bbox: { x: 0.1, y: 0.1, width: 0.5, height: 0.05 },
+        markdown: "Title",
+        formula: null,
+      },
+      {
+        rawIndex: 1,
+        page: 1,
+        type: "text",
+        bbox: { x: 0.1, y: 0.2, width: 0.5, height: 0.1 },
+        markdown: "Text",
+        formula: null,
+      },
+      {
+        rawIndex: 2,
+        page: 2,
+        type: "table",
+        bbox: { x: 0.1, y: 0.1, width: 0.8, height: 0.4 },
+        markdown: "Table",
+        formula: null,
+      },
+    ];
+
+    const resultBytes = await generateLayoutPdf(originalBytes, boxes);
+    expect(resultBytes).to.be.instanceOf(Uint8Array);
+    const reloaded = await PDFDocument.load(resultBytes);
+    expect(reloaded.getPageCount()).to.equal(2);
+  });
 });

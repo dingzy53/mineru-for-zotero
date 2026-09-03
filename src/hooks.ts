@@ -16,7 +16,11 @@ import {
 } from "./modules/readerToolbar";
 import { createZToolkit } from "./utils/ztoolkit";
 import { getAutoParsePageLimit } from "./utils/prefs";
-import { parseAttachment } from "./modules/parseManager";
+import {
+  isMinerUGeneratedAttachment,
+  parseAttachment,
+} from "./modules/parseManager";
+import { getPdfPageCount } from "./modules/pdfSplitter";
 import { taskStore } from "./modules/taskStore";
 
 let notifierID: string | null = null;
@@ -47,7 +51,7 @@ async function onStartup() {
         event: string,
         type: string,
         ids: Array<string | number>,
-        extraData: Record<string, any>,
+        _extraData: Record<string, any>,
       ) => {
         if (event === "add" && type === "item") {
           const limit = getAutoParsePageLimit();
@@ -55,13 +59,29 @@ async function onStartup() {
             const items = await Zotero.Items.getAsync(ids as number[]);
             for (const item of items) {
               if (item.isPDFAttachment()) {
-                // Check page count and parse if within limit
-                // The Zotero attachment needs to be fully synced or indexed to have page count
-                // But we can check standard file size or pdfinfo later
-                // For now, let's just trigger parsing
-                parseAttachment(item).catch((e) =>
-                  ztoolkit.log("Auto-parse failed", e),
-                );
+                if (isMinerUGeneratedAttachment(item)) {
+                  continue;
+                }
+                try {
+                  let filePath =
+                    (await item.getFilePathAsync?.()) || item.getFilePath?.();
+                  if (!filePath) {
+                    await Zotero.Promise.delay(800);
+                    filePath =
+                      (await item.getFilePathAsync?.()) || item.getFilePath?.();
+                  }
+                  if (!filePath) {
+                    continue;
+                  }
+                  const pageCount = await getPdfPageCount(filePath);
+                  if (pageCount > 0 && pageCount <= limit) {
+                    parseAttachment(item).catch((e) =>
+                      ztoolkit.log("Auto-parse failed", e),
+                    );
+                  }
+                } catch (e) {
+                  ztoolkit.log("Failed to check page count for auto-parse", e);
+                }
               }
             }
           }
