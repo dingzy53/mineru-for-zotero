@@ -48,3 +48,4 @@ pref-parsed-count-error = 已解析 PDF：读取失败
 pref-data-folder-path = 数据目录：{ $path }
 pref-about-title = 关于
 pref-help = { $name } Build { $version } { $time }
+pref-open-results-manager = 管理已解析结果

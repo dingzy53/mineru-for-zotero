@@ -52,6 +52,15 @@ export interface StorageAdapter {
     source: "online" | "local";
     markdown: string;
   }): Promise<void>;
+  deleteResult(
+    ref: AttachmentKeyRef,
+    options?: { preciseOnly?: boolean; liteOnly?: boolean },
+  ): Promise<void>;
+  getAttachmentDirSize(ref: AttachmentKeyRef): Promise<number>;
+  readManifestSafe(ref: AttachmentKeyRef): Promise<ParseManifest | null>;
+  readLiteManifestSafe(
+    ref: AttachmentKeyRef,
+  ): Promise<LiteParseManifest | null>;
   countReadyResults(): Promise<number>;
   openDataFolder(): Promise<void>;
 }
@@ -267,6 +276,49 @@ export function createStorage(rootDir: string): StorageAdapter {
         }
       }
       return count;
+    },
+
+    async deleteResult(ref, options) {
+      const dir = getAttachmentDir(fsRoot, ref);
+      if (!(await exists(dir))) {
+        return;
+      }
+      if (options?.preciseOnly) {
+        await removePath(joinPath(dir, MANIFEST_FILE));
+        await removePath(joinPath(dir, RAW_RESULT_FILE));
+        await removePath(joinPath(dir, CONTENT_FILE));
+        await removePath(joinPath(dir, BOXES_FILE));
+        await removePath(joinPath(dir, IMAGES_DIR));
+        await removePath(joinPath(dir, LAYOUT_PDF_FILE));
+      } else if (options?.liteOnly) {
+        await removePath(joinPath(dir, LITE_MANIFEST_FILE));
+        await removePath(joinPath(dir, LITE_CONTENT_FILE));
+      } else {
+        await removePath(dir);
+      }
+    },
+
+    async getAttachmentDirSize(ref) {
+      const dir = getAttachmentDir(fsRoot, ref);
+      return computeDirSize(dir);
+    },
+
+    async readManifestSafe(ref) {
+      try {
+        return await readManifestFile(getAttachmentDir(fsRoot, ref));
+      } catch {
+        return null;
+      }
+    },
+
+    async readLiteManifestSafe(ref) {
+      try {
+        return (await readJson(
+          joinPath(getAttachmentDir(fsRoot, ref), LITE_MANIFEST_FILE),
+        )) as LiteParseManifest;
+      } catch {
+        return null;
+      }
     },
 
     async openDataFolder() {
@@ -853,4 +905,45 @@ function readDirectoryServicePath(
 
 function makeStamp(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+async function computeDirSize(path: string): Promise<number> {
+  if (!(await exists(path))) {
+    return 0;
+  }
+  if (hasIOUtils()) {
+    try {
+      const children = await IOUtils.getChildren(toNativePath(path));
+      let total = 0;
+      for (const child of children) {
+        const stat = await IOUtils.stat(child);
+        if (stat.type === "directory") {
+          total += await computeDirSize(child);
+        } else {
+          total += stat.size ?? 0;
+        }
+      }
+      return total;
+    } catch {
+      return 0;
+    }
+  }
+
+  let total = 0;
+  const iterator = new OS.File.DirectoryIterator(toNativePath(path));
+  try {
+    await iterator.forEach(async (entry: OS.File.Entry) => {
+      if (entry.isDir) {
+        total += await computeDirSize(entry.path);
+      } else {
+        const stat = await OS.File.stat(entry.path);
+        total += stat.size ?? 0;
+      }
+    });
+  } catch {
+    // Ignore errors
+  } finally {
+    iterator.close();
+  }
+  return total;
 }

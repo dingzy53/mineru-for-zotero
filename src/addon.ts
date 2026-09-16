@@ -9,6 +9,12 @@ import type {
 import type { ReaderToolbarRegistration } from "./modules/readerToolbar";
 import { createZToolkit } from "./utils/ztoolkit";
 import { taskStore, openTaskManagerWindow } from "./modules/taskStore";
+import {
+  openResultsManagerWindow,
+  createResultsManagerService,
+} from "./modules/resultsManager";
+import { createStorage } from "./modules/storage";
+import { getMinerUStorageRoot } from "./modules/preferenceScript";
 import { syncAllToAgentFolder, updateAllMinerUTags } from "./modules/agentSync";
 import { parseAttachment } from "./modules/parseManager";
 import { getString } from "./utils/locale";
@@ -52,6 +58,9 @@ class Addon {
     this.api = {
       taskStore,
       openTaskManagerWindow,
+      openResultsManagerWindow,
+      createResultsManagerService: () =>
+        createResultsManagerService(createStorage(getMinerUStorageRoot())),
       syncAllToAgentFolder,
       updateAllMinerUTags,
       retryTask: this.retryTask.bind(this),

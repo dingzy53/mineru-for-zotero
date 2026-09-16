@@ -17,3 +17,6 @@ prefs-table-title = Title
 prefs-table-detail = Detail
 tabpanel-lib-tab-label = Library Tab
 tabpanel-reader-tab-label = Reader Tab
+
+mineru-for-zotero-results-manager-menuitem =
+    .label = MinerU Parsed Results Manager

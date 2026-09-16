@@ -48,3 +48,4 @@ pref-parsed-count-error = Parsed PDFs: failed to read
 pref-data-folder-path = Data folder: { $path }
 pref-about-title = About
 pref-help = { $name } Build { $version } { $time }
+pref-open-results-manager = Manage Parsed Results

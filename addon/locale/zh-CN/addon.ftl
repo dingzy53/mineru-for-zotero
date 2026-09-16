@@ -9,3 +9,6 @@ prefs-table-title = 标题
 prefs-table-detail = 详情
 tabpanel-lib-tab-label = 库页签
 tabpanel-reader-tab-label = 阅读器标签
+
+mineru-for-zotero-results-manager-menuitem =
+    .label = MinerU 已解析结果管理

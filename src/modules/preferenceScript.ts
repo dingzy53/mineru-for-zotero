@@ -305,6 +305,14 @@ export async function registerPrefsScripts(_window: Window) {
     });
 
   document
+    .getElementById(`${config.addonRef}-open-results-manager`)
+    ?.addEventListener("click", () => {
+      const addonObj = (Zotero as any).MinerUForZotero;
+      if (addonObj?.api?.openResultsManagerWindow) {
+        addonObj.api.openResultsManagerWindow();
+      }
+    });
+  document
     .getElementById(`${config.addonRef}-api-regenerate-token`)
     ?.addEventListener("click", () => {
       setMarkdownApiToken(generateMarkdownApiToken());
