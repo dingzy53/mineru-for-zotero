@@ -29,6 +29,7 @@ import {
 import { getPdfPageCount, splitPdf } from "./pdfSplitter";
 import { createStorage, type StorageAdapter } from "./storage";
 import { getString } from "../utils/locale";
+import { runWithConcurrency } from "../utils/concurrency";
 import {
   getApiKey,
   getLocalApiTimeoutMinutes,
@@ -732,38 +733,11 @@ async function parseAttachmentWithDependencies(
           String(attachment.id),
           `[Auto-Split] Processing ${chunks} parts in parallel...`,
         );
-        const queue = [...chunkTasks];
-        let active = 0;
-        const chunkConcurrency = getMaxConcurrentRequests(dependencies);
-        await new Promise<void>((resolve, reject) => {
-          let hasError = false;
-          const next = () => {
-            if (hasError) return;
-            if (taskStore.getTask(String(attachment.id))?.status === "failed") {
-              hasError = true;
-              reject(new Error("The operation was canceled."));
-              return;
-            }
-            if (queue.length === 0 && active === 0) {
-              resolve();
-              return;
-            }
-            while (active < chunkConcurrency && queue.length > 0) {
-              const task = queue.shift()!;
-              active++;
-              task()
-                .then(() => {
-                  active--;
-                  next();
-                })
-                .catch((err) => {
-                  hasError = true;
-                  reject(err);
-                });
-            }
-          };
-          next();
-        });
+        await runWithConcurrency(
+          chunkTasks,
+          getMaxConcurrentRequests(dependencies),
+          () => taskStore.getTask(String(attachment.id))?.status === "failed",
+        );
       } else {
         for (const task of chunkTasks) {
           await task();
