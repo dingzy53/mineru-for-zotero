@@ -47,6 +47,10 @@
 10. `refactor(readerOverlay): share class-name DOM helpers`
 11. `chore: remove remaining dead exports`
 12. `refactor(preferences): share native file picker scaffolding`
+13. `fix(test): use chai assert so the browser test bundler resolves it`
+14. `fix(test): restore global Zotero and Components after results manager tests`
+15. `fix(resultsManager): inject window lookups and stop mutating read-only globals in tests`
+16. `fix(test): isolate storage tests from persistent temp results`
 
 新增/调整的模块：`parseMerge.ts`、`storageFs.ts`、`readerOverlay/dom.ts`、`utils/concurrency.ts`，以及对应单测 `test/parseMerge.test.ts`、`test/concurrency.test.ts`。
 
@@ -76,4 +80,5 @@ node --test scripts/*.test.mjs
 
 - `parseAttachmentWithDependencies` 仍较长，但其内部闭包（分块提交/轮询/下载）强耦合于 `client`、`task`、`resume` 等局部状态，进一步抽离收益有限、风险较高；合并与并发这两个纯逻辑已抽离，可读性已明显改善。
 - 若修改核心流程，建议继续保持“纯函数抽离优先”的策略，并为新抽离的纯函数补充 `test/*.test.ts` 单测。
-- 本机未安装 Zotero，完整 `npm test` 未执行；已用 `npx tsc -p test/tsconfig.json --noEmit`、独立脚本测试以及基于 Node 的 IOUtils/PathUtils shim 运行 storage/parseMerge/concurrency/readerOverlay 回归对比。
+- 完整 `npm test` 已在本机运行通过：在 `/tmp/zotero-test` 下载 Zotero 10 beta 后，使用 `ZOTERO_PLUGIN_ZOTERO_BIN_PATH=/tmp/zotero-test/Zotero_linux-x86_64/zotero npm test -- --exit-on-finish`，全部 **373 passed / 0 failed**（19 个测试套件）。
+- 为让套件真正跑绿，额外修复了 3 个测试基础设施问题：`resultsManager.test.ts` 误用 Node `assert`（改为 chai，浏览器打包可解析）、`openResultsManagerWindow` 测试污染只读全局 `Components`/`Zotero` 并劫持报告器（改为注入 `ResultsManagerWindowDependencies`）、`storage.test.ts` 跨运行复用 `TmpD` 导致的脏状态（root 目录加随机后缀）。
