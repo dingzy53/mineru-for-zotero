@@ -34,15 +34,6 @@ export function setPref<K extends keyof PluginPrefsMap>(
   return Zotero.Prefs.set(`${PREFS_PREFIX}.${key}`, value, true);
 }
 
-/**
- * Clear preference value.
- * Wrapper of `Zotero.Prefs.clear`.
- * @param key
- */
-export function clearPref(key: string) {
-  return Zotero.Prefs.clear(`${PREFS_PREFIX}.${key}`, true);
-}
-
 export function getApiKey(): string {
   const value = getPref("apiKey");
   return typeof value === "string" ? value : "";
@@ -206,10 +197,6 @@ export function setAutoParsePageLimit(value: number) {
 export function getParallelSplit(): boolean {
   const value = getPref("parallelSplit" as keyof PluginPrefsMap);
   return value === true;
-}
-
-export function setParallelSplit(value: boolean) {
-  return setPref("parallelSplit" as keyof PluginPrefsMap, value);
 }
 
 export function getAttachLayoutPdf(): boolean {

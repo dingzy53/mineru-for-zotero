@@ -873,24 +873,6 @@ function ensureSelectPanelCloseHandlers(
   );
 }
 
-/** 创建一个不会把点击继续冒泡到 PDF.js 的复制按钮。 */
-export function createCopyButton(
-  doc: Document,
-  label: string,
-  onCopy: () => void,
-): HTMLButtonElement {
-  const button = doc.createElement("button");
-  button.type = "button";
-  button.className = "mineru-copy-button";
-  button.textContent = label;
-  button.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    onCopy();
-  });
-  return button;
-}
-
 /** 判断当前 box 是否属于公式类。 */
 export function isFormulaBox(box: NormalizedBox): boolean {
   return [

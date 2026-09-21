@@ -65,18 +65,6 @@ export function readLayoutPdfFromZip(zip: ZipEntries): Uint8Array | null {
 }
 
 /**
- * 判断 ZIP 条目是否属于 Markdown、JSON 或图片结果。
- */
-export function shouldKeepZipEntry(name: string): boolean {
-  return (
-    name.endsWith(".md") ||
-    name.endsWith(".json") ||
-    name.endsWith(".pdf") ||
-    isZipImageEntry(name)
-  );
-}
-
-/**
  * 判断 ZIP 条目是否是安全的 MinerU 图片结果。
  */
 export function isZipImageEntry(name: string): boolean {

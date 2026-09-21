@@ -1,4 +1,3 @@
-import type { ReaderOverlayState, ReaderOverlayKey } from "./types";
 import { getReaderOverlayStateForReader } from "./state";
 
 /** 判断当前 reader 的 overlay root 集合是否需要重新同步窗口。 */

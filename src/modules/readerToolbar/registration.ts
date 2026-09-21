@@ -144,8 +144,3 @@ export function syncWindowToolbar(
     }
   }
 }
-
-/** 返回 toolbar 注册生命周期使用的共享 panel store。 */
-export function getReaderToolbarPanelStore(): ReaderToolbarPanelStore {
-  return panelStore;
-}
