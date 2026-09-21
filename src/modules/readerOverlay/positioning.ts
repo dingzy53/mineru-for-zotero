@@ -1,4 +1,5 @@
 import { safeReaderOverlayCleanup } from "./diagnostics";
+import { hasClassName, isInsideClassTarget } from "./dom";
 import {
   applyReaderOverlayBoxSelectionFromElement,
   findBoxAtPoint,
@@ -408,92 +409,19 @@ export function createReaderOverlayPositioningController(
 
 /** 判断事件目标是否在 select-copy 面板内，避免拦截 textarea 原生交互。 */
 function isInsideSelectPanelTarget(target: EventTarget | null): boolean {
-  const closest = (
-    target as { closest?: (selector: string) => Element | null } | null
-  )?.closest;
-  if (typeof closest === "function") {
-    try {
-      if (
-        closest.call(
-          target,
-          ".mineru-copy-select-panel, .mineru-copy-select-panel-textarea",
-        )
-      ) {
-        return true;
-      }
-    } catch {
-      // Reader teardown can leave cross-window dead objects behind.
-    }
-  }
-
-  let element = target as {
-    className?: unknown;
-    classList?: { contains: (className: string) => boolean };
-    parentElement?: unknown;
-  } | null;
-  while (element) {
-    if (
-      hasClassName(element, "mineru-copy-select-panel") ||
-      hasClassName(element, "mineru-copy-select-panel-textarea")
-    ) {
-      return true;
-    }
-    element = element.parentElement as typeof element;
-  }
-  return false;
+  return isInsideClassTarget(
+    target,
+    ".mineru-copy-select-panel, .mineru-copy-select-panel-textarea",
+    ["mineru-copy-select-panel", "mineru-copy-select-panel-textarea"],
+  );
 }
 
 /** 判断事件目标是否在公式复制菜单内，避免修饰键点击穿透为 box 选择。 */
 function isInsideFormulaMenuTarget(target: EventTarget | null): boolean {
-  const closest = (
-    target as { closest?: (selector: string) => Element | null } | null
-  )?.closest;
-  if (typeof closest === "function") {
-    try {
-      if (
-        closest.call(
-          target,
-          ".mineru-copy-formula-menu, .mineru-copy-formula-menu-item",
-        )
-      ) {
-        return true;
-      }
-    } catch {
-      // Reader teardown can leave cross-window dead objects behind.
-    }
-  }
-
-  let element = target as {
-    className?: unknown;
-    classList?: { contains: (className: string) => boolean };
-    parentElement?: unknown;
-  } | null;
-  while (element) {
-    if (
-      hasClassName(element, "mineru-copy-formula-menu") ||
-      hasClassName(element, "mineru-copy-formula-menu-item")
-    ) {
-      return true;
-    }
-    element = element.parentElement as typeof element;
-  }
-  return false;
-}
-
-/** 兼容真实 DOM 与测试桩的 className / classList 判断。 */
-function hasClassName(
-  element: {
-    className?: unknown;
-    classList?: { contains: (className: string) => boolean };
-  },
-  className: string,
-): boolean {
-  if (element.classList?.contains(className)) {
-    return true;
-  }
-  return (
-    typeof element.className === "string" &&
-    element.className.split(/\s+/).includes(className)
+  return isInsideClassTarget(
+    target,
+    ".mineru-copy-formula-menu, .mineru-copy-formula-menu-item",
+    ["mineru-copy-formula-menu", "mineru-copy-formula-menu-item"],
   );
 }
 

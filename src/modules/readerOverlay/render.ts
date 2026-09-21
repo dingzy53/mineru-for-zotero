@@ -4,6 +4,7 @@ import {
   formatTableBoxForCopy,
 } from "../copyFormatter";
 import { safeReaderOverlayCleanup } from "./diagnostics";
+import { hasClassName, isInsideClassTarget } from "./dom";
 import { readerOverlayString, showReaderOverlayNotice } from "./notice";
 import { copyBoxImageFromStorage, copyText, isImageCopyBox } from "./copy";
 import { setBoxSelectedClass, selectBoxRange } from "./selection";
@@ -726,46 +727,9 @@ function getViewportWidth(doc: Document): number {
 }
 
 function isInsideActions(target: EventTarget | null): boolean {
-  const closest = (target as { closest?: (selector: string) => Element | null })
-    ?.closest;
-  if (typeof closest === "function") {
-    try {
-      if (closest.call(target, ".mineru-copy-box-actions")) {
-        return true;
-      }
-    } catch {
-      // Cross-window dead objects can throw during reader teardown.
-    }
-  }
-
-  let element = target as {
-    className?: unknown;
-    classList?: { contains: (className: string) => boolean };
-    parentElement?: unknown;
-  } | null;
-  while (element) {
-    if (hasClassName(element, "mineru-copy-box-actions")) {
-      return true;
-    }
-    element = element.parentElement as typeof element;
-  }
-  return false;
-}
-
-function hasClassName(
-  element: {
-    className?: unknown;
-    classList?: { contains: (className: string) => boolean };
-  },
-  className: string,
-): boolean {
-  if (element.classList?.contains(className)) {
-    return true;
-  }
-  return (
-    typeof element.className === "string" &&
-    element.className.split(/\s+/).includes(className)
-  );
+  return isInsideClassTarget(target, ".mineru-copy-box-actions", [
+    "mineru-copy-box-actions",
+  ]);
 }
 
 function setBoxActionsActive(actions: HTMLDivElement, active: boolean): void {
