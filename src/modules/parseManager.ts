@@ -2,6 +2,7 @@ import type { AttachmentRef, NormalizedBox } from "./domain";
 import type { FluentMessageId } from "../../typings/i10n";
 import { config } from "../../package.json";
 import { normalizeMinerUBoxes } from "./boxNormalizer";
+import { mergeChunkResults } from "./parseMerge";
 import { generateLayoutPdf } from "./layoutPdfGenerator";
 import {
   createMinerUClientForSettings,
@@ -889,67 +890,11 @@ async function parseAttachmentWithDependencies(
       }
     }
 
-    let mergedResult: any;
     await taskStore.upsertTask({
       ...taskStore.getTask(String(attachment.id))!,
       detail: undefined,
     });
-    if (mode === "lite") {
-      mergedResult = {
-        kind: "lite",
-        markdown: results.map((r) => r.markdown).join("\n\n---\n\n"),
-      };
-    } else if (results.length === 1) {
-      const single = results[0];
-      mergedResult = {
-        kind: "precise",
-        rawResult: single.rawResult,
-        markdown: single.markdown,
-        images: single.images || [],
-        layoutPdf: single.layoutPdf,
-        _mergedBoxes: normalizeMinerUBoxes(single.rawResult),
-      };
-    } else {
-      let mergedMarkdown = "";
-      const mergedImages: any[] = [];
-      const rawResultsArr: any[] = [];
-      const mergedBoxes: any[] = [];
-      let pageOffset = 0;
-
-      for (let i = 0; i < results.length; i++) {
-        const res = results[i];
-        rawResultsArr.push(res.rawResult);
-
-        let md = res.markdown;
-        const images = res.images || [];
-        for (const img of images) {
-          const oldPath = img.path;
-          const newPath = `part${i}_${oldPath.replace("images/", "")}`;
-          img.path = `images/${newPath}`;
-          md = md.split(oldPath).join(img.path);
-        }
-        mergedImages.push(...images);
-        mergedMarkdown += md + (i < results.length - 1 ? "\n\n---\n\n" : "");
-
-        const boxes = normalizeMinerUBoxes(res.rawResult);
-        for (const box of boxes) {
-          box.page += pageOffset;
-        }
-        mergedBoxes.push(...boxes);
-
-        pageOffset += res._chunkPageCount || 200;
-      }
-
-      mergedResult = {
-        kind: "precise",
-        rawResult: rawResultsArr,
-        markdown: mergedMarkdown,
-        images: mergedImages,
-        _mergedBoxes: mergedBoxes,
-      };
-    }
-
-    const result = mergedResult;
+    const result = mergeChunkResults(results, mode);
     const taskID = taskIDs.join(",");
 
     if (result.kind === "lite") {
