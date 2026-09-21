@@ -1,0 +1,122 @@
+import {
+  MinerURequestError,
+  MinerUTaskError,
+  MinerUClient,
+} from "./mineruClient";
+import { ParseSource } from "../utils/prefs";
+
+export const POLL_INTERVAL_MS = 3000;
+export async function downloadTaskResultWithRetry(
+  client: MinerUClient,
+  taskID: string,
+  delay: (ms: number) => Promise<void>,
+  timeoutMs: number,
+  source: ParseSource,
+  log: (...args: unknown[]) => void,
+  onRetry?: (attempt: number, waitMs: number) => Promise<void>,
+): Promise<any> {
+  const deadline = Date.now() + timeoutMs;
+  const maxAttempts = Math.max(1, Math.ceil(timeoutMs / POLL_INTERVAL_MS));
+  let attempt = 0;
+  while (true) {
+    try {
+      return await client.downloadResult(taskID);
+    } catch (error) {
+      if (
+        !isRetryableNetworkError(error, source) ||
+        Date.now() >= deadline ||
+        attempt >= maxAttempts
+      ) {
+        throw error;
+      }
+      attempt += 1;
+      const waitMs = getReconnectDelayMs(attempt);
+      log("MinerU result download interrupted; retrying", {
+        taskID,
+        attempt,
+        waitMs,
+        error,
+      });
+      await onRetry?.(attempt, waitMs);
+      await delay(Math.min(waitMs, Math.max(0, deadline - Date.now())));
+    }
+  }
+}
+export async function waitForTask(
+  client: MinerUClient,
+  taskID: string,
+  delay: (ms: number) => Promise<void>,
+  timeoutMs: number,
+  checkAbort?: () => boolean,
+  source: ParseSource = "online",
+  log: (...args: unknown[]) => void = () => {},
+  onRetry?: (attempt: number, waitMs: number) => Promise<void>,
+): Promise<void> {
+  const maxPollCount = Math.ceil(timeoutMs / POLL_INTERVAL_MS);
+  let retryAttempt = 0;
+  for (let count = 0; count < maxPollCount; count += 1) {
+    if (checkAbort?.()) {
+      throw new MinerUTaskError("MinerU task cancelled by user");
+    }
+    try {
+      const result = await client.pollTask(taskID);
+      retryAttempt = 0;
+      if (result.status === "succeeded") {
+        return;
+      }
+      if (result.status === "failed") {
+        throw new MinerUTaskError(result.error || "MinerU task failed");
+      }
+      await delay(POLL_INTERVAL_MS);
+    } catch (error) {
+      if (!isRetryableNetworkError(error, source)) {
+        throw error;
+      }
+      retryAttempt += 1;
+      const waitMs = getReconnectDelayMs(retryAttempt);
+      log("MinerU task polling interrupted; retrying", {
+        taskID,
+        attempt: retryAttempt,
+        waitMs,
+        error,
+      });
+      await onRetry?.(retryAttempt, waitMs);
+      await delay(waitMs);
+    }
+  }
+  throw new MinerUTaskError("MinerU task timed out");
+}
+export function isTaskNotFoundError(
+  error: unknown,
+  source: ParseSource,
+): boolean {
+  return (
+    source === "local" &&
+    error instanceof MinerURequestError &&
+    ["local-poll", "local-download"].includes(error.stage) &&
+    error.status === 404
+  );
+}
+export function isRetryableNetworkError(
+  error: unknown,
+  source: ParseSource,
+): boolean {
+  if (!(error instanceof MinerURequestError)) {
+    return false;
+  }
+  const transient = error.status === 0 || error.status >= 500;
+  if (!transient) {
+    return false;
+  }
+  if (source === "local") {
+    return error.stage.startsWith("local-");
+  }
+  // Online: only retry idempotent GET stages (polling and downloads).
+  // Re-submitting or re-uploading could consume the daily quota twice.
+  return ["poll", "agent-poll", "download", "agent-download"].includes(
+    error.stage,
+  );
+}
+export function getReconnectDelayMs(attempt: number): number {
+  return Math.min(30_000, 3_000 * 2 ** Math.min(attempt - 1, 3));
+}
