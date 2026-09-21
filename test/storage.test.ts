@@ -2,7 +2,9 @@ import { assert } from "chai";
 import { createStorage } from "../src/modules/storage";
 import { normalizedBoxes } from "./domainFixtures";
 
-const rootDir = "TmpD/mineru-copy";
+const rootDir = `TmpD/mineru-copy-${Date.now()}-${Math.random()
+  .toString(36)
+  .slice(2, 8)}`;
 
 describe("storage", function () {
   it("uses libraryID and attachmentKey as stable directory name", function () {
