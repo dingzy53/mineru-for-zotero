@@ -385,9 +385,18 @@ export async function registerPrefsScripts(_window: Window) {
   );
 }
 
-function pickDirectoryAsync(
+/**
+ * 创建并打开原生文件选择器，统一处理创建失败与取消。
+ *
+ * `mode` 返回选择器模式常量，`configure` 用于追加过滤器等设置，
+ * `extract` 决定最终返回的路径（返回 null 视为用户取消）。
+ */
+function openFilePicker(
   window: Window,
   title: string,
+  mode: (nsIFilePicker: any) => number,
+  configure: (fp: any, nsIFilePicker: any) => void,
+  extract: (fp: any, result: number, nsIFilePicker: any) => string | null,
 ): Promise<string | null> {
   return new Promise((resolve) => {
     try {
@@ -400,14 +409,11 @@ function pickDirectoryAsync(
       fp.init(
         (window as any).browsingContext || window,
         title,
-        nsIFilePicker.modeGetFolder,
+        mode(nsIFilePicker),
       );
+      configure(fp, nsIFilePicker);
       fp.open((result: number) => {
-        if (result === nsIFilePicker.returnOK && fp.file) {
-          resolve(fp.file.path);
-        } else {
-          resolve(null);
-        }
+        resolve(extract(fp, result, nsIFilePicker));
       });
     } catch (e) {
       ztoolkit.log("Failed to open file picker", e);
@@ -421,75 +427,45 @@ function pickFileAsync(
   title: string,
   mode: "modeSave" | "modeOpen",
 ): Promise<string | null> {
-  return new Promise((resolve) => {
-    try {
-      const Components = (window as any).Components;
-      const nsIFilePicker = Components.interfaces.nsIFilePicker;
-      const fp =
-        Components.classes["@mozilla.org/filepicker;1"].createInstance(
-          nsIFilePicker,
-        );
-      fp.init(
-        (window as any).browsingContext || window,
-        title,
-        nsIFilePicker[mode],
-      );
+  return openFilePicker(
+    window,
+    title,
+    (nsIFilePicker) => nsIFilePicker[mode],
+    (fp, nsIFilePicker) => {
       fp.appendFilter("ZIP Archive", "*.zip");
       if (mode === "modeSave") {
         fp.defaultString = "mineru_backup.zip";
       }
-      fp.open((result: number) => {
-        if (
-          (result === nsIFilePicker.returnOK ||
-            result === nsIFilePicker.returnReplace) &&
-          fp.file
-        ) {
-          let path = fp.file.path;
-          if (mode === "modeSave" && !path.toLowerCase().endsWith(".zip")) {
-            path += ".zip";
-          }
-          resolve(path);
-        } else {
-          resolve(null);
+    },
+    (fp, result, nsIFilePicker) => {
+      if (
+        (result === nsIFilePicker.returnOK ||
+          result === nsIFilePicker.returnReplace) &&
+        fp.file
+      ) {
+        let path = fp.file.path;
+        if (mode === "modeSave" && !path.toLowerCase().endsWith(".zip")) {
+          path += ".zip";
         }
-      });
-    } catch (e) {
-      ztoolkit.log("Failed to open file picker", e);
-      resolve(null);
-    }
-  });
+        return path;
+      }
+      return null;
+    },
+  );
 }
 
 function pickExecutableAsync(
   window: Window,
   title: string,
 ): Promise<string | null> {
-  return new Promise((resolve) => {
-    try {
-      const Components = (window as any).Components;
-      const nsIFilePicker = Components.interfaces.nsIFilePicker;
-      const fp =
-        Components.classes["@mozilla.org/filepicker;1"].createInstance(
-          nsIFilePicker,
-        );
-      fp.init(
-        (window as any).browsingContext || window,
-        title,
-        nsIFilePicker.modeOpen,
-      );
-      fp.appendFilters(nsIFilePicker.filterAll);
-      fp.open((result: number) => {
-        if (result === nsIFilePicker.returnOK && fp.file) {
-          resolve(fp.file.path);
-        } else {
-          resolve(null);
-        }
-      });
-    } catch (e) {
-      ztoolkit.log("Failed to open file picker", e);
-      resolve(null);
-    }
-  });
+  return openFilePicker(
+    window,
+    title,
+    (nsIFilePicker) => nsIFilePicker.modeOpen,
+    (fp, nsIFilePicker) => fp.appendFilters(nsIFilePicker.filterAll),
+    (fp, result, nsIFilePicker) =>
+      result === nsIFilePicker.returnOK && fp.file ? fp.file.path : null,
+  );
 }
 
 function extractZipToDir(zipFilePath: string, destDir: string) {
