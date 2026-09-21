@@ -8,158 +8,114 @@ Core feature modules currently include `mineruClient/` for selecting and running
 
 ## Build, Test, and Development Commands
 
-- Use `npm` for package scripts and dependency operations in this repository. The tracked lockfile is `package-lock.json`.
-- `npm start`: runs `zotero-plugin serve`, builds in development mode, launches Zotero, and watches `src/**` and `addon/**` for hot reload.
-- `npm run build`: creates a production plugin build with `zotero-plugin build`, then runs `tsc --noEmit` for type checking. The `.xpi` output lands at `.scaffold/build/mineru-for-zotero.xpi` (a standard ZIP archive).
-- `npm test`: runs the scaffold test suite. On Linux CI the scaffold downloads Zotero automatically; locally, download the Linux tarball (`https://www.zotero.org/download/client/dl?platform=linux-x86_64&channel=beta`), extract it, and run `ZOTERO_PLUGIN_ZOTERO_BIN_PATH=<extracted>/Zotero_linux-x86_64/zotero npm test`. A desktop session with a working X display is enough; Xvfb is only needed headless. Downloading that tarball with `wget`'s default user agent gets an HTTP 403 from the CDN; use `curl` (or set a browser-like UA). The payload may be XZ-compressed even though the URL looks like a `.tar.bz2`, so inspect with `file` and extract with `tar -xJf` when needed.
-- `npm run lint:check`: checks Prettier formatting and ESLint rules (`prettier --check . && eslint .`).
-- `npm run lint:fix`: formats files and applies safe ESLint fixes (`prettier --write . && eslint . --fix`).
-- `npm run release`: starts the configured release flow for versioning, packaging, tags, and GitHub release assets. If running manually, you can use `npm version patch -m "chore(release): bump version to %s" && git push --follow-tags` to bump the version and push the tag. The `.github/workflows/release.yml` GitHub Action will automatically compile and publish the `.xpi` when a `v*` tag is pushed.
+- Use `npm` for package scripts and dependency operations. Tracked lockfile is `package-lock.json`.
+- `npm start`: runs `zotero-plugin serve`, builds in dev mode, launches Zotero, and watches for hot reload.
+- `npm run build`: creates production plugin (`.scaffold/build/mineru-for-zotero.xpi`) then runs `tsc --noEmit`.
+- `npm test`: runs scaffold test suite. On local Linux, provide tarball path: `ZOTERO_PLUGIN_ZOTERO_BIN_PATH=<extracted>/zotero npm test`.
+- `npm run lint:check`: checks Prettier formatting and ESLint rules.
+- `npm run lint:fix`: formats files and applies safe ESLint fixes.
+- `npm run release`: starts the release flow; GitHub Actions handles publishing `.xpi` on `v*` tags.
 
-Treat `npm run lint:check` as the local equivalent of the CI lint gate. Before any commit, run it after all file edits are complete and fix every reported Prettier or ESLint issue. Do not tell the user a change is ready to commit, push, or merge while `npm run lint:check` is failing or has not been run after the latest edit. Ensure `npm install` has been run first; Prettier and ESLint binaries are not available without `node_modules`.
+Treat `npm run lint:check` as a CI gate. Run it before commits and fix all issues.
 
 ## Coding Style & Naming Conventions
 
-Use TypeScript ES modules and follow the existing two-space indentation. Prettier is configured with `printWidth: 80`, `tabWidth: 2`, and LF line endings. Keep module filenames descriptive and lower camel case where the project already does so, for example `preferenceScript.ts` or `mineruClient.ts`. Prefer small modules with explicit exported functions or classes over broad utility files. Locale keys belong in Fluent files, not inline UI strings.
+Use TypeScript ES modules and follow two-space indentation. Prettier uses `printWidth: 80`, `tabWidth: 2`, LF. Keep module filenames descriptive and lower camel case. Locale keys belong in Fluent files, not inline UI strings.
 
 ## Testing Guidelines
 
-Tests use Mocha and Chai through `zotero-plugin test`. Place unit tests in `test/` with names like `featureName.test.ts`, and keep shared fixtures in clearly named helper files such as `domainFixtures.ts`. Add or update tests for parsing, formatting, storage, client boundaries, normalizer coverage, reader toolbar behavior, reader overlay interactions, and lifecycle behavior when those areas change.
+Tests use Mocha/Chai via `zotero-plugin test`. Place tests in `test/*.test.ts`.
 
-When modifying the return signature of a core UI function (e.g., returning an object instead of a DOM element) or introducing asynchronous/lazy DOM APIs like `IntersectionObserver`, you **must** proactively update the corresponding test files (`test/*.test.ts`) that call these functions. Tests often rely on synchronous DOM evaluation; ensure you provide synchronous test mocks (e.g., in `createDocumentStub`) for asynchronous APIs to prevent massive test failures. If you cannot run `npm run test` locally due to environment constraints (like missing Zotero binary), you must at minimum run `npx tsc -p test/tsconfig.json --noEmit` to verify test type correctness before committing.
+When modifying core UI functions or adding async DOM APIs like `IntersectionObserver`, update corresponding tests and provide synchronous mocks (e.g., in `createDocumentStub`) to prevent massive test failures. If unable to run `npm test`, run `npx tsc -p test/tsconfig.json --noEmit` to verify test typings before committing.
 
 ### Understanding Scaffold Test Failures
 
-The scaffold streams test results out of Zotero as JSON, which drops non-enumerable Error properties. A chai `AssertionError` still shows its message plus `Expected:`/`Received:` diffs, but a thrown `TypeError`/`ReferenceError`/custom `Error` prints as `✖ <name>, undefined / Expected: undefined / Received: undefined`. Mocha `TimeoutError`s serialize the same way, so a test that only fails with "undefined" on CI can also be a blocked test (e.g. a modal `alert()` that nobody dismisses in headless CI — stub `Zotero.getMainWindow` in tests that exercise notice paths instead of showing real dialogs). Treat that shape as "the test threw or hung", and get the real message by reproducing the test outside Zotero: bundle it with `npx esbuild test/<file>.test.ts --bundle --format=cjs --platform=node --outfile=/tmp/<file>.cjs`, run it with `node_modules/.bin/mocha --require <stub-file>` using minimal `Zotero`/`ztoolkit`/`addon` global stubs, and read the real stack. Tests driven purely by injected fakes (e.g. `parseManager`, `markdownApiEndpoint`) reproduce well this way; DOM-dependent tests are best debugged through the full suite.
+Scaffold streams test results as JSON, which drops non-enumerable Error properties. A thrown error often prints as `undefined` instead of a stack trace. Mocha timeouts also serialize as `undefined`, which often indicates a blocked test (e.g., a modal `alert()` blocking headless CI—always stub `Zotero.getMainWindow`). To get the real stack trace, bundle the test file with `esbuild` and run it via standalone Node `mocha` with minimal Zotero stubs. `Error: The operation was canceled.` mid-run means Zotero aborted, often due to opening real dialogs in tests.
 
-`Error: The operation was canceled.` mid-run means the Zotero-side run aborted and the remaining suites silently never ran, hiding later failures. In this project the observed cause was batch parse tests calling `openTaskManagerWindow()` directly and opening real chrome dialogs inside the test Zotero; routing window opening through injected dependencies fixed the abort. Always re-run the full suite locally to catch failures hidden by an abort.
+After code changes, run full tests with `zotero-plugin test --exit-on-finish`.
 
-After code changes, run the full scaffold test suite with `zotero-plugin test --exit-on-finish` so the scaffold test Zotero process exits automatically after the suite completes. On Windows, prefer the local scaffold binary for final verification:
-
-```powershell
-.\node_modules\.bin\zotero-plugin.CMD test --exit-on-finish --abort-on-fail
-```
-
-This project does not use Vitest. Do not look for or run `.\node_modules\.bin\vitest.cmd`.
-
-Standalone Node tests under `scripts/` are not part of the scaffold suite. Run them separately with `node --test scripts/*.test.mjs` when those scripts change.
-
-For small edits to existing XHTML files such as `addon/content/preferences.xhtml`, avoid running `prettier --write` unless formatting is part of the task. It can reflow unrelated long tags and expand the diff; if it happens during validation, restore unrelated formatting before final verification.
-
-For user-facing Markdown documents such as `README.md` and `README_zh.md`, do not manually hard-wrap paragraphs or list items to 80 columns unless the surrounding document already uses that style. Preserve natural single-line sentences so later content edits stay readable and diffs stay focused.
-
-For generated or agent-maintained Markdown under `docs/superpowers/`, especially `docs/superpowers/plans/*.md` and `docs/superpowers/specs/*.md`, always run Prettier on the touched files before final lint verification:
-
-```powershell
-npx prettier --write docs/superpowers/plans/<file>.md docs/superpowers/specs/<file>.md
-```
-
-If multiple Markdown files were created or edited, include all of them in that command. This rule exists because unformatted plan/spec Markdown has repeatedly caused GitHub Actions `npm run lint:check` failures.
+Standalone Node tests under `scripts/` are run separately via `node --test scripts/*.test.mjs`.
 
 ## Test Profile Port Isolation
 
-`zotero-plugin-scaffold` generates the test profile with `extensions.zotero.httpServer.port` set to **23124** (instead of the default 23119) to avoid conflicts with a running production Zotero instance. However, the scaffold writes this setting directly into `prefs.js`, which Zotero persists on shutdown. If the test profile ever cross-contaminates the real profile (e.g. manual file copy, plugin behavior), port 23124 leaks into the production profile and breaks the Zotero Connector browser extension (which expects port 23119).
-
-The mitigation is `scripts/fix-test-profile.mjs`, which runs via `preserve`/`pretest` hooks before every `npm start` / `npm test`. It creates a `user.js` in each test profile that sets the port override. Unlike `prefs.js`, `user.js` overrides preferences at every Zotero startup but is never written back, cutting off the leak path.
-
-If the connector stops detecting Zotero after development work, first fully exit Zotero, then run `node scripts/fix-zotero-connector-port.mjs`. The script repairs only the leaked test port `23124` in Windows Zotero profiles and restores the Connector default port `23119`. If needed, manually check the real profile's `prefs.js` for the same stray setting.
+`zotero-plugin-scaffold` sets the test profile HTTP port to **23124** (default 23119) to avoid conflicts. The `scripts/fix-test-profile.mjs` pre-hook mitigates leaks of this port into `prefs.js`. If the Zotero Connector extension breaks after development work, run `node scripts/fix-zotero-connector-port.mjs` to restore port `23119` in the real profile.
 
 ## MinerU Parsing Pipeline
 
 ### Parse Manager Dependency Injection Contract
 
-`parseAttachmentWithDependencies()` must keep every external boundary behind `ParseManagerDependencies`: item/title lookups (`getAttachmentTitle`), window opening (`openTaskManager`), page counting (`getPdfPageCount`), storage, clients, notices, and parse-column callbacks. Do not call `Zotero.Items.getAsync`, `attachment.getField()`, `attachment.getFilePath()`, `openTaskManagerWindow()`, or `pdfSplitter` helpers directly inside the parse flow — unit tests inject fakes and must never touch the real Zotero database or open real windows.
+`parseAttachmentWithDependencies()` must keep every external boundary behind `ParseManagerDependencies`: item lookups, window opening, page counting, storage, clients, notices, and callbacks. Never call `Zotero.Items.getAsync`, `attachment.getField()`, or `openTaskManagerWindow()` directly.
 
-Parse notices are failure-only: task submitted and finished states do not emit user-facing notices, while errors (empty-boxes, empty-lite markdown, file access errors, and caught failures) report user messages via `dependencies.showMessage(failure.id, failure.args)` and mark the taskStore record failed. When a single (non-split) parse completes, pass the original `rawResult` and `images` through to storage instead of wrapping them in a one-element array.
+Parse notices are failure-only. Success states emit no UI notices. Errors (empty results, file access errors) report via `dependencies.showMessage(failure.id, failure.args)`.
 
 ### Client Selection & API Limits
 
-MinerU parsing is selected by `createMinerUClientForSettings()` from `parseSource` (`online` or `local`) and `parseMode` (`precise` or `lite`). Keep the source/mode contract explicit when changing preferences, parsing orchestration, storage, and tests.
+MinerU parsing is selected by `createMinerUClientForSettings()` from `parseSource` (`online`/`local`) and `parseMode` (`precise`/`lite`).
 
 MinerU API limits:
 
 - **Precision Extract API (v4)**: max 200 MB/file, max 600 pages/file, batch up to 200 files.
 - **Agent Lightweight API (v1)**: max 10 MB/file, max 20 pages/file, single file only.
-- Daily quota is approximately 2000 high-priority pages per account for the Precision API.
-- The environment variable `MINERU_API_MAX_CONCURRENT_REQUESTS` caps how many attachments or PDF chunks are processed at once (`Services.env`, clamped to 1–10, default 3). It feeds both the attachment batch queue and the per-PDF chunk queue in `parseManager.ts`; tests override it through the `getMaxConcurrentRequests` dependency instead.
+- `MINERU_API_MAX_CONCURRENT_REQUESTS` limits concurrency (clamped 1-10, default 3). Tests override it via `getMaxConcurrentRequests`.
 
 ### Online Precise Flow
 
-Online precise parsing uses the official MinerU v4 batch extraction flow: request `/api/v4/file-urls/batch`, upload the PDF to the returned presigned URL, poll `/api/v4/extract-results/batch/{batch_id}`, then download `full_zip_url` or fall back to `md_url` where necessary.
+Uses the official MinerU v4 batch extraction flow: request `/api/v4/file-urls/batch`, upload PDF to the presigned URL, poll `/api/v4/extract-results/batch/{batch_id}`, then download `full_zip_url` or `md_url`.
 
 ### Online Lite Flow
 
-Online lite parsing uses the MinerU Agent API flow in `mineruClient/agentLite.ts`: create the task, upload to the returned file URL, poll the Agent task endpoint, then download Markdown from `markdown_url` or `markdownUrl`. Agent responses may wrap fields under `data`, so preserve both wrapped and top-level response handling.
+Uses MinerU Agent API flow (`mineruClient/agentLite.ts`): create task, upload to file URL, poll Agent endpoint, download Markdown. Preserve both wrapped (`data`) and top-level response handling.
 
 ### Local Parsing Flow
 
-Local parsing uses the async local API in `mineruClient/local.ts`, defaulting to `http://127.0.0.1:8000`: check `/health`, submit multipart data to `/tasks`, poll `/tasks/{taskID}`, and download `/tasks/{taskID}/result`. Local results may be ZIP or JSON, and precise/lite mode changes both request fields and result conversion.
+Uses async local API (`mineruClient/local.ts`): `/health`, submit multipart to `/tasks`, poll `/tasks/{taskID}`, download `/tasks/{taskID}/result`. Results may be ZIP or JSON.
 
 ### Presigned URL Uploads
 
-Keep MinerU presigned URL requests as close to the signed request as possible. Prefer a bare XHR PUT for uploads to presigned URLs so extra headers do not change the signature calculation and trigger `SignatureDoesNotMatch`.
+Prefer a bare XHR PUT for uploads to presigned URLs so extra headers do not change the signature calculation and trigger `SignatureDoesNotMatch`.
 
 ### Result Download & ZIP Handling
 
-Diagnose MinerU result ZIP download issues with network evidence. In the Zotero/Firefox runtime, `fetch`, `XMLHttpRequest`, `Zotero.HTTP.request`, and `Zotero.File.download` may behave differently for CDN URLs. If the built-in network path returns an empty response or an unreadable ZIP, record the URL, byte count, response headers, ZIP-reader diagnostics, and any fallback path.
-
-After downloading a ZIP locally, prefer ZIP readers available in the Zotero runtime, such as `nsIZipReader`; do not assume `DecompressionStream("deflate-raw")` is available in the target runtime.
-
-When debugging the MinerU parsing pipeline, do not infer API behavior from UI messages alone. Use tests or diagnostics to verify each boundary: API key checks, file readability, upload URL creation, bare upload, polling, result download, ZIP reading, raw result schema selection, box normalization, and storage writes.
+When downloading result ZIPs locally, prefer Zotero runtime readers like `nsIZipReader`; do not assume `DecompressionStream` is available. Verify CDN URLs and network response headers when debugging empty/corrupt ZIP downloads.
 
 ### Task Persistence, Resume & Reconnect
 
-Task records persist in `ProfD/mineru_tasks.json` through `taskStore`; all writes go through a serialized save queue (`upsertTask`/`updateTaskStatus` return promises so callers can await durability). On startup, records stuck in `running` are marked `failed` with a message telling the user to Resume (when resume metadata exists) or Retry.
+Task records persist in `ProfD/mineru_tasks.json` via a serialized save queue. Stuck `running` tasks on startup are marked `failed` to prompt Resume or Retry.
 
-Resume state lives in two places: per-chunk bookkeeping inside `TaskRecord.resume` (source/mode/`filePath`/pdf mtime guard whether a task can actually be resumed) and chunk result caches under `ProfD/mineru-resume/<attachmentID>/`. Chunk caches stay on disk until the final merged result is written; on success `cleanupTaskResume()` removes them and clears `resume`. Non-resumable parses reset that directory first and also delete legacy `mineru-part-<id>-*-result.json` files left by older versions directly in the data directory root.
+Resume state includes `TaskRecord.resume` bookkeeping and chunk caches in `ProfD/mineru-resume/<attachmentID>/`. Caches stay until the final merged result is written, after which `cleanupTaskResume()` removes them.
 
-During parsing, transient network failures (status 0 or ≥ 500) reconnect with exponential backoff instead of failing the task. For `local` every `local-*` stage may retry; for online clients only idempotent GET stages (`poll`, `agent-poll`, `download`, `agent-download`) retry — submit/upload never do, or one blip would burn quota twice. A local 404 during poll/download means the remote task was lost after a server restart: only that unfinished chunk is resubmitted, completed chunks keep their caches.
-
-The Task Manager window (`addon/content/taskManager.html`) reads localized labels from the addon API (`api.getString`, fallback English literals) because chrome HTML dialogs cannot resolve plugin Fluent resources declaratively. Keep any new dialog strings behind that helper.
+Transient network failures (status 0 or ≥ 500) reconnect with exponential backoff for idempotent GET stages only; submit/upload stages never retry to avoid burning quota. A local 404 during poll means the remote task was lost: only that unfinished chunk is resubmitted.
 
 ### Box Normalization
 
-MinerU box data is not always stored in `pages[].blocks`. Real results may use `pdf_info[].para_blocks`, `pdf_info[].layout_dets`, or `pdf_info[].discarded_blocks`; page size may be `page_size`; regions may be `bbox` or `poly`; text may be under `markdown`, `text`, `content`, `html`, `latex`, or `lines[].spans[].content`.
-
-The normalizer preserves detailed box types where useful for labels, including captions, headers, footers, footnotes, page numbers, references, formulas, image/table bodies, and table HTML. For "missing box information" errors, inspect the saved `mineru-result.json` and the schemas supported by `boxNormalizer.ts` first.
+MinerU box data formats vary (`pages[].blocks`, `pdf_info[].para_blocks`, `pdf_info[].layout_dets`, etc.). `boxNormalizer.ts` converts these into stable boxes, preserving detailed types (captions, formulas, references). Check supported schemas when handling missing box errors.
 
 ## Storage & Agent Sync
 
 ### Local Result Storage
 
-Precise parsing results are stored under `ProfD/mineru-copy/attachments/<libraryID>-<attachmentKey>/` with `manifest.json`, `mineru-result.json`, `content.md`, `boxes.normalized.json`, and optional extracted files under `images/`. Lite parsing results are stored beside them as `lite-manifest.json` and `lite-content.md`. Treat these files as plugin-owned output; external tools may read them but should not write them.
+Precise results are in `ProfD/mineru-copy/attachments/<libraryID>-<attachmentKey>/` (`manifest.json`, `mineru-result.json`, `content.md`, `boxes.normalized.json`, `images/`). Lite results are stored beside them as `lite-manifest.json` and `lite-content.md`.
 
-Prefer `storage.readPreferredMarkdown()` when user-facing copy should work with either precise or lite results. It reads ready precise Markdown first and falls back to ready lite Markdown.
-
-Storage writes use temporary and backup directories to keep previous ready results readable when replacement fails. Ignore transient `.tmp-*` and `.bak-*` result directories when counting or diagnosing ready results.
-
-`createStorage()` resolves the first path segment as a Zotero directory-service key (`TmpD`, `ProfD`, `Home`). `Services.dirsvc.get(key)` **throws** `NS_ERROR_FAILURE` for unknown keys instead of returning null, so the lookup must be wrapped in try/catch and treated as a miss. Storage unit tests must use roots whose first segment is not a dirsvc key (or expect the resolved absolute path). Directory listings like `listParseStatuses()` must sort entries before returning — `readdir` order differs across filesystems and broke a stable-order test on CI.
-
-`storage.readBoxes()` may refresh stale `boxes.normalized.json` from `mineru-result.json` when the raw MinerU result contains more detailed supported boxes. Do not assume an unchanged box count means the normalized file is current.
+Use `storage.readPreferredMarkdown()` to read precise first, then lite fallback. Ignore transient `.tmp-*` and `.bak-*` files.
+`createStorage()` resolves the path segment as a Zotero dirsvc key which throws `NS_ERROR_FAILURE` if unknown; tests must use roots not matching a dirsvc key. `listParseStatuses()` must sort entries for stable test order.
 
 ### Agent-Friendly Sync Folder
 
-The optional sync folder copies completed parse results into a structured directory for external agent consumption. Folder naming format is `[CitationKey] - [Title]` (falling back to `[Year] - [Title]` or `[Item] - [Title]`). Citation keys are extracted from `parent.getField("extra")` via the regex `/Citation Key:\s*([^\s]+)/`. Titles are sanitized with `title.replace(/[\\/:*?"<>|]/g, "_").substring(0, 100)`. A global `_index.json` is maintained at the sync root listing all entries.
-
-Sync is triggered once per successful parse (`syncResultToAgentFolder()`). Results that were parsed before the sync feature was added are not automatically retroactively synced; a manual "Sync All" or startup migration would be needed for that.
+The optional sync folder copies results into `[CitationKey] - [Title]` format. Sync happens once per successful parse. `_index.json` maintains the list of synced entries.
 
 ### PDF Splitting for Large Files
 
-PDFs exceeding the MinerU page limit (200 pages for Precision API) are automatically split. The primary approach uses `pdf-lib` (pure JavaScript, no external dependency) for page counting and splitting. When `pdf-lib` fails, the plugin falls back to `pdftk` via `Subprocess`.
-
-For `pdftk`, use `pdftk <file> dump_data` and parse `NumberOfPages:\s*(\d+)` for page count, then `pdftk <file> cat 1-200 output <target>` for splitting. On macOS and Linux, use `/bin/sh -c 'pdftk "$@"' sh ...args` as a fallback to resolve PATH issues (especially inside Flatpak). On Windows, skip the shell fallback and call `pdftk` directly.
-
-Batch parsing and per-PDF chunk processing each use a local queue with the same concurrency cap (default 3, overridden by `MINERU_API_MAX_CONCURRENT_REQUESTS`, clamped 1–10). The pattern is: shift from queue, increment active count, call `.finally()` to decrement and invoke `next()`. The batch promise resolves when both `queue.length === 0` and `active === 0`. Parallel chunk processing itself is opt-in through the `parallelSplit` preference (default off); sequential chunk processing is the safe default.
+PDFs exceeding limits are automatically split using `pdf-lib` (pure JS). If `pdf-lib` fails, it falls back to `pdftk` via `Subprocess`. Use `pdftk <file> dump_data` to read page count and `pdftk <file> cat 1-200 output <target>` to split. On macOS/Linux, wrap the fallback in `/bin/sh -c 'pdftk "$@"' sh ...args` to resolve Flatpak PATH issues. On Windows, call `pdftk` directly since `/bin/sh` doesn't exist. Sequential chunk processing is the safe default, with `parallelSplit` as an opt-in preference.
 
 ## Cross-Platform Compatibility
 
 ### Platform Detection
 
-`getRuntimePlatform()` in `download.ts` must check `AppConstants.platform` with exact string matches first (`"win"`, `"macosx"`, `"linux"`), then fall back to the joined platform string with `darwin`/`mac` checked **before** `win`. Note that `AppConstants.platform` returns `"macosx"` (not `"mac"`), so the mapping must convert `macosx` → `mac`. Do not join all platform strings and check `.includes("win")` — this can falsely match on non-Windows platforms.
+`getRuntimePlatform()` must check `AppConstants.platform` for exact string matches first (`"win"`, `"macosx"`, `"linux"`). Remember that Mac is `"macosx"`, not `"mac"`.
 
 ### Subprocess Module Loading
 
-The `Subprocess` module must be loaded with both import styles for cross-version compatibility:
+Load `Subprocess` handling both import styles:
 
 ```typescript
 try {
@@ -171,125 +127,73 @@ try {
 
 ### OS.File Deprecation
 
-`OS.File.stat()` is deprecated in modern Zotero builds. Migrate to `IOUtils.stat()`. Note that `IOUtils.stat` returns `stat.size` as `number | undefined`, so always use `(stat.size ?? 0)` for comparisons.
-
-### Shell Fallbacks by Platform
-
-- `/bin/sh` shell fallbacks for PATH resolution (e.g. Flatpak `pdftk`) work on macOS and Linux but fail on Windows where `/bin/sh` does not exist. Add a platform check: on Windows, re-throw the original error; on macOS/Linux, proceed with the shell fallback.
-- On macOS, `pdftk` installed via Homebrew lives at `/opt/homebrew/bin/pdftk`. The Subprocess PATH may not include this by default. Augment the PATH or use the absolute path.
+Migrate `OS.File.stat()` to `IOUtils.stat()`. Use `(stat.size ?? 0)` as `stat.size` can be undefined.
 
 ## Zotero Runtime Quirks
 
 ### TypeScript Casts
 
-Several Zotero runtime APIs lack accurate TypeScript declarations and require casts:
-
-- `Zotero.Utilities.System.exec` exists at runtime but not in declarations. Use `(Zotero.Utilities as any).System?.exec`.
-- `Zotero.Utilities.Internal.exec` returns `boolean | Error`, not `string`. Cast output: `(output as any as string)`.
-- XPCOM contract IDs are not in `nsIXPCComponents_Classes`. Cast: `(Components.classes as any)["@mozilla.org/..."]`.
-- `Zotero.Items.getAsync` overloads are `(string | number): Promise<Item>` and `(string[] | number[]): Promise<Item[]>`. Cannot pass `(string | number)[]` — cast to `number[]`.
+- `Zotero.Utilities.System.exec` requires cast: `(Zotero.Utilities as any).System?.exec`.
+- XPCOM contract IDs need cast: `(Components.classes as any)["@mozilla.org/..."]`.
+- `Zotero.Items.getAsync` needs specific array cast: `number[]` or `string[]`.
 
 ### Plugin Instance Access
 
-The plugin instance is `Zotero[config.addonInstance]`. In this project, `package.json` defines `addonInstance: "MinerUForZotero"` (PascalCase), so access it as `(Zotero as any).MinerUForZotero`. The API object is set via `addon.api = { taskStore, openTaskManagerWindow }`.
+Access plugin via `(Zotero as any).MinerUForZotero`.
 
 ### Window Management
 
-`window.open()` called from an embedded Preferences tab does not reliably pass the opener reference in sandboxed environments like Flatpak/Wayland, causing child windows to lose access to `globalThis.Zotero` and `globalThis.opener`. Instead, use `Zotero.getMainWindow().openDialog()` and pass data through `window.arguments[0]`. Use `nsIWindowMediator` for duplicate window detection.
-
-Child window HTML (e.g. Task Manager) needs multiple fallback strategies to access the Zotero object: (1) `window.arguments[0]`, (2) `globalThis.Zotero`, (3) `opener.Zotero`, (4) `ChromeUtils.importESModule`.
+`window.open()` from Preferences tabs may lose opener refs on Flatpak/Wayland. Use `Zotero.getMainWindow().openDialog()` instead. Child windows should fall back across `window.arguments[0]`, `globalThis.Zotero`, and `opener.Zotero`.
 
 ### Logging
 
-`ztoolkit.log` may not appear in the console being inspected, depending on the runtime environment and console settings. For diagnostics, also emit to `Zotero.debug` and the relevant window `console.info`, and keep a visible UI state when possible.
+For diagnostics, emit to `Zotero.debug` and `console.info` to ensure visibility across runtime environments.
 
-### Preferences
+### Preferences & Fluent Locale Files
 
-New preferences must be registered in `addon/prefs.js` with **unprefixed** keys (e.g. `pref("syncFolder", "")`). The scaffold adds the extension prefix automatically. The format is `pref("keyName", defaultValue);` — one per line.
-
-### Fluent Locale Files
-
-Locale files live at `addon/locale/<locale>/preferences.ftl` and `addon/locale/<locale>/addon.ftl`. The build renames them; the actual file is not `mineruForZotero-preferences.ftl`. FTL syntax: `pref-sync-folder = Label text` for simple strings, `pref-parsed-count = Count: { $count }` for parameterized values.
+New preferences must be registered in `addon/prefs.js` with **unprefixed** keys. Locale files use FTL syntax (`pref-sync-folder = Label text`).
 
 ## Item Context Menu
 
-Reparse prompts must be non-destructive by default. For Zotero/Firefox prompt dialogs using `confirmEx`, treat dialog close, Escape, and cancel-like positions as `use-existing`; do not bind button position 1 to reparsing or overwriting.
-
-The item context menu intentionally targets PDF attachment selections only. Do not reintroduce the old regular-item submenu path unless the requirement changes explicitly.
-
-Multi-PDF parsing starts from one attachment-only menu command. Task submission and completion do not show notifications to the user; only parse failures and errors surface user-facing notices.
-
-When registering item context menu commands through `Zotero.MenuManager`, keep the lifecycle aligned with Zotero's localization resources. If a menu item uses keys from `*-mainWindow.ftl`, remove the inserted main-window Fluent link during window unload and shutdown before the plugin chrome is destructed; otherwise Zotero can keep trying to resolve an unloaded `mainWindow.ftl` and break later right-click menu refreshes.
+Reparse prompts must default non-destructively to `use-existing`. The context menu targets PDF attachments only. Task submission and completion do not show notifications to the user; only failures do. When registering commands, ensure lifecycle alignment with Zotero's localization resources to prevent broken right-click menus on unload.
 
 ## Reader Toolbar & Overlay
 
 ### Toolbar UI
 
-Reader toolbar UI is icon-driven and registered per reader window. Keep panel state per reader instance, place mode commands and selection actions consistently, and use Fluent strings rather than hard-coded reader overlay or preferences text.
+Toolbar UI is icon-driven, registered per reader window. Keep panel state per reader instance.
 
 ### Overlay Modes & Selection
 
-Reader overlay modes are `all`, `hover`, and `off`. Multi-selection uses `Shift` or `Ctrl`; selected boxes copy in original MinerU `rawIndex` order; formula boxes support copying with or without `$` delimiters.
-
-Default overlay behavior must allow native PDF text selection by keeping overlay boxes and page layers at `pointer-events: none`. Only modifier-key selection mode should enable overlay pointer events and intercept box clicks.
+Modes: `all`, `hover`, `off`. Shift/Ctrl enables multi-selection. Default behavior allows native PDF text selection (`pointer-events: none`). Only modifier-key mode enables overlay pointer events.
 
 ### Overlay Mounting & Lifecycle
 
-For Zotero/PDF.js reader overlays, mount the overlay root on the reader document `body` or `documentElement`, not on `#viewerContainer`, `.pdfViewer`, or other PDF.js internal scroll containers. Use PDF.js containers only for scroll observation, positioning, and wheel forwarding.
-
-Reader overlays can span same-origin nested reader iframes. Keep `rootsByWindow` and cleanup handlers in sync across windows, and clean up overlays when a reader disappears or switches mode to `off`.
-
-When reader overlay data is missing, do not rely on logs alone. Surface a user-facing notice, reset the overlay mode to `off`, and avoid leaving stale UI state enabled.
-
-In Zotero PDF reader documents such as `resource://zotero/...viewer.html`, do not load plugin `chrome://` icon resources directly from reader overlay CSS. Prefer inline SVG or data URI icons for reader overlay controls.
+Mount the overlay root on the reader document `body` or `documentElement`, not `#viewerContainer`. Keep `rootsByWindow` synced, clean up overlays when a reader disappears, and avoid leaving stale UI state if data is missing.
 
 ### Large PDF Virtualization
 
-When rendering overlay boxes for large PDFs (e.g., 200+ pages), do not synchronously build and append all DOM elements upfront. Creating thousands of nested DOM nodes blocks the Zotero UI thread and causes freezing.
-Instead, construct empty page layers (`.mineru-copy-page-layer`) synchronously, and use `IntersectionObserver` (with a sufficient `rootMargin`, e.g. `1000px`) to lazy-load the actual boxes when the page layer intersects the viewport. Ensure the observer is properly cleaned up when the overlay is destroyed.
+Do not synchronously build thousands of DOM nodes for large PDFs. Construct empty page layers (`.mineru-copy-page-layer`) synchronously, and use `IntersectionObserver` to lazy-load boxes.
 
 ### Hover & Z-Index
 
-Reader overlay hover retention must include absolutely positioned child menus that extend outside the actions parent, not only the actions parent rectangle. Otherwise hover hit-testing can switch to a lower box while the pointer is over a floating menu.
-
-Reader overlay floating menus and panels must keep the owning box in a sustained elevated state, not only keep the actions element displayed. Later boxes can otherwise cover the open menu because of DOM order and hover z-index.
+Hover retention must include absolutely positioned child menus. Floating menus must keep the owning box in a sustained elevated state so later boxes don't cover the open menu.
 
 ### Layout Isolation
 
-Do not reuse the icon-only toolbar button base class for text menu items. Pseudo-element icons, fixed button dimensions, and icon-button hover boxes will pollute text menu layout.
-
-When adding reader overlay hit-testing helpers across modules, keep helper scope explicit. Do not assume a helper local to `render.ts` is available from `selection.ts`; missing helpers can break hover protection before the visual fix runs.
+Do not reuse the icon-only toolbar button base class for text menu items.
 
 ### Overlay Tests
 
-`buildReaderOverlayRoot()` returns `{ root, cleanup }`; tests must destructure the root instead of passing the result object to DOM helpers. `createDocumentStub()` must provide synchronous mocks for browser APIs the overlay touches (e.g. `IntersectionObserver`, `defaultView.getComputedStyle`); extend the stub there rather than patching per-test. Reader notices are shown through `Zotero.getMainWindow().alert()` (not `ProgressWindow`); notice tests should stub `Zotero.getMainWindow` and restore it in `finally`.
+`buildReaderOverlayRoot()` returns `{ root, cleanup }`; tests must destructure. `createDocumentStub()` must provide synchronous mocks for APIs like `IntersectionObserver`.
 
 ## CLI Tool
 
-The companion CLI at `mineru-for-zotero-cli/scripts/query-markdown.mjs` provides agent-readable access to parsed Markdown stored in Zotero. It communicates with the plugin's local HTTP query API.
-
-Supported commands:
-
-- `libraries`: lists available Zotero libraries (user and group libraries).
-- `collections`: lists collections/folders within a library, with optional `--parent-key` filtering.
-- `tags`: lists library tags with item counts and optional `--limit`.
-- `search`: searches items with rich metadata filters (`--title`, `--creator`, `--collection`, `--tag`, `--abstract`, `--publication`, `--citekey`, `--doi`, `--item-type`, `--since`, `--year`, `--has-pdf`, `--parsed-only`, `--sort-by`, `--sort-order`, `--limit`).
-- `markdown`: queries saved Markdown with granularity modes (`full`, `headings`, `section`, `search`, `locate`).
-
-Granularity modes for `markdown`:
-
-- `full`: returns the entire Markdown document.
-- `headings`: returns the heading tree (document outline/index).
-- `section`: returns a specific section identified by `--section-path "Introduction/Background"` (hierarchy separator is `/`). Pass `--include-subsections` to extend the range past same-level numbered subsections (`3.1`, `3.2`, … inside `3.`) until the next chapter or unnumbered heading.
-- `search`: returns matching paragraphs with configurable `--context-paragraphs`.
-- `locate`: searches precise layout boxes and returns physical page numbers with bbox for a text snippet (precise results only).
-
-Candidate summaries include `year`, `creators`, `itemType`, `publication`, `citekey`, and `doi` fields when available, allowing citation matching, author-year resolution, and direct bibtex key lookups without guessing full titles.
-
-The CLI auto-detects the local HTTP server port from the Zotero profile, falling back to `23119`. Override with `--port <number>`, or set `ZOTERO_CONFIG_DIR` in tests to point profile discovery at a fixture directory. Output format defaults to `text` (agent-readable); use `--format json` for script consumption. If the plugin's "Require token" setting is enabled, pass `--token "<token>"` to all commands. Unreachable endpoints exit with a `network-error` hint that suggests starting Zotero or passing `--port`.
+The companion CLI (`mineru-for-zotero-cli/scripts/query-markdown.mjs`) provides agent-readable access via the local HTTP query API.
+Commands: `libraries`, `collections`, `tags`, `search`, `markdown`.
+Granularity modes for `markdown`: `full`, `headings`, `section`, `search`, `locate`.
+Auto-detects the server port, outputting agent-readable text by default.
 
 ## Commit & Pull Request Guidelines
 
-Recent history follows Conventional Commits, such as `feat(mineru): add official api client boundary` and `test(mineru): add domain formatter normalizer coverage`. Use a short imperative subject with a meaningful scope. Pull requests should describe the behavioral change, list test results, link related issues, and include screenshots or recordings for visible Zotero UI changes. Do not commit local secrets from `.env`; use `.env.example` for documented configuration.
-
-Before suggesting or making a commit, explicitly confirm the latest `npm run lint:check` result in the final response. If the command was not run, state that clearly and do not provide a commit-ready summary.
+Follow Conventional Commits. PRs should describe changes, list test results, link issues, and include UI screenshots. Confirm `npm run lint:check` passes before committing.
