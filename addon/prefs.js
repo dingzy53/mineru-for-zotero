@@ -11,3 +11,4 @@ pref("syncFolder", "");
 pref("autoParsePageLimit", 0);
 pref("parallelSplit", false);
 pref("attachLayoutPdf", false);
+pref("pdftkPath", "");

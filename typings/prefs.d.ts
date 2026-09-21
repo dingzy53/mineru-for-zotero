@@ -20,6 +20,7 @@ declare namespace _ZoteroTypes {
       "autoParsePageLimit": number;
       "parallelSplit": boolean;
       "attachLayoutPdf": boolean;
+      "pdftkPath": string;
     };
   }
 }
