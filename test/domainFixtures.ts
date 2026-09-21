@@ -1,4 +1,4 @@
-import type { NormalizedBox, ParseManifest } from "../src/modules/domain";
+import type { NormalizedBox } from "../src/modules/domain";
 
 export const mineruResultFixture = {
   pages: [
@@ -46,15 +46,3 @@ export const normalizedBoxes: NormalizedBox[] = [
     formula: "E=mc^2",
   },
 ];
-
-export const parseManifestFixture: ParseManifest = {
-  attachmentID: 1,
-  attachmentKey: "ABC123",
-  libraryID: 12,
-  fileName: "a.pdf",
-  pdfMtime: 1,
-  parsedAt: "2026-04-30T00:00:00.000Z",
-  mineruTaskID: "task-1",
-  resultVersion: 1,
-  status: "ready",
-};

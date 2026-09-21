@@ -65,13 +65,6 @@ export function readLayoutPdfFromZip(zip: ZipEntries): Uint8Array | null {
 }
 
 /**
- * 判断 ZIP 条目是否是安全的 MinerU 图片结果。
- */
-export function isZipImageEntry(name: string): boolean {
-  return Boolean(getZipImagePath(name));
-}
-
-/**
  * 把 ZIP 内图片条目转换为存储使用的相对图片路径。
  */
 export function getZipImagePath(name: string): string | null {
