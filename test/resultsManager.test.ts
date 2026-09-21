@@ -276,6 +276,19 @@ describe("Results Manager", function () {
   });
 
   describe("openResultsManagerWindow", function () {
+    let originalZotero: unknown;
+    let originalComponents: unknown;
+
+    beforeEach(function () {
+      originalZotero = (globalThis as any).Zotero;
+      originalComponents = (globalThis as any).Components;
+    });
+
+    afterEach(function () {
+      (globalThis as any).Zotero = originalZotero;
+      (globalThis as any).Components = originalComponents;
+    });
+
     it("focuses existing window if already open", async function () {
       let focused = false;
       let opened = false;
