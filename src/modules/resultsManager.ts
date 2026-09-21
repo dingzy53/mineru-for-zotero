@@ -331,29 +331,32 @@ export function createResultsManagerService(
   };
 }
 
+export interface ResultsManagerWindowDependencies {
+  getMainWindow?: () => any;
+  getMostRecentWindow?: (windowType: string) => any;
+}
+
 export function openResultsManagerWindow(
   service?: ResultsManagerService,
+  windowDependencies: ResultsManagerWindowDependencies = {},
 ): void {
   try {
     const Zotero = (globalThis as any).Zotero;
-    const mainWin = Zotero?.getMainWindow?.();
+    const mainWin = (
+      windowDependencies.getMainWindow ?? (() => Zotero?.getMainWindow?.())
+    )();
     if (!mainWin) {
       return;
     }
 
     try {
-      const wm = (globalThis as any).Components?.classes?.[
-        "@mozilla.org/appshell/window-mediator;1"
-      ]?.getService(
-        (globalThis as any).Components?.interfaces?.nsIWindowMediator,
-      );
-
-      if (wm) {
-        const existing = wm.getMostRecentWindow("mineruResultsManager");
-        if (existing) {
-          existing.focus();
-          return;
-        }
+      const getMostRecentWindow =
+        windowDependencies.getMostRecentWindow ??
+        getMostRecentResultsManagerWindow;
+      const existing = getMostRecentWindow("mineruResultsManager");
+      if (existing) {
+        existing.focus();
+        return;
       }
     } catch (_e) {
       // Ignore
@@ -375,4 +378,11 @@ export function openResultsManagerWindow(
       `Failed to open Results Manager window: ${e}`,
     );
   }
+}
+
+function getMostRecentResultsManagerWindow(windowType: string): any {
+  const wm = (globalThis as any).Components?.classes?.[
+    "@mozilla.org/appshell/window-mediator;1"
+  ]?.getService((globalThis as any).Components?.interfaces?.nsIWindowMediator);
+  return wm?.getMostRecentWindow?.(windowType) ?? null;
 }

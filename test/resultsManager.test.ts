@@ -276,54 +276,29 @@ describe("Results Manager", function () {
   });
 
   describe("openResultsManagerWindow", function () {
-    let originalZotero: unknown;
-    let originalComponents: unknown;
-
-    beforeEach(function () {
-      originalZotero = (globalThis as any).Zotero;
-      originalComponents = (globalThis as any).Components;
-    });
-
-    afterEach(function () {
-      (globalThis as any).Zotero = originalZotero;
-      (globalThis as any).Components = originalComponents;
-    });
-
     it("focuses existing window if already open", async function () {
       let focused = false;
       let opened = false;
-      (globalThis as any).Zotero = {
+      const { openResultsManagerWindow } =
+        await import("../src/modules/resultsManager");
+
+      openResultsManagerWindow(undefined, {
         getMainWindow: () => ({
           openDialog: () => {
             opened = true;
           },
         }),
-      };
-      (globalThis as any).Components = {
-        classes: {
-          "@mozilla.org/appshell/window-mediator;1": {
-            getService: () => ({
-              getMostRecentWindow: (type: string) => {
-                if (type === "mineruResultsManager") {
-                  return {
-                    focus: () => {
-                      focused = true;
-                    },
-                  };
-                }
-                return null;
+        getMostRecentWindow: (type: string) => {
+          if (type === "mineruResultsManager") {
+            return {
+              focus: () => {
+                focused = true;
               },
-            }),
-          },
+            };
+          }
+          return null;
         },
-        interfaces: {
-          nsIWindowMediator: {},
-        },
-      };
-
-      const { openResultsManagerWindow } =
-        await import("../src/modules/resultsManager");
-      openResultsManagerWindow();
+      });
 
       assert.strictEqual(focused, true);
       assert.strictEqual(opened, false);
@@ -332,7 +307,10 @@ describe("Results Manager", function () {
     it("opens dialog with correct chrome URL if not already open", async function () {
       let openedUrl = "";
       let openedArgs: any = null;
-      (globalThis as any).Zotero = {
+      const { openResultsManagerWindow } =
+        await import("../src/modules/resultsManager");
+
+      openResultsManagerWindow(undefined, {
         getMainWindow: () => ({
           openDialog: (
             url: string,
@@ -344,23 +322,8 @@ describe("Results Manager", function () {
             openedArgs = args;
           },
         }),
-      };
-      (globalThis as any).Components = {
-        classes: {
-          "@mozilla.org/appshell/window-mediator;1": {
-            getService: () => ({
-              getMostRecentWindow: () => null,
-            }),
-          },
-        },
-        interfaces: {
-          nsIWindowMediator: {},
-        },
-      };
-
-      const { openResultsManagerWindow } =
-        await import("../src/modules/resultsManager");
-      openResultsManagerWindow();
+        getMostRecentWindow: () => null,
+      });
 
       assert.strictEqual(
         openedUrl,
