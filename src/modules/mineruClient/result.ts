@@ -4,16 +4,22 @@ import type { ZipEntries } from "./types";
 import { decodeText } from "./zip";
 
 /**
+ * ZIP 中已知的中间 JSON 文件名，按优先级排序。
+ */
+const MIDDLE_JSON_NAMES = ["middle_json.json", "layout.json"];
+
+/**
  * 从 MinerU 结果 ZIP 中读取最合适的原始 JSON 结果。
  */
 export function readRawResultFromZip(zip: ZipEntries): unknown | null {
   let firstJson: unknown | null = null;
 
   for (const [name, entry] of zip) {
-    if (name === "full.md") {
+    const normalized = name.replace(/\\/g, "/");
+    if (normalized === "full.md" || normalized === "markdown.md") {
       continue;
     }
-    if (!name.endsWith(".json")) {
+    if (!normalized.endsWith(".json")) {
       continue;
     }
     try {
@@ -22,6 +28,18 @@ export function readRawResultFromZip(zip: ZipEntries): unknown | null {
       if (hasPageBoxData(parsed)) {
         return parsed;
       }
+    } catch {
+      continue;
+    }
+  }
+
+  for (const candidate of MIDDLE_JSON_NAMES) {
+    const entry = zip.get(candidate);
+    if (!entry) {
+      continue;
+    }
+    try {
+      return JSON.parse(decodeText(entry.bytes)) as unknown;
     } catch {
       continue;
     }
@@ -74,12 +92,17 @@ export function hasPageBoxData(value: unknown): boolean {
       ? raw.pdf_info
       : [];
   return pages.some((page) => {
+    if (!page || typeof page !== "object") {
+      return false;
+    }
+    if (Array.isArray((page as { blocks?: unknown }).blocks)) {
+      return (page as { blocks: unknown[] }).blocks.some(hasBlockGeometry);
+    }
     const rawPage = page as {
-      blocks?: unknown;
       para_blocks?: unknown;
       layout_dets?: unknown;
     };
-    return [rawPage.blocks, rawPage.para_blocks, rawPage.layout_dets].some(
+    return [rawPage.para_blocks, rawPage.layout_dets].some(
       (blocks) => Array.isArray(blocks) && blocks.some(hasBlockGeometry),
     );
   });

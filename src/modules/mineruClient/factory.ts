@@ -1,29 +1,24 @@
-import { createOnlineAgentLiteMinerUClient } from "./agentLite";
-import { createLocalMinerUClient } from "./local";
-import { createOnlinePreciseMinerUClient } from "./onlinePrecise";
 import type { MinerUClient, MinerUClientFactoryOptions } from "./types";
+import { createV1MinerUClient } from "./v1";
+
+const ONLINE_BASE_URL = "https://mineru.net/api";
+const LOCAL_BASE_URL = "http://127.0.0.1:8000";
 
 /**
- * 根据当前 parse source 和 parse mode 选择对应的 MinerU client。
+ * 根据当前 parse source 选择 MinerU V1 client 的 base URL。
+ *
+ * 官方远程与本地服务共用同一套 V1 endpoint，仅 base URL 与鉴权方式不同。
  */
 export function createMinerUClientForSettings(
   options: MinerUClientFactoryOptions,
 ): MinerUClient {
-  if (options.source === "online" && options.mode === "precise") {
-    return createOnlinePreciseMinerUClient(options);
-  }
-  if (options.source === "online" && options.mode === "lite") {
-    return createOnlineAgentLiteMinerUClient(options);
-  }
-  if (options.source === "local") {
-    return createLocalMinerUClient({
-      ...options,
-      mode: options.mode,
-      localApiBaseURL: options.localApiBaseURL ?? "http://127.0.0.1:8000",
-      saveImages: options.saveImages,
-    });
-  }
-  throw new Error(
-    `Unsupported MinerU client mode: ${options.source}/${options.mode}`,
-  );
+  const baseURL =
+    options.source === "local"
+      ? (options.localApiBaseURL ?? LOCAL_BASE_URL)
+      : (options.baseURL ?? ONLINE_BASE_URL);
+  return createV1MinerUClient({
+    ...options,
+    baseURL,
+    outputFormats: ["markdown", "middle_json", "zip"],
+  });
 }

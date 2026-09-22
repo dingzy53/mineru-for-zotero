@@ -6,7 +6,7 @@ import {
   getMarkdownApiToken,
   getSaveImages,
   getLocalApiTimeoutMinutes,
-  getParseMode,
+  getParseTier,
   getParseSource,
   setMarkdownApiEnabled,
   setMarkdownApiRequireToken,
@@ -14,17 +14,15 @@ import {
   setApiKey,
   setLocalApiBaseURL,
   setLocalApiTimeoutMinutes,
-  setParseMode,
+  setParseTier,
   setParseSource,
   setSaveImages,
   getSyncFolder,
   setSyncFolder,
   getAutoParsePageLimit,
   setAutoParsePageLimit,
-  getPdftkPath,
-  setPdftkPath,
-  type ParseMode,
   type ParseSource,
+  type ParseTier,
 } from "../utils/prefs";
 import { createStorage } from "./storage";
 
@@ -222,77 +220,6 @@ export async function registerPrefsScripts(_window: Window) {
     });
   }
 
-  const testPdftkBtn = document.getElementById(`${config.addonRef}-test-pdftk`);
-  if (testPdftkBtn) {
-    testPdftkBtn.addEventListener("click", async () => {
-      const statusEl = document.getElementById(
-        `${config.addonRef}-pdftk-status`,
-      ) as HTMLElement | null;
-      try {
-        const { testPdftk } = await import("./pdfSplitter");
-        const result = await testPdftk();
-        if (result.success) {
-          _window.alert(
-            `pdftk OK!\n\nPath: ${result.path}\nPlatform: ${result.platform}\n\n${result.output}`,
-          );
-          if (statusEl) {
-            statusEl.textContent = `✓ ${result.path}`;
-            statusEl.style.color = "green";
-          }
-        } else {
-          _window.alert(
-            `pdftk not found\n\nPlatform: ${result.platform}\nError: ${result.error}\n\nSearched:\n${result.searchedPaths.join("\n")}`,
-          );
-          if (statusEl) {
-            statusEl.textContent = `✗ ${result.error}`;
-            statusEl.style.color = "red";
-          }
-        }
-      } catch (e: any) {
-        _window.alert("pdftk test failed: " + String(e.message || e));
-      }
-    });
-  }
-
-  // pdftk path input
-  const pdftkPathInput = document.getElementById(
-    `${config.addonRef}-pdftk-path`,
-  ) as HTMLInputElement | null;
-  if (pdftkPathInput) {
-    pdftkPathInput.value = getPdftkPath();
-    pdftkPathInput.addEventListener("change", () => {
-      setPdftkPath(pdftkPathInput.value.trim());
-      // Clear cached path so next test uses the new value
-      import("./pdfSplitter")
-        .then((m) => m.clearPdftkPathCache())
-        .catch(() => {
-          // ignore
-        });
-    });
-  }
-
-  // Browse button for pdftk path
-  const browsePdftkBtn = document.getElementById(
-    `${config.addonRef}-browse-pdftk`,
-  );
-  if (browsePdftkBtn) {
-    browsePdftkBtn.addEventListener("click", async () => {
-      const filePath = await pickExecutableAsync(
-        _window,
-        "Select pdftk executable",
-      );
-      if (filePath && pdftkPathInput) {
-        pdftkPathInput.value = filePath;
-        setPdftkPath(filePath);
-        import("./pdfSplitter")
-          .then((m) => m.clearPdftkPathCache())
-          .catch(() => {
-            // ignore
-          });
-      }
-    });
-  }
-
   document
     .getElementById(`${config.addonRef}-open-task-manager`)
     ?.addEventListener("click", () => {
@@ -452,20 +379,6 @@ function pickFileAsync(
   );
 }
 
-function pickExecutableAsync(
-  window: Window,
-  title: string,
-): Promise<string | null> {
-  return openFilePicker(
-    window,
-    title,
-    (nsIFilePicker) => nsIFilePicker.modeOpen,
-    (fp, nsIFilePicker) => fp.appendFilters(nsIFilePicker.filterAll),
-    (fp, result, nsIFilePicker) =>
-      result === nsIFilePicker.returnOK && fp.file ? fp.file.path : null,
-  );
-}
-
 function extractZipToDir(zipFilePath: string, destDir: string) {
   const Components = (globalThis as any).Components;
   const reader = Components.classes[
@@ -547,12 +460,12 @@ export function registerPreferenceValueSync(document: Document): void {
     getParseSource,
     setParseSource,
   );
-  registerChoicePreferenceSync<ParseMode>(
+  registerChoicePreferenceSync<ParseTier>(
     document,
-    `zotero-prefpane-${config.addonRef}-parse-mode`,
-    ["precise", "lite"],
-    getParseMode,
-    setParseMode,
+    `zotero-prefpane-${config.addonRef}-parse-tier`,
+    ["flash", "basic", "standard", "advanced"],
+    getParseTier,
+    setParseTier,
   );
   registerTextPreferenceSync(
     document,

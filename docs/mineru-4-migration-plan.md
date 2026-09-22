@@ -17,6 +17,24 @@
 > (routes), `docs/en/reference/migration_4.md`, `docs/en/usage/http_api.md`,
 > `docs/next/api/*`, and `docs/next/middle-json/current-medium.md`.
 
+## Implementation status
+
+Implemented in this branch:
+
+- Unified V1 client (`mineruClient/v1.ts`) for online + local; deleted the v4
+  batch (`onlinePrecise.ts`), Agent lite (`agentLite.ts`), legacy local
+  (`local.ts`), and multipart (`formData.ts`) modules.
+- Schema-aware `boxNormalizer.ts` for Middle JSON 2.0 + legacy `pdf_info`.
+- Tiers replace precise/lite: `parseTier` preference and UI
+  (`flash`/`basic`/`standard`/`advanced`); online is forced to `standard`.
+- Large PDFs chunked via `files[].page_range`; removed `pdftk`, `pdfSplitter.ts`,
+  `parallelSplit`, and the pdftk preferences/UI. `pdfPageCount.ts` uses
+  `pdf-lib` only.
+- V1 test suite, updated box/preferences/parse-manager tests, and docs.
+
+Still pending: a live end-to-end smoke test against a running MinerU 4 server
+(Phase 7).
+
 ---
 
 ## 1. Why this is needed

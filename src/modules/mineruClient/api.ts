@@ -1,39 +1,27 @@
-import { MinerURequestError, MinerUTaskError } from "./errors";
+import { MinerURequestError } from "./errors";
 import { errorMessage, responseErrorDetail } from "./http";
-import type { ExtractResultsBatchResponse, FetchLike } from "./types";
+import type { FetchLike } from "./types";
 
 /**
- * 从 MinerU 返回的字符串或对象形式 file URL 中取出实际上传地址。
+ * 生成 MinerU V1 API 鉴权请求头。
  */
-export function getUploadURL(
-  value: string | { url?: string } | undefined,
-): string {
-  if (typeof value === "string") {
-    return value;
+export function authHeaders(apiKey: string): Record<string, string> {
+  if (!apiKey.trim()) {
+    return {};
   }
-  return value?.url ?? "";
+  return {
+    Authorization: `Bearer ${apiKey}`,
+  };
 }
 
 /**
- * 拉取指定 batch task 的 MinerU v4 解析结果并校验业务状态码。
+ * 生成 MinerU V1 JSON API 请求头。
  */
-export async function fetchBatchResult(
-  request: FetchLike,
-  baseURL: string,
-  apiKey: string,
-  taskID: string,
-): Promise<ExtractResultsBatchResponse> {
-  const response = await requestJson<ExtractResultsBatchResponse>(
-    request,
-    `${baseURL}/api/v4/extract-results/batch/${encodeURIComponent(taskID)}`,
-    "poll",
-    {
-      method: "GET",
-      headers: authHeaders(apiKey),
-    },
-  );
-  ensureBusinessSuccess(response, "poll");
-  return response;
+export function jsonHeaders(apiKey: string): Record<string, string> {
+  return {
+    ...authHeaders(apiKey),
+    "Content-Type": "application/json",
+  };
 }
 
 /**
@@ -75,39 +63,60 @@ export async function requestOk(
 }
 
 /**
- * 校验 MinerU 响应中的业务 code，非成功状态时抛出任务错误。
+ * 将 V1 返回的 upload_url 解析为绝对地址。
  */
-export function ensureBusinessSuccess(
-  response: { code?: number; msg?: string },
-  stage: string,
-): void {
-  if (response.code != null && response.code !== 0) {
-    throw new MinerUTaskError(response.msg || `MinerU ${stage} failed`);
+export function resolveUploadURL(baseURL: string, uploadURL: string): string {
+  if (/^https?:\/\//i.test(uploadURL)) {
+    return uploadURL;
   }
+  return `${baseURL}${uploadURL.startsWith("/") ? "" : "/"}${uploadURL}`;
 }
 
 /**
- * 读取 batch 结果中的第一个文件解析结果。
+ * 合并上传头：仅当上传地址与 API 同源时才附加 Bearer Token，
+ * 避免把密钥泄露给外部预签名地址。
  */
-export function firstExtractResult(response: ExtractResultsBatchResponse) {
-  return response.data?.extract_result?.[0];
+export function sameOriginUploadHeaders(
+  baseURL: string,
+  uploadURL: string,
+  uploadHeaders: Record<string, string> | undefined,
+  apiKey: string,
+): Record<string, string> {
+  const headers: Record<string, string> = { ...(uploadHeaders ?? {}) };
+  if (isSameOrigin(baseURL, uploadURL)) {
+    Object.assign(headers, authHeaders(apiKey));
+  }
+  return headers;
 }
 
 /**
- * 生成 MinerU API 鉴权请求头。
+ * 判断两个 HTTP(S) 地址是否同源（scheme + host + effective port）。
  */
-export function authHeaders(apiKey: string): Record<string, string> {
-  return {
-    Authorization: `Bearer ${apiKey}`,
-  };
+export function isSameOrigin(left: string, right: string): boolean {
+  const a = parseOrigin(left);
+  const b = parseOrigin(right);
+  return (
+    a != null &&
+    b != null &&
+    a.scheme === b.scheme &&
+    a.host === b.host &&
+    a.port === b.port
+  );
 }
 
-/**
- * 生成 MinerU JSON API 请求头。
- */
-export function jsonHeaders(apiKey: string): Record<string, string> {
-  return {
-    ...authHeaders(apiKey),
-    "Content-Type": "application/json",
-  };
+function parseOrigin(
+  value: string,
+): { scheme: string; host: string; port: number } | null {
+  try {
+    const url = new URL(value);
+    const port =
+      url.port !== "" ? Number(url.port) : url.protocol === "https:" ? 443 : 80;
+    return {
+      scheme: url.protocol.toLowerCase(),
+      host: url.hostname.toLowerCase(),
+      port,
+    };
+  } catch {
+    return null;
+  }
 }

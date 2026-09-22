@@ -52,16 +52,27 @@ export function createFormDataRequest(): FetchLike {
  * 基于 fetch-like 请求器创建裸 PUT 二进制上传函数。
  */
 export function fetchUploadBinary(request: FetchLike) {
-  return async (url: string, body: Uint8Array): Promise<Response> =>
-    request(url, { method: "PUT", body });
+  return async (
+    url: string,
+    body: Uint8Array,
+    headers?: Record<string, string>,
+  ): Promise<Response> =>
+    request(url, {
+      method: "PUT",
+      body,
+      ...(headers ? { headers } : {}),
+    });
 }
 
 /**
  * 基于 fetch-like 请求器创建 GET 二进制下载函数。
  */
 export function fetchDownloadBinary(request: FetchLike) {
-  return async (url: string): Promise<Response> =>
-    request(url, { method: "GET" });
+  return async (
+    url: string,
+    headers?: Record<string, string>,
+  ): Promise<Response> =>
+    request(url, { method: "GET", ...(headers ? { headers } : {}) });
 }
 
 /**
@@ -86,11 +97,15 @@ export function fallbackDownloadBinary(
 export function xhrUploadBinary(
   url: string,
   body: Uint8Array,
+  headers?: Record<string, string>,
 ): Promise<Response> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);
     xhr.responseType = "arraybuffer";
+    for (const [name, value] of Object.entries(headers ?? {})) {
+      xhr.setRequestHeader(name, value);
+    }
     xhr.onload = () => resolve(xhrToResponse(xhr));
     xhr.onerror = () => reject(new Error("XMLHttpRequest upload failed"));
     xhr.send(toStandaloneArrayBuffer(body));
@@ -100,11 +115,17 @@ export function xhrUploadBinary(
 /**
  * 使用 XMLHttpRequest 下载二进制响应并包装为 Response。
  */
-export function xhrDownloadBinary(url: string): Promise<Response> {
+export function xhrDownloadBinary(
+  url: string,
+  headers?: Record<string, string>,
+): Promise<Response> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("GET", url);
     xhr.responseType = "arraybuffer";
+    for (const [name, value] of Object.entries(headers ?? {})) {
+      xhr.setRequestHeader(name, value);
+    }
     xhr.onload = () => resolve(xhrToResponse(xhr));
     xhr.onerror = () => reject(new Error("XMLHttpRequest download failed"));
     xhr.send();
@@ -336,6 +357,28 @@ export function isArrayBuffer(value: unknown): value is ArrayBuffer {
 }
 
 /**
+ * 计算字节的 SHA-256 十六进制摘要，运行时不可用时返回 null。
+ */
+export async function sha256Hex(bytes: Uint8Array): Promise<string | null> {
+  const subtle = (
+    globalThis as typeof globalThis & {
+      crypto?: { subtle?: SubtleCrypto };
+    }
+  ).crypto?.subtle;
+  if (!subtle?.digest) {
+    return null;
+  }
+  try {
+    const digest = await subtle.digest("SHA-256", bytes);
+    return Array.from(new Uint8Array(digest))
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 把未知错误值转换为可读错误消息。
  */
 export function errorMessage(error: unknown): string {
@@ -360,10 +403,40 @@ export function summarizeErrorBody(text: string): string {
   if (!text) {
     return "";
   }
+  const json = extractJsonError(text);
+  if (json) {
+    return sanitizeErrorDetail(json);
+  }
   const code = extractXmlTag(text, "Code");
   const message = extractXmlTag(text, "Message");
   const summary = [code, message].filter(Boolean).join(": ");
   return sanitizeErrorDetail(summary || text);
+}
+
+/**
+ * 从 V1 错误 envelope ({"error":{"code":..,"message":..}}) 中提取摘要。
+ */
+export function extractJsonError(text: string): string {
+  if (!text.startsWith("{")) {
+    return "";
+  }
+  try {
+    const parsed = JSON.parse(text) as {
+      error?: { code?: string; message?: string };
+      msg?: string;
+      code?: string;
+    };
+    const error = parsed.error;
+    if (error && (error.code || error.message)) {
+      return [error.code, error.message].filter(Boolean).join(": ");
+    }
+    if (parsed.code || parsed.msg) {
+      return [parsed.code, parsed.msg].filter(Boolean).join(": ");
+    }
+  } catch {
+    // Not JSON; fall through to XML/text handling.
+  }
+  return "";
 }
 
 /**

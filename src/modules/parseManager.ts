@@ -24,20 +24,19 @@ import {
   type TaskRecord,
   type TaskResumeRecord,
 } from "./taskStore";
-import { getPdfPageCount, splitPdf } from "./pdfSplitter";
+import { getPdfPageCount } from "./pdfPageCount";
 import { createStorage, type StorageAdapter } from "./storage";
 import { getString } from "../utils/locale";
-import { runWithConcurrency } from "../utils/concurrency";
 import {
   getApiKey,
   getLocalApiTimeoutMinutes,
   getLocalApiBaseURL,
-  getParseMode,
+  getParseTier,
   getParseSource,
   getSaveImages,
-  getParallelSplit,
   type ParseMode,
   type ParseSource,
+  type ParseTier,
 } from "../utils/prefs";
 import { getMinerUStorageRoot } from "./preferenceScript";
 import {
@@ -88,8 +87,7 @@ import {
   getReconnectDelayMs,
 } from "./parseNetwork";
 
-const LOCAL_CHUNK_PAGE_LIMIT = 200;
-const DEFAULT_CHUNK_PAGE_LIMIT = 200;
+const CHUNK_PAGE_LIMIT = 200;
 const DEFAULT_ONLINE_POLL_TIMEOUT_MS = 6 * 60 * 1000;
 const MAX_CONCURRENT_REQUESTS_DEFAULT = 3;
 const MAX_CONCURRENT_REQUESTS_CEILING = 10;
@@ -98,26 +96,19 @@ export type ReparseChoice = "use-existing" | "reparse";
 export interface ParseManagerDependencies {
   getApiKey: () => string;
   getParseSource?: () => ParseSource;
-  getParseMode?: () => ParseMode;
+  getParseTier?: () => ParseTier;
   getLocalApiBaseURL?: () => string;
   getLocalApiTimeoutMinutes?: () => number;
   getSaveImages?: () => boolean;
-  getParallelSplit?: () => boolean;
   getMaxConcurrentRequests?: () => number;
   getPdfPageCount?: (filePath: string) => Promise<number>;
-  splitPdf?: (
-    inputPath: string,
-    outputPath: string,
-    startPage: number,
-    endPage: number,
-  ) => Promise<boolean>;
   storage?: StorageAdapter;
   createStorage?: () => StorageAdapter;
   client?: MinerUClient;
   createClient?: (settings: {
     apiKey: string;
     source: ParseSource;
-    mode: ParseMode;
+    tier: ParseTier;
     localApiBaseURL: string;
     saveImages: boolean;
   }) => MinerUClient;
@@ -238,9 +229,9 @@ async function parseAttachmentsWithDependencies(
   }
 
   const source = getCurrentParseSource(dependencies);
-  const mode = getCurrentParseMode(dependencies);
+  const mode: ParseMode = "precise";
   const apiKey = dependencies.getApiKey().trim();
-  if (requiresApiKey(source, mode) && !apiKey) {
+  if (requiresApiKey(source) && !apiKey) {
     dependencies.showMessage("parse-error-missing-api-key");
     return;
   }
@@ -452,10 +443,10 @@ async function parseAttachmentWithDependencies(
   }
 
   const source = getCurrentParseSource(dependencies);
-  const mode = getCurrentParseMode(dependencies);
+  const mode: ParseMode = "precise";
   const apiKey = dependencies.getApiKey().trim();
   const localApiBaseURL = dependencies.getLocalApiBaseURL?.() ?? "";
-  if (requiresApiKey(source, mode) && !apiKey) {
+  if (requiresApiKey(source) && !apiKey) {
     dependencies.showMessage("parse-error-missing-api-key");
     return;
   }
@@ -479,7 +470,7 @@ async function parseAttachmentWithDependencies(
     {
       apiKey,
       source,
-      mode,
+      tier: getCurrentParseTier(dependencies, source),
       localApiBaseURL,
       saveImages: dependencies.getSaveImages?.() !== false,
     },
@@ -529,8 +520,7 @@ async function parseAttachmentWithDependencies(
     const pageCount = dependencies.getPdfPageCount
       ? await dependencies.getPdfPageCount(filePath)
       : await getPdfPageCount(filePath);
-    const CHUNK_SIZE = getChunkPageLimit(source);
-    const split = dependencies.splitPdf ?? splitPdf;
+    const CHUNK_SIZE = CHUNK_PAGE_LIMIT;
     const chunks = Math.max(1, Math.ceil(pageCount / CHUNK_SIZE));
     const resume = createTaskResume(
       task.resume,
@@ -563,22 +553,14 @@ async function parseAttachmentWithDependencies(
     await ensureTaskResumeDirectory(resumeDirectory);
 
     if (pageCount > CHUNK_SIZE) {
-      const tmpDir = resumeDirectory;
-      const isParallel = dependencies.getParallelSplit
-        ? dependencies.getParallelSplit()
-        : getParallelSplit();
-
       const chunkTasks = Array.from({ length: chunks }, (_, i) => async () => {
         const chunk = resume.chunks[i];
         const startPage = chunk.startPage;
         const endPage = chunk.endPage;
-        const targetPath = toNativePath(
-          `${tmpDir}/mineru-part-${attachment.id}-${i}.pdf`,
-        );
         const cachePath =
           chunk.resultPath ??
           toNativePath(
-            `${tmpDir}/mineru-part-${attachment.id}-${i}-result.json`,
+            `${resumeDirectory}/mineru-part-${attachment.id}-${i}-result.json`,
           );
         chunk.resultPath = cachePath;
 
@@ -591,22 +573,15 @@ async function parseAttachmentWithDependencies(
           return;
         }
 
-        if (!isParallel) {
-          await updateTaskDetail(
-            String(attachment.id),
-            `[Auto-Split] Processing part ${i + 1}/${chunks} (Pages ${startPage}-${endPage})`,
-          );
-        }
+        await updateTaskDetail(
+          String(attachment.id),
+          `[Auto-Split] Processing part ${i + 1}/${chunks} (Pages ${startPage}-${endPage})`,
+        );
 
         const submitChunk = async (): Promise<void> => {
-          const success = await split(filePath, targetPath, startPage, endPage);
-          if (!success) {
-            throw new MinerUTaskError(
-              `Failed to split PDF chunk ${i + 1}/${chunks}. pdftk may not be installed.`,
-            );
-          }
-
-          const submitResult = await client.submitPdf(targetPath);
+          const submitResult = await client.submitPdf(filePath, {
+            pageRange: `${startPage}-${endPage}`,
+          });
           chunk.taskID = submitResult.taskID;
           chunk.status = "submitted";
           taskIDs[i] = chunk.taskID;
@@ -707,27 +682,10 @@ async function parseAttachmentWithDependencies(
         results[i] = res;
         chunk.status = "succeeded";
         await persistTaskResume(task, resume);
-        try {
-          await IOUtils.remove(targetPath);
-        } catch {
-          // The PDF part is disposable; keep the result cache on failure.
-        }
       });
 
-      if (isParallel) {
-        await updateTaskDetail(
-          String(attachment.id),
-          `[Auto-Split] Processing ${chunks} parts in parallel...`,
-        );
-        await runWithConcurrency(
-          chunkTasks,
-          getMaxConcurrentRequests(dependencies),
-          () => taskStore.getTask(String(attachment.id))?.status === "failed",
-        );
-      } else {
-        for (const task of chunkTasks) {
-          await task();
-        }
+      for (const task of chunkTasks) {
+        await task();
       }
 
       // Keep chunk result caches until the final merged result has been
@@ -854,7 +812,12 @@ async function parseAttachmentWithDependencies(
       ...taskStore.getTask(String(attachment.id))!,
       detail: undefined,
     });
-    const result = mergeChunkResults(results, mode);
+    const mergeMode: ParseMode = results.every(
+      (entry) => entry && entry.rawResult != null,
+    )
+      ? "precise"
+      : "lite";
+    const result = mergeChunkResults(results, mergeMode);
     const taskID = taskIDs.join(",");
 
     if (result.kind === "lite") {
@@ -1265,7 +1228,7 @@ function createDefaultDependencies(): ParseManagerDependencies {
   return {
     getApiKey,
     getParseSource,
-    getParseMode,
+    getParseTier,
     getLocalApiBaseURL,
     getLocalApiTimeoutMinutes,
     getSaveImages,
@@ -1298,7 +1261,7 @@ function getClient(
   settings: {
     apiKey: string;
     source: ParseSource;
-    mode: ParseMode;
+    tier: ParseTier;
     localApiBaseURL: string;
     saveImages: boolean;
   },
@@ -1319,17 +1282,15 @@ function getCurrentParseSource(
   return dependencies.getParseSource?.() ?? "online";
 }
 
-function getCurrentParseMode(
+function getCurrentParseTier(
   dependencies: ParseManagerDependencies,
-): ParseMode {
-  return dependencies.getParseMode?.() ?? "precise";
-}
-
-function getChunkPageLimit(source: ParseSource): number {
-  // The remote Local MinerU API rejects requests above 200 pages. Keep the
-  // same conservative boundary for the other clients until their limits are
-  // handled independently.
-  return source === "local" ? LOCAL_CHUNK_PAGE_LIMIT : DEFAULT_CHUNK_PAGE_LIMIT;
+  source: ParseSource,
+): ParseTier {
+  // The official cloud API only exposes the `standard` tier.
+  if (source === "online") {
+    return "standard";
+  }
+  return dependencies.getParseTier?.() ?? "standard";
 }
 
 function getPollTimeoutMs(
@@ -1342,8 +1303,8 @@ function getPollTimeoutMs(
   return (dependencies.getLocalApiTimeoutMinutes?.() ?? 30) * 60 * 1000;
 }
 
-function requiresApiKey(source: ParseSource, mode: ParseMode): boolean {
-  return source === "online" && mode === "precise";
+function requiresApiKey(source: ParseSource): boolean {
+  return source === "online";
 }
 
 async function hasExistingResultForMode(

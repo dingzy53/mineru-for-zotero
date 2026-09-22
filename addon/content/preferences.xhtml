@@ -60,20 +60,22 @@
     </hbox>
     <hbox align="top" style="gap: 6px">
       <label
-        data-l10n-id="pref-parse-mode-title"
+        data-l10n-id="pref-parse-tier-title"
         style="margin-top: 8px"
       ></label>
       <vbox style="margin-left: 8px">
         <radiogroup
-          id="zotero-prefpane-__addonRef__-parse-mode"
+          id="zotero-prefpane-__addonRef__-parse-tier"
           orient="horizontal"
           native="true"
-          preference="parseMode"
+          preference="parseTier"
         >
-          <radio data-l10n-id="pref-parse-mode-precise" value="precise" />
-          <radio data-l10n-id="pref-parse-mode-lite" value="lite" />
+          <radio data-l10n-id="pref-parse-tier-flash" value="flash" />
+          <radio data-l10n-id="pref-parse-tier-basic" value="basic" />
+          <radio data-l10n-id="pref-parse-tier-standard" value="standard" />
+          <radio data-l10n-id="pref-parse-tier-advanced" value="advanced" />
         </radiogroup>
-        <html:div data-l10n-id="pref-parse-mode-help"></html:div>
+        <html:div data-l10n-id="pref-parse-tier-help"></html:div>
       </vbox>
     </hbox>
     <hbox align="top" style="gap: 6px; margin-top: 12px">
@@ -175,18 +177,6 @@
       </hbox>
     </vbox>
     <vbox>
-      <checkbox
-        id="zotero-prefpane-__addonRef__-parallel-split"
-        data-l10n-id="pref-parallel-split"
-        native="true"
-        preference="parallelSplit"
-      />
-      <html:div
-        data-l10n-id="pref-parallel-split-help"
-        style="margin-left: 24px"
-      ></html:div>
-    </vbox>
-    <vbox>
       <html:h2 data-l10n-id="pref-data-folder-title"></html:h2>
       <hbox style="gap: 6px">
         <html:button
@@ -195,26 +185,11 @@
         ></html:button>
         <html:button id="__addonRef__-backup-data">Backup Data</html:button>
         <html:button id="__addonRef__-restore-data">Restore Data</html:button>
-        <html:button id="__addonRef__-test-pdftk">Test pdftk</html:button>
         <html:button
           id="__addonRef__-open-results-manager"
           data-l10n-id="pref-open-results-manager"
         ></html:button>
       </hbox>
-      <hbox style="gap: 6px; align-items: center; margin-top: 6px">
-        <html:label style="white-space: nowrap">pdftk path:</html:label>
-        <html:input
-          id="__addonRef__-pdftk-path"
-          type="text"
-          style="flex: 1; min-width: 200px"
-          placeholder="(auto-detect)"
-        />
-        <html:button id="__addonRef__-browse-pdftk">Browse</html:button>
-      </hbox>
-      <html:div
-        id="__addonRef__-pdftk-status"
-        style="color: gray; font-size: 0.9em; margin-top: 2px"
-      ></html:div>
       <html:div id="__addonRef__-data-folder-path"></html:div>
       <html:div id="__addonRef__-parsed-count"></html:div>
     </vbox>

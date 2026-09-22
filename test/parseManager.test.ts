@@ -364,7 +364,6 @@ describe("parseManager", function () {
       const manager = createParseManager({
         ...baseDependencies([]),
         getParseSource: () => entry.source,
-        getParseMode: () => entry.mode,
         showMessage: (id, args) => {
           notices.push({ id, args });
         },
@@ -403,7 +402,6 @@ describe("parseManager", function () {
     const events: string[] = [];
     const manager = createParseManager({
       ...baseDependencies([]),
-      getParseMode: () => "lite",
       onParseColumnRunning: async (_attachment, mode) => {
         events.push(`${mode}:running`);
       },
@@ -419,7 +417,7 @@ describe("parseManager", function () {
 
     await manager.parseAttachment(pdfAttachment());
 
-    assert.deepEqual(events, ["lite:running", "lite:ready"]);
+    assert.deepEqual(events, ["precise:running", "lite:ready"]);
   });
 
   it("registers the injected attachment title in the task store", async function () {
@@ -481,7 +479,6 @@ describe("parseManager", function () {
     const events: string[] = [];
     const manager = createParseManager({
       ...baseDependencies([]),
-      getParseMode: () => "lite",
       onParseColumnRunning: async (_attachment, mode) => {
         events.push(`${mode}:running`);
       },
@@ -497,7 +494,7 @@ describe("parseManager", function () {
 
     await manager.parseAttachment(pdfAttachment());
 
-    assert.deepEqual(events, ["lite:running", "lite:clear"]);
+    assert.deepEqual(events, ["precise:running", "precise:clear"]);
   });
 
   it("keeps parsing when parse column running update fails", async function () {
@@ -931,41 +928,12 @@ describe("parseManager", function () {
     assert.include(messages, "parse-error-missing-api-key");
   });
 
-  it("does not require an API key for lite results", async function () {
-    const messages: string[] = [];
-    let wroteLite = false;
-    const manager = createParseManager({
-      ...baseDependencies(messages),
-      getApiKey: () => "",
-      getParseSource: () => "online",
-      getParseMode: () => "lite",
-      storage: {
-        ...baseStorage(),
-        hasLiteResult: async () => false,
-        writeLiteResult: async () => {
-          wroteLite = true;
-        },
-      },
-      client: {
-        submitPdf: async () => ({ taskID: "lite-task" }),
-        pollTask: async () => ({ status: "succeeded" }),
-        downloadResult: async () => ({ kind: "lite", markdown: "# Lite" }),
-      },
-    });
-
-    await manager.parseAttachment(pdfAttachment());
-
-    assert.isTrue(wroteLite);
-    assert.notInclude(messages, "parse-error-missing-api-key");
-  });
-
   it("writes precise results only for precise client results", async function () {
     const messages: string[] = [];
     let wrotePrecise = false;
     const manager = createParseManager({
       ...baseDependencies(messages),
       getParseSource: () => "online",
-      getParseMode: () => "precise",
       storage: {
         ...baseStorage(),
         writeResult: async () => {
@@ -999,80 +967,12 @@ describe("parseManager", function () {
     assert.isTrue(wrotePrecise);
   });
 
-  it("uses an existing lite result when the user chooses not to reparse", async function () {
-    const messages: string[] = [];
-    let submitCalled = false;
-    const manager = createParseManager({
-      ...baseDependencies(messages),
-      getParseSource: () => "online",
-      getParseMode: () => "lite",
-      storage: {
-        ...baseStorage(),
-        hasReadyResult: async () => false,
-        hasLiteResult: async () => true,
-      },
-      confirmReparse: async () => "use-existing",
-      client: {
-        submitPdf: async () => {
-          submitCalled = true;
-          throw new Error("submitPdf should not be called");
-        },
-        pollTask: async () => ({ status: "succeeded" }),
-        downloadResult: async () => ({ kind: "lite", markdown: "# Lite" }),
-      },
-    });
-
-    await manager.parseAttachment(pdfAttachment());
-
-    assert.isFalse(submitCalled);
-    assert.include(messages, "parse-use-existing-result");
-  });
-
-  it("skips existing lite results once in bulk parsing", async function () {
-    const messages: string[] = [];
-    const submitted: string[] = [];
-    let confirmCount = 0;
-    const manager = createParseManager({
-      ...baseDependencies(messages),
-      getParseSource: () => "online",
-      getParseMode: () => "lite",
-      storage: {
-        ...baseStorage(),
-        hasReadyResult: async () => {
-          throw new Error("hasReadyResult should not be used for lite mode");
-        },
-        hasLiteResult: async (attachment) => attachment.id === 1,
-      },
-      confirmReparse: async () => {
-        confirmCount += 1;
-        return "use-existing";
-      },
-      client: {
-        submitPdf: async (filePath) => {
-          submitted.push(filePath);
-          return { taskID: "lite-task" };
-        },
-        pollTask: async () => ({ status: "succeeded" }),
-        downloadResult: async () => ({ kind: "lite", markdown: "# Lite" }),
-      },
-    });
-
-    await manager.parseAttachments([
-      pdfAttachment({ id: 1, filePath: "C:/tmp/a.pdf" }),
-      pdfAttachment({ id: 2, filePath: "C:/tmp/b.pdf" }),
-    ]);
-
-    assert.equal(confirmCount, 1);
-    assert.deepEqual(submitted, ["C:\\tmp\\b.pdf"]);
-  });
-
   it("reports empty lite markdown without writing a lite result", async function () {
     const messages: string[] = [];
     let wroteLite = false;
     const manager = createParseManager({
       ...baseDependencies(messages),
       getParseSource: () => "online",
-      getParseMode: () => "lite",
       storage: {
         ...baseStorage(),
         writeLiteResult: async () => {
@@ -1097,7 +997,6 @@ describe("parseManager", function () {
     const manager = createParseManager({
       ...baseDependencies(messages),
       getParseSource: () => "online",
-      getParseMode: () => "lite",
       storage: {
         ...baseStorage(),
         hasLiteResult: async () => true,
@@ -1129,7 +1028,6 @@ describe("parseManager", function () {
       client: undefined,
       getApiKey: () => "",
       getParseSource: () => "local",
-      getParseMode: () => "lite",
       getLocalApiBaseURL: () => "http://127.0.0.1:9000",
       getSaveImages: () => false,
       createClient: (settings) => {
@@ -1150,7 +1048,7 @@ describe("parseManager", function () {
     assert.deepEqual(receivedSettings, {
       apiKey: "",
       source: "local",
-      mode: "lite",
+      tier: "standard",
       localApiBaseURL: "http://127.0.0.1:9000",
       saveImages: false,
     });
@@ -1641,7 +1539,6 @@ describe("parseManager", function () {
     const manager = createParseManager({
       ...baseDependencies(messages),
       getParseSource: () => "local",
-      getParseMode: () => "lite",
       client: {
         submitPdf: async () => {
           throw new MinerURequestError("local-health", 503, "offline");
@@ -1663,7 +1560,6 @@ describe("parseManager", function () {
     const manager = createParseManager({
       ...baseDependencies(messages),
       getParseSource: () => "local",
-      getParseMode: () => "precise",
       getLocalApiTimeoutMinutes: () => 1,
       delay: async () => {},
       client: {
@@ -1742,27 +1638,22 @@ describe("parseManager", function () {
     assert.include(messages, "parse-error-upload");
   });
 
-  it("resumes a failed split from the first incomplete chunk", async function () {
+  it("resumes a failed parse chunk from the first incomplete chunk", async function () {
     const messages: string[] = [];
     const submitted: string[] = [];
-    const splitPaths: string[] = [];
+    const pageRanges: string[] = [];
     let shouldFailSecondChunk = true;
     const manager = createParseManager({
       ...baseDependencies(messages),
       getParseSource: () => "local",
-      getParseMode: () => "precise",
-      getParallelSplit: () => false,
       getPdfPageCount: async () => 401,
-      splitPdf: async (_inputPath, outputPath) => {
-        splitPaths.push(outputPath);
-        return true;
-      },
       getLocalApiTimeoutMinutes: () => 1,
       delay: async () => {},
       client: {
-        submitPdf: async (filePath) => {
+        submitPdf: async (filePath, options) => {
           const taskID = `split-task-${submitted.length}`;
           submitted.push(filePath);
+          pageRanges.push(options?.pageRange ?? "");
           return { taskID };
         },
         pollTask: async (taskID) => {
@@ -1790,11 +1681,11 @@ describe("parseManager", function () {
     shouldFailSecondChunk = false;
     await manager.parseAttachment(attachment, { force: true, resume: true });
 
-    // 401 pages -> three chunks. Run 1 submitted chunks 0 and 1; the resume
-    // run skips chunk 0 via its result cache, reconnects chunk 1 through the
-    // saved task ID without re-uploading, and submits the pending chunk 2.
+    // 401 pages -> three chunks submitted with page ranges. Run 1 submitted
+    // chunks 0 and 1; the resume run skips chunk 0 via its result cache,
+    // reconnects chunk 1 through the saved task ID, and submits chunk 2.
     assert.lengthOf(submitted, 3);
-    assert.lengthOf(splitPaths, 3);
+    assert.deepEqual(pageRanges, ["1-200", "201-400", "401-401"]);
     assert.deepEqual(messages, ["parse-error-local-api-unavailable"]);
   });
 
@@ -1864,7 +1755,7 @@ function baseDependencies(messages: string[]): ParseManagerDependencies {
   return {
     getApiKey: () => "secret-token",
     getParseSource: () => "online",
-    getParseMode: () => "precise",
+    getParseTier: () => "standard",
     getLocalApiBaseURL: () => "http://127.0.0.1:8000",
     getPdfPageCount: async () => 10,
     openTaskManager: () => {},

@@ -1,6 +1,6 @@
 pref("apiKey", "");
 pref("parseSource", "online");
-pref("parseMode", "precise");
+pref("parseTier", "standard");
 pref("localApiBaseURL", "http://127.0.0.1:8000");
 pref("localApiTimeoutMinutes", 30);
 pref("apiEnabled", false);
@@ -9,5 +9,3 @@ pref("apiToken", "");
 pref("saveImages", true);
 pref("syncFolder", "");
 pref("autoParsePageLimit", 0);
-pref("parallelSplit", false);
-pref("pdftkPath", "");

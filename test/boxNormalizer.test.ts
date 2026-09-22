@@ -538,4 +538,196 @@ describe("boxNormalizer", function () {
     assert.equal(boxes[4].formula, "E=mc^2");
     assert.equal(boxes[5].formula, "a+b");
   });
+
+  it("joins docvortex inline spans into paragraph markdown", function () {
+    const boxes = normalizeMinerUBoxes({
+      schema: "docvortex.middle",
+      schema_version: "2.0",
+      pages: [
+        {
+          page_idx: 0,
+          blocks: [
+            {
+              type: "text",
+              index: 0,
+              bbox: [0.25, 0.5, 0.75, 0.75],
+              content: [
+                { type: "text", content: "The value is " },
+                { type: "equation_inline", content: "x<y" },
+                { type: "text", content: " and " },
+                { type: "code_inline", content: "print(1)" },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    assert.lengthOf(boxes, 1);
+    assert.equal(boxes[0].markdown, "The value is $x<y$ and `print(1)`");
+    assert.equal(boxes[0].page, 1);
+    assert.deepEqual(boxes[0].bbox, {
+      x: 0.25,
+      y: 0.5,
+      width: 0.5,
+      height: 0.25,
+    });
+  });
+
+  it("reads hyperlink span text", function () {
+    const boxes = normalizeMinerUBoxes({
+      schema: "docvortex.middle",
+      pages: [
+        {
+          page_idx: 0,
+          blocks: [
+            {
+              type: "text",
+              index: 0,
+              bbox: [0, 0, 1, 1],
+              content: [
+                { type: "text", content: "See " },
+                {
+                  type: "hyperlink",
+                  url: "https://example.com",
+                  content: [{ type: "text", content: "the docs" }],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    assert.equal(boxes[0].markdown, "See the docs");
+  });
+
+  it("emits one box per visual container with body and caption", function () {
+    const boxes = normalizeMinerUBoxes({
+      schema: "docvortex.middle",
+      pages: [
+        {
+          page_idx: 0,
+          blocks: [
+            {
+              type: "image",
+              index: 0,
+              bbox: [0.1, 0.1, 0.5, 0.4],
+              content: [
+                {
+                  type: "image_body",
+                  index: 0,
+                  bbox: [0.1, 0.1, 0.5, 0.35],
+                  content: "",
+                  image_path: "page_0_image_0.png",
+                },
+                {
+                  type: "image_caption",
+                  index: 1,
+                  bbox: [0.1, 0.35, 0.5, 0.4],
+                  content: [{ type: "text", content: "Figure 1" }],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    assert.lengthOf(boxes, 1);
+    assert.equal(boxes[0].type, "image");
+    assert.equal(boxes[0].imagePath, "page_0_image_0.png");
+    assert.include(boxes[0].markdown, "Figure 1");
+  });
+
+  it("reads table body html for table copy formats", function () {
+    const boxes = normalizeMinerUBoxes({
+      schema: "docvortex.middle",
+      pages: [
+        {
+          page_idx: 0,
+          blocks: [
+            {
+              type: "table",
+              index: 0,
+              bbox: [0.1, 0.1, 0.9, 0.5],
+              content: [
+                {
+                  type: "table_body",
+                  index: 0,
+                  bbox: [0.1, 0.1, 0.9, 0.45],
+                  content: "<table><tr><td>1</td></tr></table>",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    assert.lengthOf(boxes, 1);
+    assert.equal(boxes[0].type, "table");
+    assert.include(boxes[0].tableFormats?.html ?? "", "<table");
+  });
+
+  it("flattens list children that carry their own bbox", function () {
+    const boxes = normalizeMinerUBoxes({
+      schema: "docvortex.middle",
+      pages: [
+        {
+          page_idx: 0,
+          blocks: [
+            {
+              type: "list",
+              index: 0,
+              bbox: [0.1, 0.1, 0.9, 0.3],
+              content: [
+                {
+                  type: "text",
+                  index: 0,
+                  bbox: [0.1, 0.1, 0.9, 0.2],
+                  content: [{ type: "text", content: "one" }],
+                },
+                {
+                  type: "text",
+                  index: 1,
+                  bbox: [0.1, 0.2, 0.9, 0.3],
+                  content: [{ type: "text", content: "two" }],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    assert.deepEqual(
+      boxes.map((box) => box.markdown),
+      ["one", "two"],
+    );
+  });
+
+  it("reads standalone equation block content", function () {
+    const boxes = normalizeMinerUBoxes({
+      schema: "docvortex.middle",
+      pages: [
+        {
+          page_idx: 2,
+          blocks: [
+            {
+              type: "equation",
+              index: 0,
+              bbox: [0.2, 0.2, 0.8, 0.3],
+              content: "E=mc^2",
+            },
+          ],
+        },
+      ],
+    });
+
+    assert.equal(boxes[0].page, 3);
+    assert.equal(boxes[0].type, "equation");
+    assert.equal(boxes[0].formula, "E=mc^2");
+    assert.equal(boxes[0].markdown, "E=mc^2");
+  });
 });

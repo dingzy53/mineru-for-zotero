@@ -11,7 +11,7 @@ import {
   getMarkdownApiToken,
   getLocalApiBaseURL,
   getLocalApiTimeoutMinutes,
-  getParseMode,
+  getParseTier,
   getParseSource,
   getSaveImages,
   setMarkdownApiEnabled,
@@ -19,7 +19,7 @@ import {
   setMarkdownApiToken,
   setLocalApiBaseURL,
   setLocalApiTimeoutMinutes,
-  setParseMode,
+  setParseTier,
   setParseSource,
   setSaveImages,
 } from "../src/utils/prefs";
@@ -34,7 +34,7 @@ describe("preferenceScript", function () {
       'id="zotero-prefpane-mineruForZotero-local-api-base-url"',
       'id="zotero-prefpane-mineruForZotero-local-api-timeout-minutes"',
       'id="zotero-prefpane-mineruForZotero-parse-source"',
-      'id="zotero-prefpane-mineruForZotero-parse-mode"',
+      'id="zotero-prefpane-mineruForZotero-parse-tier"',
       'data-l10n-id="mineruForZotero-pref-data-storage-title"',
       'id="zotero-prefpane-mineruForZotero-save-images"',
       'id="mineruForZotero-open-data-folder"',
@@ -101,9 +101,9 @@ describe("preferenceScript", function () {
     }
   });
 
-  it("defaults parse source, parse mode, and local API URL", function () {
+  it("defaults parse source, parse tier, and local API URL", function () {
     assert.equal(getParseSource(), "online");
-    assert.equal(getParseMode(), "precise");
+    assert.equal(getParseTier(), "standard");
     assert.equal(getLocalApiBaseURL(), "http://127.0.0.1:8000");
     assert.equal(getLocalApiTimeoutMinutes(), 30);
   });
@@ -134,20 +134,20 @@ describe("preferenceScript", function () {
     }
   });
 
-  it("round-trips parse source, parse mode, and local API URL", function () {
+  it("round-trips parse source, parse tier, and local API URL", function () {
     try {
       setParseSource("local");
-      setParseMode("lite");
+      setParseTier("advanced");
       setLocalApiBaseURL("http://127.0.0.1:9000/");
       setLocalApiTimeoutMinutes(45);
 
       assert.equal(getParseSource(), "local");
-      assert.equal(getParseMode(), "lite");
+      assert.equal(getParseTier(), "advanced");
       assert.equal(getLocalApiBaseURL(), "http://127.0.0.1:9000/");
       assert.equal(getLocalApiTimeoutMinutes(), 45);
     } finally {
       setParseSource("online");
-      setParseMode("precise");
+      setParseTier("standard");
       setLocalApiBaseURL("http://127.0.0.1:8000");
       setLocalApiTimeoutMinutes(30);
     }
@@ -165,48 +165,48 @@ describe("preferenceScript", function () {
     }
   });
 
-  it("persists parse mode changes from the preferences UI immediately", function () {
-    const parseMode = fakePreferenceElement("lite");
+  it("persists parse tier changes from the preferences UI immediately", function () {
+    const parseTier = fakePreferenceElement("advanced");
     const document = fakePreferenceDocument({
-      "zotero-prefpane-mineruForZotero-parse-mode": parseMode,
+      "zotero-prefpane-mineruForZotero-parse-tier": parseTier,
     });
 
     try {
-      setParseMode("lite");
+      setParseTier("advanced");
       registerPreferenceValueSync(document);
 
-      parseMode.value = "precise";
-      parseMode.emit("change");
+      parseTier.value = "standard";
+      parseTier.emit("change");
 
-      assert.equal(getParseMode(), "precise");
+      assert.equal(getParseTier(), "standard");
     } finally {
-      setParseMode("precise");
+      setParseTier("standard");
     }
   });
 
-  it("persists parse source and mode changes from radiogroups immediately", function () {
+  it("persists parse source and tier changes from radiogroups immediately", function () {
     const parseSource = fakePreferenceElement("online", "", "radiogroup");
-    const parseMode = fakePreferenceElement("precise", "", "radiogroup");
+    const parseTier = fakePreferenceElement("standard", "", "radiogroup");
     const document = fakePreferenceDocument({
       "zotero-prefpane-mineruForZotero-parse-source": parseSource,
-      "zotero-prefpane-mineruForZotero-parse-mode": parseMode,
+      "zotero-prefpane-mineruForZotero-parse-tier": parseTier,
     });
 
     try {
       setParseSource("online");
-      setParseMode("precise");
+      setParseTier("standard");
       registerPreferenceValueSync(document);
 
       parseSource.value = "local";
       parseSource.emit("command");
-      parseMode.value = "lite";
-      parseMode.emit("command");
+      parseTier.value = "advanced";
+      parseTier.emit("command");
 
       assert.equal(getParseSource(), "local");
-      assert.equal(getParseMode(), "lite");
+      assert.equal(getParseTier(), "advanced");
     } finally {
       setParseSource("online");
-      setParseMode("precise");
+      setParseTier("standard");
     }
   });
 

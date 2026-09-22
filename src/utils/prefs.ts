@@ -7,10 +7,12 @@ const DEFAULT_LOCAL_API_BASE_URL = "http://127.0.0.1:8000";
 const DEFAULT_LOCAL_API_TIMEOUT_MINUTES = 30;
 const DEFAULT_SYNC_FOLDER = "";
 const DEFAULT_AUTO_PARSE_PAGE_LIMIT = 0;
-const DEFAULT_PDFTK_PATH = "";
 
 export type ParseSource = "online" | "local";
 export type ParseMode = "precise" | "lite";
+export type ParseTier = "flash" | "basic" | "standard" | "advanced";
+
+const PARSE_TIERS: ParseTier[] = ["flash", "basic", "standard", "advanced"];
 
 /**
  * Get preference value.
@@ -59,18 +61,20 @@ export function setParseSource(value: ParseSource) {
 }
 
 /**
- * Read the configured parse mode and fall back to the default value.
+ * Read the configured parse tier and fall back to the default value.
  */
-export function getParseMode(): ParseMode {
-  const value = getPref("parseMode");
-  return value === "lite" ? "lite" : "precise";
+export function getParseTier(): ParseTier {
+  const value = getPref("parseTier");
+  return PARSE_TIERS.includes(value as ParseTier)
+    ? (value as ParseTier)
+    : "standard";
 }
 
 /**
- * Persist the parse mode preference.
+ * Persist the parse tier preference.
  */
-export function setParseMode(value: ParseMode) {
-  return setPref("parseMode", value);
+export function setParseTier(value: ParseTier) {
+  return setPref("parseTier", value);
 }
 
 /**
@@ -192,20 +196,6 @@ export function getAutoParsePageLimit(): number {
 
 export function setAutoParsePageLimit(value: number) {
   return setPref("autoParsePageLimit" as keyof PluginPrefsMap, value);
-}
-
-export function getParallelSplit(): boolean {
-  const value = getPref("parallelSplit" as keyof PluginPrefsMap);
-  return value === true;
-}
-
-export function getPdftkPath(): string {
-  const value = getPref("pdftkPath" as keyof PluginPrefsMap);
-  return typeof value === "string" ? value : DEFAULT_PDFTK_PATH;
-}
-
-export function setPdftkPath(value: string) {
-  return setPref("pdftkPath" as keyof PluginPrefsMap, value);
 }
 
 /**

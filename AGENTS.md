@@ -50,33 +50,31 @@ Parse notices are failure-only. Success states emit no UI notices. Errors (empty
 
 ### Client Selection & API Limits
 
-MinerU parsing is selected by `createMinerUClientForSettings()` from `parseSource` (`online`/`local`) and `parseMode` (`precise`/`lite`).
+MinerU parsing uses the unified V1 client (`mineruClient/v1.ts`) selected by `createMinerUClientForSettings()` from `parseSource` (`online`/`local`) and `parseTier` (`flash`/`basic`/`standard`/`advanced`). The official API (`https://mineru.net/api/v1/*`) and the local server (`http://127.0.0.1:8000/v1/*`) share the same uploads → parse jobs → files flow. The official cloud only exposes `standard`; `parseManager` forces `standard` for online.
 
-MinerU API limits:
+MinerU V1 API limits:
 
-- **Precision Extract API (v4)**: max 200 MB/file, max 600 pages/file, batch up to 200 files.
-- **Agent Lightweight API (v1)**: max 10 MB/file, max 20 pages/file, single file only.
-- `MINERU_API_MAX_CONCURRENT_REQUESTS` limits concurrency (clamped 1-10, default 3). Tests override it via `getMaxConcurrentRequests`.
+- max 200 MB/file, max 1000 pages/file, up to 100 files/job.
+- `files[].page_range` (1-based, e.g. `1-200`) selects pages. Large PDFs are chunked by page range instead of being split locally; `getPdfPageCount()` uses `pdf-lib` only.
+- `MINERU_API_MAX_CONCURRENT_REQUESTS` limits cross-attachment concurrency (clamped 1-10, default 3). Tests override it via `getMaxConcurrentRequests`.
 
-### Online Precise Flow
+### V1 Parsing Flow
 
-Uses the official MinerU v4 batch extraction flow: request `/api/v4/file-urls/batch`, upload PDF to the presigned URL, poll `/api/v4/extract-results/batch/{batch_id}`, then download `full_zip_url` or `md_url`.
+The client (`mineruClient/v1.ts`) runs a single flow for both deployments:
 
-### Online Lite Flow
-
-Uses MinerU Agent API flow (`mineruClient/agentLite.ts`): create task, upload to file URL, poll Agent endpoint, download Markdown. Preserve both wrapped (`data`) and top-level response handling.
-
-### Local Parsing Flow
-
-Uses async local API (`mineruClient/local.ts`): `/health`, submit multipart to `/tasks`, poll `/tasks/{taskID}`, download `/tasks/{taskID}/result`. Results may be ZIP or JSON.
+1. `GET /v1/health` discovers `features.sources` and `features.output_formats`.
+2. If `local` is advertised, submit `source: { type: "local", path }`; otherwise upload via `POST /v1/uploads` → PUT `upload_url` with `upload_headers` → `POST /v1/uploads/{id}/complete` to obtain `file_id`. The client caches the `file_id` per instance so chunked jobs reuse one upload.
+3. `POST /v1/parse/jobs` with `{ files, tier?, output_formats }` returns `job_id`.
+4. `GET /v1/parse/jobs/{job_id}` polls `queued`/`running`/`completed`/`partial`/`failed`/`canceled`.
+5. Results are read from `files[0].output_files` via `GET /v1/files/{file_id}/content`: `markdown`, `middle_json`, and `zip` (for image sidecars).
 
 ### Presigned URL Uploads
 
-Prefer a bare XHR PUT for uploads to presigned URLs so extra headers do not change the signature calculation and trigger `SignatureDoesNotMatch`.
+Send exactly the `upload_method`, `upload_url`, and `upload_headers` returned by `POST /v1/uploads`. Attach the MinerU Bearer token only when the upload URL is same-origin with the API base; never send it to an external presigned host.
 
 ### Result Download & ZIP Handling
 
-When downloading result ZIPs locally, prefer Zotero runtime readers like `nsIZipReader`; do not assume `DecompressionStream` is available. Verify CDN URLs and network response headers when debugging empty/corrupt ZIP downloads.
+Download outputs through `GET /v1/files/{file_id}/content` (the official API answers with a 302 to CDN). Prefer the `middle_json` output for boxes and the `zip` output for image sidecars. New ZIP members are `markdown.md`, `middle_json.json`, `structured_content.json`, and `images/…`; keep legacy `layout.json` / `*_middle.json` fallbacks. When downloading ZIPs locally, prefer Zotero runtime readers like `nsIZipReader`; do not assume `DecompressionStream` is available.
 
 ### Task Persistence, Resume & Reconnect
 
@@ -88,7 +86,12 @@ Transient network failures (status 0 or ≥ 500) reconnect with exponential back
 
 ### Box Normalization
 
-MinerU box data formats vary (`pages[].blocks`, `pdf_info[].para_blocks`, `pdf_info[].layout_dets`, etc.). `boxNormalizer.ts` converts these into stable boxes, preserving detailed types (captions, formulas, references). Check supported schemas when handling missing box errors.
+`boxNormalizer.ts` supports two schemas:
+
+- **Middle JSON 2.0** (`schema: "docvortex.middle"`): pages are `{ page_idx, blocks }` with no page size; top-level `bbox` is already normalized `[0,1]`; text blocks carry `content: InlineSpan[]` (`text`, `equation_inline`, `code_inline`, `hyperlink`); visual containers (`image`/`table`/`chart`/`code`) own one body child plus caption/footnote children. Emit one box per visual container, not per body child.
+- **Legacy** (`pdf_info[].para_blocks`, `pdf_info[].layout_dets`, `pages[].blocks` with pixel `bbox` and `page_size`): divide by page size and keep the existing `lines[].spans[]` handling.
+
+Check supported schemas when handling missing box errors.
 
 ## Storage & Agent Sync
 
@@ -103,9 +106,9 @@ Use `storage.readPreferredMarkdown()` to read precise first, then lite fallback.
 
 The optional sync folder copies results into `[CitationKey] - [Title]` format. Sync happens once per successful parse. `_index.json` maintains the list of synced entries.
 
-### PDF Splitting for Large Files
+### Large PDFs
 
-PDFs exceeding limits are automatically split using `pdf-lib` (pure JS). If `pdf-lib` fails, it falls back to `pdftk` via `Subprocess`. Use `pdftk <file> dump_data` to read page count and `pdftk <file> cat 1-200 output <target>` to split. On macOS/Linux, wrap the fallback in `/bin/sh -c 'pdftk "$@"' sh ...args` to resolve Flatpak PATH issues. On Windows, call `pdftk` directly since `/bin/sh` doesn't exist. Sequential chunk processing is the safe default, with `parallelSplit` as an opt-in preference.
+Large PDFs are chunked by passing `page_range` (for example `201-400`) to `POST /v1/parse/jobs`; the plugin never splits the PDF locally. `getPdfPageCount()` uses `pdf-lib` to decide chunk count. Do not reintroduce `pdftk`, `parallelSplit`, or local chunk files.
 
 ## Cross-Platform Compatibility
 

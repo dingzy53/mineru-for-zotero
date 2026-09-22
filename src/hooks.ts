@@ -20,7 +20,7 @@ import {
   isMinerUGeneratedAttachment,
   parseAttachment,
 } from "./modules/parseManager";
-import { getPdfPageCount } from "./modules/pdfSplitter";
+import { getPdfPageCount } from "./modules/pdfPageCount";
 import { taskStore } from "./modules/taskStore";
 
 let notifierID: string | null = null;

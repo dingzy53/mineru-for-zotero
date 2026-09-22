@@ -18,22 +18,24 @@ interface RawBlock {
   type?: string;
   block_type?: string;
   category_type?: string;
+  index?: number;
   bbox?: number[];
   poly?: number[];
   markdown?: string;
   text?: string;
-  content?: string;
+  content?: unknown;
   html?: string;
   latex?: string;
   formula?: string;
   image_path?: string;
+  img_path?: string;
   blocks?: RawBlock[];
   lines?: Array<{ spans?: RawSpan[] }>;
 }
 
 interface RawSpan {
   type?: string;
-  content?: string;
+  content?: unknown;
   text?: string;
   markdown?: string;
   html?: string;
@@ -43,7 +45,257 @@ interface RawSpan {
   image_path?: string;
 }
 
+/** Middle JSON 2.0 visual containers that own exactly one body child. */
+const V2_VISUAL_CONTAINERS = new Set(["image", "table", "chart", "code"]);
+
+/** Middle JSON 2.0 structural containers whose text children become boxes. */
+const V2_STRUCTURE_CONTAINERS = new Set(["list", "index"]);
+
+/** Middle JSON 2.0 body block types. */
+const V2_BODY_TYPES = new Set([
+  "image_body",
+  "table_body",
+  "chart_body",
+  "code_body",
+  "algorithm_body",
+]);
+
+/** Middle JSON 2.0 annotation block types (caption / footnote). */
+const V2_ANNOTATION_TYPES = new Set([
+  "image_caption",
+  "image_footnote",
+  "table_caption",
+  "table_footnote",
+  "chart_caption",
+  "chart_footnote",
+  "code_caption",
+  "code_footnote",
+]);
+
 export function normalizeMinerUBoxes(result: unknown): NormalizedBox[] {
+  return isDocumentV2(result)
+    ? normalizeDocumentV2(result as { pages?: V2Page[] })
+    : normalizeLegacy(result);
+}
+
+// ── Middle JSON 2.0 (docvortex) ─────────────────────────────────────
+
+interface V2Page {
+  page_idx?: number;
+  blocks?: V2Block[];
+}
+
+interface V2Block extends RawBlock {
+  content?: unknown;
+}
+
+function isDocumentV2(result: unknown): boolean {
+  const schema = String(
+    (result as { schema?: unknown } | null | undefined)?.schema ?? "",
+  ).toLowerCase();
+  return schema.startsWith("docvortex.");
+}
+
+function normalizeDocumentV2(result: { pages?: V2Page[] }): NormalizedBox[] {
+  const boxes: NormalizedBox[] = [];
+  const pages = Array.isArray(result?.pages) ? result.pages : [];
+  for (const page of pages) {
+    const pageNumber = getPageNumber(page as RawPage);
+    const blocks = Array.isArray(page?.blocks) ? page.blocks : [];
+    for (const block of blocks) {
+      walkV2Block(block, pageNumber, boxes);
+    }
+  }
+  return boxes;
+}
+
+function walkV2Block(
+  block: V2Block,
+  pageNumber: number,
+  boxes: NormalizedBox[],
+): void {
+  const raw = rawType(block);
+  if (V2_VISUAL_CONTAINERS.has(raw)) {
+    emitV2VisualContainer(block, normalizeType(raw), pageNumber, boxes);
+    return;
+  }
+  const children = getV2ChildBlocks(block);
+  if (
+    children.length > 0 &&
+    V2_STRUCTURE_CONTAINERS.has(raw) &&
+    children.some((child) => getBlockBbox(child))
+  ) {
+    for (const child of children) {
+      walkV2Block(child, pageNumber, boxes);
+    }
+    return;
+  }
+  emitV2LeafBox(block, normalizeType(raw), pageNumber, boxes);
+}
+
+function rawType(block: V2Block): string {
+  return String(block.type ?? "")
+    .trim()
+    .toLowerCase();
+}
+
+function emitV2VisualContainer(
+  block: V2Block,
+  type: MinerUBoxType,
+  pageNumber: number,
+  boxes: NormalizedBox[],
+): void {
+  const bbox = getBlockBbox(block);
+  if (!bbox) {
+    return;
+  }
+  const children = getV2ChildBlocks(block);
+  const body = children.find((child) => V2_BODY_TYPES.has(rawType(child)));
+  const annotations = children.filter((child) =>
+    V2_ANNOTATION_TYPES.has(rawType(child)),
+  );
+  const annotationText = annotations
+    .map((child) => getV2BlockText(child))
+    .map((text) => text.trim())
+    .filter(Boolean)
+    .join("\n");
+  const bodyText = body ? getV2BlockText(body).trim() : "";
+  const markdown = [bodyText, annotationText].filter(Boolean).join("\n");
+  const imagePath = body ? getBlockImagePath(body) : getBlockImagePath(block);
+  const box: NormalizedBox = {
+    rawIndex: boxes.length,
+    page: pageNumber,
+    type,
+    bbox: normalizedBboxFromV2(bbox),
+    markdown,
+    formula: null,
+  };
+  if (imagePath) {
+    box.imagePath = imagePath;
+  }
+  if (type === "table") {
+    const tableFormats = getV2TableFormats(body, markdown);
+    if (tableFormats) {
+      box.tableFormats = tableFormats;
+    }
+  }
+  boxes.push(box);
+}
+
+function emitV2LeafBox(
+  block: V2Block,
+  type: MinerUBoxType,
+  pageNumber: number,
+  boxes: NormalizedBox[],
+): void {
+  const bbox = getBlockBbox(block);
+  if (!bbox) {
+    return;
+  }
+  const markdown = getV2BlockText(block);
+  const imagePath = getBlockImagePath(block);
+  const box: NormalizedBox = {
+    rawIndex: boxes.length,
+    page: pageNumber,
+    type,
+    bbox: normalizedBboxFromV2(bbox),
+    markdown,
+    formula: isFormulaType(type) ? getV2Formula(block, markdown) : null,
+  };
+  if (imagePath) {
+    box.imagePath = imagePath;
+  }
+  boxes.push(box);
+}
+
+function normalizedBboxFromV2(bbox: [number, number, number, number]) {
+  const [x1, y1, x2, y2] = bbox;
+  return {
+    x: clamp01(x1),
+    y: clamp01(y1),
+    width: clamp01(x2 - x1),
+    height: clamp01(y2 - y1),
+  };
+}
+
+function getV2Formula(block: V2Block, markdown: string): string | null {
+  const content = block.content;
+  const value = typeof content === "string" ? content : markdown;
+  const formula = String(value ?? "").trim();
+  return formula ? formula : null;
+}
+
+function getV2TableFormats(
+  body: V2Block | undefined,
+  markdown: string,
+): NonNullable<NormalizedBox["tableFormats"]> | undefined {
+  const rawContent =
+    typeof body?.content === "string" ? body.content : undefined;
+  return compactTableFormats({
+    latex: normalizeFormatText(body?.latex),
+    markdown: normalizeFormatText(body?.markdown ?? markdown),
+    html: normalizeFormatText(body?.html ?? rawContent),
+    tsv: normalizeFormatText(readRawField(body, "tsv")),
+  });
+}
+
+function getV2ChildBlocks(block: V2Block): V2Block[] {
+  const content = block.content;
+  if (!Array.isArray(content)) {
+    return [];
+  }
+  return content.filter(isBlockElement) as V2Block[];
+}
+
+function isBlockElement(value: unknown): boolean {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return "index" in record || "bbox" in record || "blocks" in record;
+}
+
+function getV2BlockText(block: V2Block): string {
+  const content = block.content;
+  if (typeof content === "string") {
+    return content;
+  }
+  if (Array.isArray(content)) {
+    if (content.some(isBlockElement)) {
+      return getV2ChildBlocks(block)
+        .map((child) => getV2BlockText(child))
+        .filter(Boolean)
+        .join("\n");
+    }
+    return joinInlineSpans(content as RawSpan[]);
+  }
+  return "";
+}
+
+function joinInlineSpans(spans: RawSpan[]): string {
+  return spans
+    .map((span) => {
+      const type = String(span.type ?? "").toLowerCase();
+      const content = span.content ?? span.text ?? "";
+      if (type === "hyperlink" || Array.isArray(content)) {
+        return Array.isArray(content)
+          ? joinInlineSpans(content as RawSpan[])
+          : "";
+      }
+      if (type === "equation_inline") {
+        return `$${String(content)}$`;
+      }
+      if (type === "code_inline") {
+        return `\`${String(content)}\``;
+      }
+      return String(content);
+    })
+    .join("");
+}
+
+// ── Legacy (pdf_info / para_blocks / layout_dets) ───────────────────
+
+function normalizeLegacy(result: unknown): NormalizedBox[] {
   const pages = extractPages(result);
   const boxes: NormalizedBox[] = [];
 
@@ -263,8 +515,8 @@ function compactTableFormats(
   return Object.values(compacted).some(Boolean) ? compacted : undefined;
 }
 
-function readRawField(block: RawBlock, key: string): unknown {
-  return (block as Record<string, unknown>)[key];
+function readRawField(block: RawBlock | undefined, key: string): unknown {
+  return (block as Record<string, unknown> | undefined)?.[key];
 }
 
 function normalizeFormatText(value: unknown): string | undefined {
@@ -273,14 +525,18 @@ function normalizeFormatText(value: unknown): string | undefined {
 }
 
 function getBlockImagePath(block: RawBlock): string | null {
-  const direct = normalizeImagePath(block.image_path);
+  const direct =
+    normalizeImagePath(block.image_path) ??
+    normalizeImagePath((block as { img_path?: string }).img_path);
   if (direct) {
     return direct;
   }
 
   for (const line of block.lines ?? []) {
     for (const span of line.spans ?? []) {
-      const spanPath = normalizeImagePath(span.image_path);
+      const spanPath =
+        normalizeImagePath(span.image_path) ??
+        normalizeImagePath((span as { img_path?: string }).img_path);
       if (spanPath) {
         return spanPath;
       }
@@ -369,11 +625,10 @@ function shouldSeparateSpans(
 }
 
 function isInlineEquationType(type: unknown): boolean {
-  return ["inline_equation", "equation_inline"].includes(
-    String(type ?? "")
-      .trim()
-      .toLowerCase(),
-  );
+  const value = String(type ?? "")
+    .trim()
+    .toLowerCase();
+  return ["equation_inline", "inline_equation"].includes(value);
 }
 
 function joinParagraphLines(lines: string[]): string {

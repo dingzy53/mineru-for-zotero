@@ -9,7 +9,7 @@ declare namespace _ZoteroTypes {
     PluginPrefsMap: {
       "apiKey": string;
       "parseSource": string;
-      "parseMode": string;
+      "parseTier": string;
       "localApiBaseURL": string;
       "localApiTimeoutMinutes": number;
       "apiEnabled": boolean;
@@ -18,8 +18,6 @@ declare namespace _ZoteroTypes {
       "saveImages": boolean;
       "syncFolder": string;
       "autoParsePageLimit": number;
-      "parallelSplit": boolean;
-      "pdftkPath": string;
     };
   }
 }
