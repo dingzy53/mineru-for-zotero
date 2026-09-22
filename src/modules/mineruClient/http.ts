@@ -61,14 +61,20 @@ export function fetchDownloadBinary(request: FetchLike) {
  * 创建失败后自动改用备用下载实现的下载函数。
  */
 export function fallbackDownloadBinary(
-  primary: (url: string) => Promise<Response>,
-  fallback: (url: string) => Promise<Response>,
+  primary: (url: string, headers?: Record<string, string>) => Promise<Response>,
+  fallback: (
+    url: string,
+    headers?: Record<string, string>,
+  ) => Promise<Response>,
 ) {
-  return async (url: string): Promise<Response> => {
+  return async (
+    url: string,
+    headers?: Record<string, string>,
+  ): Promise<Response> => {
     try {
-      return await primary(url);
+      return await primary(url, headers);
     } catch {
-      return fallback(url);
+      return fallback(url, headers);
     }
   };
 }

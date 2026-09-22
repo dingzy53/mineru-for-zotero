@@ -4,6 +4,7 @@ import {
   createV1MinerUClient,
   MinerUTaskError,
 } from "../src/modules/mineruClient";
+import { fallbackDownloadBinary } from "../src/modules/mineruClient/http";
 
 const ONLINE_BASE = "https://mineru.net/api";
 const LOCAL_BASE = "http://127.0.0.1:8000";
@@ -294,6 +295,66 @@ describe("mineruClient (V1)", function () {
       status: "failed",
       error: "boom",
     });
+  });
+
+  it("forwards authorization headers through the download fallback wrapper", async function () {
+    const primaryCalls: Array<{
+      url: string;
+      headers?: Record<string, string>;
+    }> = [];
+    const fallbackCalls: Array<{
+      url: string;
+      headers?: Record<string, string>;
+    }> = [];
+    const downloadBinary = fallbackDownloadBinary(
+      async (url, headers) => {
+        primaryCalls.push({ url, headers });
+        return new Response(new Uint8Array([1]), { status: 200 });
+      },
+      async (url, headers) => {
+        fallbackCalls.push({ url, headers });
+        return new Response(new Uint8Array([2]), { status: 200 });
+      },
+    );
+
+    await downloadBinary("https://mineru.net/api/v1/files/md/content", {
+      Authorization: "Bearer secret",
+    });
+
+    assert.deepEqual(primaryCalls, [
+      {
+        url: "https://mineru.net/api/v1/files/md/content",
+        headers: { Authorization: "Bearer secret" },
+      },
+    ]);
+    assert.lengthOf(fallbackCalls, 0);
+  });
+
+  it("forwards authorization headers to the fallback downloader too", async function () {
+    const fallbackCalls: Array<{
+      url: string;
+      headers?: Record<string, string>;
+    }> = [];
+    const downloadBinary = fallbackDownloadBinary(
+      async () => {
+        throw new Error("primary failed");
+      },
+      async (url, headers) => {
+        fallbackCalls.push({ url, headers });
+        return new Response(new Uint8Array([2]), { status: 200 });
+      },
+    );
+
+    await downloadBinary("https://mineru.net/api/v1/files/md/content", {
+      Authorization: "Bearer secret",
+    });
+
+    assert.deepEqual(fallbackCalls, [
+      {
+        url: "https://mineru.net/api/v1/files/md/content",
+        headers: { Authorization: "Bearer secret" },
+      },
+    ]);
   });
 
   it("downloads markdown, middle json, and zip images for precise results", async function () {
