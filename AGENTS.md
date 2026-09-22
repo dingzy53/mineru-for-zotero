@@ -88,7 +88,7 @@ The local client (`mineruClient/v1.ts`):
 The official client (`mineruClient/v4.ts`):
 
 1. `POST /v4/file-urls/batch` with `{ files: [{ name, page_ranges? }], model_version: "vlm" }` returns `batch_id` and pre-signed `file_urls`.
-2. PUT the PDF bytes to `file_urls[0]` with **no `Content-Type`** and **no MinerU Bearer token** (pre-signed object storage).
+2. PUT the PDF bytes to `file_urls[0]` with **no `Content-Type`** and **no MinerU Bearer token** (pre-signed object storage). The client tries the privileged global `fetch` first, then `Zotero.HTTP`, then sandbox XHR — bare sandbox XHR to the external OSS host can fail at the cross-origin layer with `XMLHttpRequest upload failed`.
 3. `GET /v4/extract-results/batch/{batch_id}` polls `extract_result[0].state` (`waiting-file`/`pending`/`running`/`converting`/`done`/`failed`).
 4. Download `full_zip_url` (CDN, no auth) and read `full.md`, `layout.json`, `images/…` from the zip.
 
