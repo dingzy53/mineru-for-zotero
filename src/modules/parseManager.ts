@@ -39,31 +39,7 @@ import {
   type ParseTier,
 } from "../utils/prefs";
 import { getMinerUStorageRoot } from "./preferenceScript";
-import {
-  PROGRESS_WINDOW_ICON_URI,
-  PROGRESS_WINDOW_LABEL_LINE_HEIGHT_PX,
-  PROGRESS_WINDOW_DETAIL_LEFT_OFFSET_PX,
-  ELEMENT_NODE_TYPE,
-  PROGRESS_WINDOW_PRESENTATION_RETRY_DELAYS_MS,
-  ProgressWindowText,
-  ProgressWindowLineOption,
-  normalizeProgressWindowText,
-  createProgressWindowLineOptions,
-  createProgressWindowDisplayText,
-  createProgressWindowDetailLines,
-  getProgressWindowItemParent,
-  applyProgressWindowItemIcon,
-  applyProgressWindowDescriptionLineLayout,
-  scheduleProgressWindowPresentation,
-  findNextProgressWindowDetailRow,
-  styleProgressWindowDetailRow,
-  createProgressWindowTexts,
-  createParseTaskDetailText,
-  getParseTaskDetailID,
-  isParseTaskNotice,
-  resolveParseNoticeModeLabel,
-  resolveParseNoticeSourceLabel,
-} from "./parseProgress";
+import { createProgressWindowTexts } from "./parseProgress";
 import {
   createTaskResume,
   persistTaskResume,
@@ -1431,31 +1407,7 @@ function basename(path: string): string {
   );
 }
 
-export {
-  PROGRESS_WINDOW_ICON_URI,
-  PROGRESS_WINDOW_LABEL_LINE_HEIGHT_PX,
-  PROGRESS_WINDOW_DETAIL_LEFT_OFFSET_PX,
-  ELEMENT_NODE_TYPE,
-  PROGRESS_WINDOW_PRESENTATION_RETRY_DELAYS_MS,
-  type ProgressWindowText,
-  type ProgressWindowLineOption,
-  normalizeProgressWindowText,
-  createProgressWindowLineOptions,
-  createProgressWindowDisplayText,
-  createProgressWindowDetailLines,
-  getProgressWindowItemParent,
-  applyProgressWindowItemIcon,
-  applyProgressWindowDescriptionLineLayout,
-  scheduleProgressWindowPresentation,
-  findNextProgressWindowDetailRow,
-  styleProgressWindowDetailRow,
-  createProgressWindowTexts,
-  createParseTaskDetailText,
-  getParseTaskDetailID,
-  isParseTaskNotice,
-  resolveParseNoticeModeLabel,
-  resolveParseNoticeSourceLabel,
-} from "./parseProgress";
+export { createProgressWindowTexts } from "./parseProgress";
 export {
   createTaskResume,
   persistTaskResume,

@@ -31,24 +31,6 @@ export function createDefaultRequest(): FetchLike {
 }
 
 /**
- * 选择可提交 FormData 的请求实现，用于本地 multipart API。
- */
-export function createFormDataRequest(): FetchLike {
-  const fallbackFetch = (
-    globalThis as typeof globalThis & {
-      fetch?: typeof fetch;
-    }
-  ).fetch;
-  if (fallbackFetch) {
-    return fallbackFetch.bind(globalThis);
-  }
-  if (typeof XMLHttpRequest !== "undefined") {
-    return xhrFetch;
-  }
-  return createDefaultRequest();
-}
-
-/**
  * 基于 fetch-like 请求器创建裸 PUT 二进制上传函数。
  */
 export function fetchUploadBinary(request: FetchLike) {
@@ -151,27 +133,6 @@ export async function zoteroHttpFetch(
     },
   );
   return xhrToResponse(xhr);
-}
-
-/**
- * 使用 XMLHttpRequest 实现 fetch-like 请求，支持 FormData body。
- */
-export function xhrFetch(
-  input: RequestInfo | URL,
-  init?: RequestInit,
-): Promise<Response> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open(getRequestMethod(input, init), getRequestURL(input));
-    xhr.responseType = "arraybuffer";
-    const headers = normalizeHeaders(init?.headers);
-    for (const [name, value] of Object.entries(headers ?? {})) {
-      xhr.setRequestHeader(name, value);
-    }
-    xhr.onload = () => resolve(xhrToResponse(xhr));
-    xhr.onerror = () => reject(new Error("XMLHttpRequest request failed"));
-    xhr.send(toXHRBody(init?.body));
-  });
 }
 
 /**

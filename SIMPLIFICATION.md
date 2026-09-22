@@ -68,7 +68,7 @@ npx esbuild src/index.ts --bundle --target=firefox115 \
 | ----- | --------------------------------- | -------------------- | ----- | ------------------- |
 | **A** | 移除/替换 `pdf-lib`               | 体积 −约 65%（实测） | 中    | ✅ 已完成（本分支） |
 | **B** | 精简/移除 `zotero-plugin-toolkit` | 体积 −9%（119 KB）   | 低-中 | 否                  |
-| **C** | 删除死代码                        | 维护性；体积少量     | 低    | 否                  |
+| **C** | 删除死代码                        | 维护性；体积少量     | 低    | ✅ 已完成（C1+C2）  |
 | **D** | 功能/结构合并                     | 行数与维护面大幅下降 | 高    | 需产品取舍          |
 | **E** | 依赖与工程卫生                    | 安装体积、清晰度     | 低    | 否                  |
 
@@ -211,9 +211,9 @@ return pages;
 
 ### C. 删除死代码（低风险）
 
-#### C1. `src/modules/parseProgress.ts`（230 行）
+#### C1. `src/modules/parseProgress.ts`（230 行）—— ✅ 已完成
 
-仅 `createProgressWindowTexts()`（`src/modules/parseManager.ts:1179` 使用）与 `normalizeProgressWindowText()` 为运行时活跃；以下函数**只被 `parseManager` 再导出 + 测试引用，生产路径无人调用**：
+仅 `createProgressWindowTexts()`（`src/modules/parseManager.ts:1179` 使用）为运行时活跃；以下函数**只被 `parseManager` 再导出 + 测试引用，生产路径无人调用**：
 
 - `applyProgressWindowItemIcon`
 - `applyProgressWindowDescriptionLineLayout`
@@ -224,29 +224,31 @@ return pages;
 - `createProgressWindowDetailLines`
 - `createProgressWindowDisplayText`
 - `createProgressWindowLineOptions`
-- 关联常量：`PROGRESS_WINDOW_LABEL_LINE_HEIGHT_PX`、`PROGRESS_WINDOW_DETAIL_LEFT_OFFSET_PX`、`ELEMENT_NODE_TYPE`、`PROGRESS_WINDOW_PRESENTATION_RETRY_DELAYS_MS`（如无其它引用）
+- 关联常量：`PROGRESS_WINDOW_LABEL_LINE_HEIGHT_PX`、`PROGRESS_WINDOW_DETAIL_LEFT_OFFSET_PX`、`ELEMENT_NODE_TYPE`、`PROGRESS_WINDOW_PRESENTATION_RETRY_DELAYS_MS`
 
-- [ ] 在 `parseManager.ts` 的 re-export 块中移除对应条目。
-- [ ] 删除 `parseProgress.ts` 中上述函数与常量。
-- [ ] 同步裁剪 `test/parseManager.test.ts` 中对它们的测试。
-- [ ] 保留并验证 `createProgressWindowTexts` 的失败消息文本行为。
+- [x] 在 `parseManager.ts` 的 re-export 块中移除对应条目。
+- [x] 删除 `parseProgress.ts` 中上述函数与常量（文件从 230 行降到 ~85 行，仅导出 `ProgressWindowText` 与 `createProgressWindowTexts`）。
+- [x] 同步裁剪 `test/parseManager.test.ts` 中对它们的测试（删除 210 行，保留 3 个 `createProgressWindowTexts` 用例）。
+- [x] 保留并验证 `createProgressWindowTexts` 的失败消息文本行为。
 
-#### C2. `mineruClient` 未引用导出
+#### C2. `mineruClient` 未引用导出 —— ✅ 已完成
 
-- [ ] `src/modules/mineruClient/http.ts`：`createFormDataRequest`、`xhrFetch`（仅文件内定义，无外部引用）。
-- [ ] `src/modules/mineruClient/path.ts`：`safeURL`。
-- [ ] `src/modules/mineruClient/zip.ts`：`textMapToZipEntries`。
-- [ ] `src/modules/mineruClient/index.ts`：核对 barrel 中是否有多余 re-export（`downloadPlainFileBytes`、`createV1MinerUClient` 等）。
+- [x] `src/modules/mineruClient/http.ts`：`createFormDataRequest`、`xhrFetch`。
+- [x] `src/modules/mineruClient/path.ts`：`safeURL`。
+- [x] `src/modules/mineruClient/zip.ts`：`textMapToZipEntries`。
+- [ ] `src/modules/mineruClient/index.ts`：barrel 中 `downloadPlainFileBytes` 等 re-export 未被消费，但属低价值清理，本轮未动（保留以避免无谓风险）。
 
 > 注意：`fallbackDownloadBinary`、`fetchUploadBinary`、`fetchDownloadBinary`、`xhrUploadBinary`、`xhrDownloadBinary` **仍被 `v1.ts` 使用**，不可删。
 
-#### C3. Windows-only curl 下载路径
+#### C3. Windows-only curl 下载路径（本轮未做）
 
 - [ ] 评估 `src/modules/mineruClient/download.ts` 中 `downloadWithCurl`（:60）、`downloadWithNsIProcess`（:135）、`findCurlPath`（:180）约 100 行的必要性。当前非 Windows 走 `Zotero.File.download`，curl 仅是 Windows 优化；若可接受 `Zotero.File.download`，可整体移除 `Subprocess`/`nsIProcess` 复杂度。
 
-#### C4. 遗留迁移
+#### C4. 遗留迁移（本轮未做）
 
 - [ ] `src/modules/parseResume.ts:120` `cleanupLegacyChunkCacheFiles`（`src/modules/parseManager.ts:551` 调用）：确认是否还需保留旧 chunk 缓存迁移，不需要则可删。
+
+**C 实施结果**：源码/测试共 **+50 / −537 行**；`npm run build`、`tsc`（src + test）、`prettier`、`eslint` 均通过；**326 个测试全部通过**（`ZOTERO_PLUGIN_ZOTERO_BIN_PATH=<zotero> npm test --exit-on-finish`）。bundle 体积基本不变（−90 B，死代码此前已被 esbuild tree-shake），收益主要是可维护性。
 
 ---
 

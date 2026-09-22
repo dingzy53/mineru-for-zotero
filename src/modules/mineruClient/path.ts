@@ -43,21 +43,6 @@ function decodeFileURLPath(path: string): string {
 }
 
 /**
- * 返回去除查询参数的安全 URL 摘要，避免日志暴露签名信息。
- */
-export function safeURL(url: string | undefined): string {
-  if (!url) {
-    return "<missing-url>";
-  }
-  try {
-    const parsed = new URL(url);
-    return `${parsed.protocol}//${parsed.host}${parsed.pathname}`;
-  } catch {
-    return "<invalid-url>";
-  }
-}
-
-/**
  * 生成响应字节摘要，用于诊断空响应或 ZIP 解析失败。
  */
 export function summarizeBytes(bytes: Uint8Array): string {

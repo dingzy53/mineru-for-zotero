@@ -199,19 +199,6 @@ export async function inflateRaw(
 }
 
 /**
- * 把文本映射转换为 ZIP 条目映射，供 Markdown 回退结果复用。
- */
-export function textMapToZipEntries(entries: Map<string, string>): ZipEntries {
-  const encoder = new TextEncoder();
-  return new Map(
-    [...entries].map(([name, value]) => [
-      name,
-      { name, bytes: encoder.encode(value) },
-    ]),
-  );
-}
-
-/**
  * 使用 UTF-8 解码 ZIP 条目字节。
  */
 export function decodeText(bytes: Uint8Array): string {
