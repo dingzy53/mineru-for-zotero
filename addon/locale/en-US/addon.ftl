@@ -1,22 +1,6 @@
-startup-begin = Addon is loading
-startup-finish = Addon is ready
-menuitem-label = MinerU for Zotero: Item Menu
-menupopup-label = MinerU for Zotero: Popup Menu
-mineru-for-zotero-parse-pdf-menuitem =
-    .label = Parse PDF with MinerU
-mineru-for-zotero-task-manager-menuitem =
-    .label = MinerU Task Manager
-menuitem-filemenulabel = MinerU for Zotero: File Menu
 item-tree-column-mineru-parse = MinerU Parse
 item-tree-column-mineru-parse-precise = Precise
 item-tree-column-mineru-parse-lite = Lite
 item-tree-column-mineru-parse-running = Running
 item-tree-column-mineru-parse-unparsed = Unparsed
 prefs-title = MinerU for Zotero
-prefs-table-title = Title
-prefs-table-detail = Detail
-tabpanel-lib-tab-label = Library Tab
-tabpanel-reader-tab-label = Reader Tab
-
-mineru-for-zotero-results-manager-menuitem =
-    .label = MinerU Parsed Results Manager
