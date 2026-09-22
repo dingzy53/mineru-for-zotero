@@ -166,6 +166,14 @@ return pages;
 
 **风险与回退**：内置 pdf.js 路径/worker 行为随 Zotero 版本变化；保持 `-1` 兜底即可回到「整篇解析」安全路径。若某版本完全不可用，可临时把 `pdf-lib` 作为动态 fallback 或改用方案 2b。
 
+**实施结果（`spike/zotero-pdfjs-page-count` 分支实测）**
+
+- JS bundle：`1,324,785` → `465,127` bytes（**−859,658 B，约 −65%**）。
+- XPI：`344 KB` → `132 KB`（约 −62%）。
+- `pdf-lib` 已从 `package.json`、`package-lock.json` 及 bundle 中完全移除（bundle 内 `pdf-lib`/`PDFDocument` 引用均为 0）。
+- 已通过：`tsc --noEmit`、`tsc -p test/tsconfig.json --noEmit`、`prettier`、`eslint`、`npm run build`。
+- 待插件内最终确认：实际解析时日志出现 `source=pdfjs`；>200 页 PDF 正常按 `page_range` 分块。
+
 ---
 
 ### B. 精简或移除 `zotero-plugin-toolkit`

@@ -1,10 +1,9 @@
-import { PDFDocument } from "pdf-lib";
 import { toNativePath } from "./mineruClient/path";
 
 /**
  * PDF 页数探测。
  *
- * 生产环境走 Zotero 内置的 pdf.js（`resource://zotero/reader/pdf/build/pdf.mjs`），
+ * 使用 Zotero 内置的 pdf.js（`resource://zotero/reader/pdf/build/pdf.mjs`），
  * 避免为了数页数而把整个 `pdf-lib` 打进插件。之所以必须拿到页数：官方 MinerU
  * server 单文件上限 200 页（`CHUNK_PAGE_LIMIT`），超过需要按 `page_range` 分块。
  *
@@ -13,10 +12,11 @@ import { toNativePath } from "./mineruClient/path";
  * `Map.prototype.getOrInsertComputed = …` 的 polyfill，直接抛
  * `TypeError: Map.prototype is not extensible`。Zotero 的 reader 用的是
  * `<script type="module">` 在普通 realm 里加载 pdf.js；这里等价地在主窗口
- * realm 里用动态 `import()` 加载。
+ * realm 里用动态 `import()` 加载，并通过 `Zotero.getMainWindow().eval(...)`
+ * 让代码在该 realm 执行（与 Tools → Developer → Run JavaScript 机制一致）。
  *
- * Spike 阶段：内置 pdf.js 失败时仍回退 `pdf-lib`，并记录实际使用的路径，
- * 待运行时验证通过后再删除 `pdf-lib`。
+ * 计数代码把文件路径作为字符串传入，在窗口 realm 内用 `IOUtils.read()` 读取，
+ * 避免跨 realm 传递 `Uint8Array`。任何失败都返回 `-1`，调用方会退化为整篇解析。
  */
 
 const PDFJS_MODULE_URL = "resource://zotero/reader/pdf/build/pdf.mjs";
@@ -27,15 +27,7 @@ type EvalWindow = {
   eval: (source: string) => unknown;
 };
 
-/**
- * 使用 Zotero 内置 pdf.js 读取页数；失败返回 `-1`。
- *
- * 计数代码在主窗口 realm 中执行：那里 `Map.prototype` 可扩展，且 `IOUtils`
- * 可直接读取本地文件，避免跨 realm 传递 `Uint8Array`。
- */
-export async function getPdfPageCountWithZoteroPdfJs(
-  filePath: string,
-): Promise<number> {
+export async function getPdfPageCount(filePath: string): Promise<number> {
   const mainWindow = Zotero.getMainWindow?.() as unknown as
     | EvalWindow
     | undefined;
@@ -57,31 +49,13 @@ export async function getPdfPageCountWithZoteroPdfJs(
 
   try {
     const result = (await mainWindow.eval(source)) as unknown;
-    return typeof result === "number" && result > 0 ? result : -1;
+    if (typeof result === "number" && result > 0) {
+      ztoolkit.log(`MinerU page count source=pdfjs pages=${result}`);
+      return result;
+    }
+    return -1;
   } catch (error) {
     ztoolkit.log("Failed to get pdf page count via Zotero pdf.js", error);
-    return -1;
-  }
-}
-
-export async function getPdfPageCount(filePath: string): Promise<number> {
-  const viaPdfJs = await getPdfPageCountWithZoteroPdfJs(filePath);
-  if (viaPdfJs > 0) {
-    ztoolkit.log(`MinerU page count source=pdfjs pages=${viaPdfJs}`);
-    return viaPdfJs;
-  }
-
-  // Spike fallback: remove once the built-in pdf.js path is verified.
-  try {
-    const bytes = await IOUtils.read(toNativePath(filePath));
-    const pdfDoc = await PDFDocument.load(bytes, {
-      ignoreEncryption: true,
-    });
-    const count = pdfDoc.getPageCount();
-    ztoolkit.log(`MinerU page count source=pdf-lib pages=${count}`);
-    return count;
-  } catch (e) {
-    ztoolkit.log("Failed to get pdf page count via pdf-lib", e);
     return -1;
   }
 }
