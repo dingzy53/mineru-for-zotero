@@ -176,38 +176,61 @@ return pages;
 
 ---
 
-### B. 精简或移除 `zotero-plugin-toolkit`
+### B. 精简或移除 `zotero-plugin-toolkit` —— 选 B2（彻底移除）
 
-**实际使用点（全量）**
+#### B.0 实测结论：B1（只引所需模块）无效
 
-| API                                                     | 位置                                                               |
-| ------------------------------------------------------- | ------------------------------------------------------------------ |
-| `ztoolkit.log`                                          | 33 处（`taskStore.ts`、`agentSync.ts`、`parseManager.ts` 等）      |
-| `ztoolkit.Clipboard()`                                  | `src/modules/readerOverlay/copy.ts:46`、`:70`                      |
-| `ztoolkit.getGlobal("Localization")`                    | `src/utils/locale.ts:12`                                           |
-| `ztoolkit.unregisterAll()`                              | `src/hooks.ts:140`、`:160`                                         |
-| `ztoolkit.ProgressWindow.setIconURI`                    | `src/utils/ztoolkit.ts:28`（**无 ProgressWindow 实例，疑似遗留**） |
-| 类型 `ColumnOptions` / `DialogHelper`                   | `src/addon.ts:2`（仅类型）                                         |
-| `BasicTool` / `ZoteroToolkit` / `UITool` / `unregister` | `src/index.ts:1`、`src/utils/ztoolkit.ts`                          |
+esbuild 对 toolkit **无法 tree-shake**（单文件 rolldown 产物 + 无 `sideEffects:false`）：分别只 `import { BasicTool }`、`{ BasicTool, ClipboardHelper }` 与整包 `ZoteroToolkit`，打包体积分别为 **122,003 / 122,107 / 122,005 B**——几乎一样，`UITool`/`ReaderTool`/`FieldHookManager` 等均仍在产物里。
 
-**问题**
+⇒ 只改 import 省不到体积；要拿收益只能**删除依赖**。实测 toolkit 增量 **121,766 B**，占当前 465 KB bundle 的 **≈26%**；移除后 bundle ≈ **343 KB**。
 
-- 当前 `new ZoteroToolkit()` 引入**整包**；`src/utils/ztoolkit.ts:34-46` 的 `MyToolkit` 类**从未被实例化**（死代码），却使其 `BasicTool`/`UITool`/`unregister` import 被保留。
+#### B.1 `new ZoteroToolkit()` 到底做了什么（源码核实）
 
-**实施清单**
+`ZoteroToolkit extends BasicTool`，构造时**饿汉式**实例化 15 个 tool：`UI, Reader, ExtraField, FieldHooks, Keyboard, Prompt, Menu, Clipboard, FilePicker, Patch, ProgressWindow, VirtualizedTable, Dialog, LargePrefObject, Guide`。其中：
 
-- [ ] 删除 `src/utils/ztoolkit.ts` 中的 `MyToolkit` 类及其独占 import。
-- [ ] 只引入实际使用的 tool 子模块（或改用 `MyToolkit` 白名单模式），替换 `new ZoteroToolkit()`。
-- [ ] 评估完全移除 toolkit：
-  - `log` → `Zotero.debug` 封装（`src/` 中禁止 `console.*`，遵循 AGENTS 约定）；
-  - `Clipboard` → `Zotero.Utilities.Internal.copyTextToClipboard` 等；
-  - `getGlobal` → 直接访问 `globalThis`/`Localization`；
-  - `unregisterAll` → 确认是否真有注册项（当前 `ztoolkit.UI` 仅出现在 `basicOptions`）。
-- [ ] 若 `ProgressWindow.setIconURI` 确认为遗留，连同调用一起删除。
-- [ ] 回归验证：剪贴板复制、locale 初始化、启动/卸载钩子、日志输出。
-- [ ] `npm run lint:check` + `npm test`。
+- `BasicTool` 构造时即 `import("resource://gre/modules/Console.sys.mjs")` 建一个 `ConsoleAPI`（try/catch）；
+- **`KeyboardManager` 构造有全局副作用**：`_ensureAutoUnregisterAll()`（注册 `Zotero.Plugins` observer）、`addListenerCallback(onMainWindowLoad/Unload)`（`Services.wm.addListener`）、`initReaderKeyboardListener()`（`Zotero.Reader.registerEventListener("renderToolbar", …)`，并给每个 main/reader 窗口挂 `keydown`/`keyup`）。**插件根本不用键盘快捷键**，这些监听是纯开销。
+- `log()` 同时写 console（`groupCollapsed`+`trace`）与 `Zotero.debug`；`getGlobal()` 查 `globalThis` 否则转主窗口；`unregisterAll()` 遍历 tool 调各自 `unregisterAll`。
 
----
+#### B.2 插件实际只用到 5 个能力
+
+| API                                                     | 位置                                                          | 本地替代                                                                                           |
+| ------------------------------------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `ztoolkit.log`（33 处）                                 | 各模块诊断                                                    | 本地 `log()` → `Zotero.debug`（dev 可择机加 console）                                              |
+| `ztoolkit.Clipboard()`                                  | `readerOverlay/copy.ts:46`、`:70`                             | 文本→`Zotero.Utilities.Internal.copyTextToClipboard`；图片→复刻 `nsITransferable`+`imgITools` 逻辑 |
+| `ztoolkit.getGlobal("Localization")`                    | `utils/locale.ts:12`（`Localization` 已在则不走）             | `globalThis.Localization`                                                                          |
+| `ztoolkit.unregisterAll()`                              | `hooks.ts:140`、`:160`                                        | 删除（插件未通过 toolkit 注册任何东西，当前已是 no-op）                                            |
+| `ztoolkit.ProgressWindow.setIconURI`                    | `utils/ztoolkit.ts`（**无任何 ProgressWindow 实例，纯遗留**） | 删除                                                                                               |
+| 类型 `ColumnOptions` / `DialogHelper`                   | `addon.ts`（均为**死字段** `data.prefs`/`data.dialog`）       | 直接删掉这两个未使用字段                                                                           |
+| `BasicTool` / `ZoteroToolkit` / `UITool` / `unregister` | `index.ts`、`utils/ztoolkit.ts`                               | 本地 `getGlobal` + 自建 mini-toolkit                                                               |
+
+#### B.3 关键设计：保留 `ztoolkit` 全局名，最小化改动
+
+**不改那 33 处 `ztoolkit.log` 调用点，也不改测试。** 只需让 `src/utils/ztoolkit.ts` 返回一个**同名同形**的本地对象（`log`/`getGlobal`/`Clipboard`/`unregisterAll`），`index.ts` 继续 `defineGlobal("ztoolkit", …)`。这样：
+
+- 所有调用点不变；`typings/global.d.ts` 的 `ZToolkit = ReturnType<typeof createZToolkit>` 自动跟着变。
+- `test/readerOverlay.test.ts` 等大量把 `globalThis.ztoolkit = { Clipboard | log }` 当作测试缝的用法保持不变（它们替换的是全局对象）。
+
+#### B.4 潜在影响 / 风险
+
+- **体积**：−≈122 KB（bundle 465→≈343 KB，−26%；相对最初 1.32 MB 累计 −74%）。
+- **行为**：删除 `KeyboardManager` 的全局/reader 键盘监听与 `renderToolbar` 监听——插件本就不用，属清理。
+- **日志**：本地 `log` 计划只写 `Zotero.debug`（符合 AGENTS「避免 `console.*`」）。dev 下会失去 toolkit 的 console group/trace；如需可仅 dev 保留 console。**测试缝不变**。
+- **剪贴板**：文本改用 Zotero 官方 API（更稳）；**图片需要精确复刻** toolkit 的 `imgITools.decodeImageFromArrayBuffer` + `application/x-moz-nativeimage` + `nsITransferable`（Zotero 9/10 都 ≥102，只需该分支）。这是本项**唯一中等风险点**，需手工验证文本框选、box 文本、box 图片三种复制。
+- **启动**：不再构造 15 个 tool、不再 import `Console.sys.mjs`，启动更轻。
+- **类型**：移除 `ColumnOptions`/`DialogHelper` 后，`addon.data.prefs`/`data.dialog` 需一并删除；`hooks.ts` 的 `addon.data.dialog?.window?.close()` 是死代码，可删。
+
+#### B.5 实施清单（B2）
+
+- [ ] 重写 `src/utils/ztoolkit.ts`：本地 `createZToolkit()` 返回 `{ log, getGlobal, Clipboard, unregisterAll }`；`Clipboard` 复刻 toolkit 的 text/image 逻辑。
+- [ ] `src/index.ts`：去掉 `BasicTool` import，改用本地 `getGlobal`。
+- [ ] `src/addon.ts`：去掉 `ColumnOptions`/`DialogHelper` import 及 `prefs`/`dialog` 字段。
+- [ ] `src/hooks.ts`：删除 `addon.data.dialog?.window?.close()`。
+- [ ] `src/utils/locale.ts`：改用 `globalThis.Localization`（保留 `typeof Localization` 回退）。
+- [ ] `package.json`：`npm uninstall zotero-plugin-toolkit`。
+- [ ] 回归：`npm run build`（对比体积）、`tsc`（src+test）、`lint:check`、`npm test --exit-on-finish`；手工验证三种复制与 reader 诊断日志。
+
+**风险与回退**：唯一真实风险是图片剪贴板复刻；若回归可将该函数回退为原 toolkit 调用（保留依赖）或改为“图片复制失败”降级提示。
 
 ### C. 删除死代码（低风险）
 
