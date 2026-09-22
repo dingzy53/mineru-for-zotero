@@ -25,7 +25,6 @@ export interface ParsedResultEntry {
   attachmentDir?: string;
   hasImages?: boolean;
   hasBoxes?: boolean;
-  hasLayoutPdf?: boolean;
 }
 
 export interface ResultsManagerDependencies {
@@ -127,7 +126,6 @@ export async function scanAllResults(
     }
 
     const attachmentDir = deps.storage.getAttachmentDir?.(ref) || "";
-    const hasLayoutPdf = Boolean(await deps.storage.hasLayoutPdf?.(ref));
 
     entries.push({
       libraryID,
@@ -151,7 +149,6 @@ export async function scanAllResults(
       attachmentDir,
       hasImages: status.preciseReady,
       hasBoxes: status.preciseReady,
-      hasLayoutPdf,
     });
   }
 

@@ -57,8 +57,6 @@ export type FluentMessageId =
   | 'pref-api-source-local'
   | 'pref-api-source-online'
   | 'pref-api-source-title'
-  | 'pref-attach-layout-pdf'
-  | 'pref-attach-layout-pdf-help'
   | 'pref-auto-parse-page-limit'
   | 'pref-data-folder-path'
   | 'pref-data-folder-title'

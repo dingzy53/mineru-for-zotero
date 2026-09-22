@@ -371,7 +371,6 @@
       <select id="contentFilter">
         <option value="all">All Content</option>
         <option value="images">Has Images</option>
-        <option value="layout">Has Layout PDF</option>
         <option value="orphans">Orphans Only</option>
       </select>
       <select id="sortOrder">
@@ -549,7 +548,6 @@
             if (mode === "lite" && !e.hasLite) return false;
 
             if (content === "images" && !e.hasImages) return false;
-            if (content === "layout" && !e.hasLayoutPdf) return false;
             if (content === "orphans" && !e.isOrphan) return false;
 
             return true;
@@ -655,12 +653,6 @@
                 var b = document.createElement("span");
                 b.className = "badge";
                 b.textContent = "Boxes";
-                badges.appendChild(b);
-              }
-              if (entry.hasLayoutPdf) {
-                var b = document.createElement("span");
-                b.className = "badge";
-                b.textContent = "Layout PDF";
                 badges.appendChild(b);
               }
               if (entry.isOrphan) {

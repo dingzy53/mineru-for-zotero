@@ -1069,7 +1069,7 @@ describe("mineruClient", function () {
     ]);
   });
 
-  it("extracts nested images and layout pdf from local mineru zip", async function () {
+  it("extracts nested images from local mineru zip", async function () {
     const client = createMinerUClientForSettings({
       apiKey: "secret-token",
       source: "local",
@@ -1082,7 +1082,6 @@ describe("mineruClient", function () {
             "hybrid_auto/doc_middle.json": JSON.stringify({
               pdf_info: [{ para_blocks: [{ bbox: [0, 0, 10, 10] }] }],
             }),
-            "hybrid_auto/doc_layout.pdf": new Uint8Array([37, 80, 68, 70]),
             "hybrid_auto/images/sub.png": new Uint8Array([137, 80, 78, 71]),
           }),
           {
@@ -1102,7 +1101,6 @@ describe("mineruClient", function () {
     assert.deepEqual(result.images, [
       { path: "sub.png", bytes: new Uint8Array([137, 80, 78, 71]) },
     ]);
-    assert.deepEqual(result.layoutPdf, new Uint8Array([37, 80, 68, 70]));
   });
 
   it("prefers the zip json that contains page box data", async function () {

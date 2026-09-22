@@ -48,23 +48,6 @@ export function readImagesFromZip(
 }
 
 /**
- * 从 MinerU 结果 ZIP 中提取包含的 layout.pdf (如果存在)。
- */
-export function readLayoutPdfFromZip(zip: ZipEntries): Uint8Array | null {
-  for (const [name, entry] of zip) {
-    const normalized = name.replace(/\\/g, "/");
-    if (
-      normalized.endsWith("_layout.pdf") ||
-      normalized.endsWith("/layout.pdf") ||
-      normalized === "layout.pdf"
-    ) {
-      return entry.bytes;
-    }
-  }
-  return null;
-}
-
-/**
  * 把 ZIP 内图片条目转换为存储使用的相对图片路径。
  */
 export function getZipImagePath(name: string): string | null {

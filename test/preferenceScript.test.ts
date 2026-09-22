@@ -14,7 +14,6 @@ import {
   getParseMode,
   getParseSource,
   getSaveImages,
-  getAttachLayoutPdf,
   setMarkdownApiEnabled,
   setMarkdownApiRequireToken,
   setMarkdownApiToken,
@@ -23,7 +22,6 @@ import {
   setParseMode,
   setParseSource,
   setSaveImages,
-  setAttachLayoutPdf,
 } from "../src/utils/prefs";
 
 describe("preferenceScript", function () {
@@ -100,30 +98,6 @@ describe("preferenceScript", function () {
       assert.isFalse(getSaveImages());
     } finally {
       setSaveImages(true);
-    }
-  });
-
-  it("defaults attach-layout-pdf to false and roundtrips changes", function () {
-    const attachLayoutPdf = fakePreferenceElement("false", "", "checkbox");
-    const document = fakePreferenceDocument({
-      "zotero-prefpane-mineruForZotero-attach-layout-pdf": attachLayoutPdf,
-    });
-
-    try {
-      setAttachLayoutPdf(false);
-      assert.isFalse(getAttachLayoutPdf());
-
-      registerPreferenceValueSync(document);
-      assert.isFalse(attachLayoutPdf.checked);
-
-      attachLayoutPdf.checked = true;
-      attachLayoutPdf.emit("command");
-      assert.isTrue(getAttachLayoutPdf());
-
-      setAttachLayoutPdf(false);
-      assert.isFalse(getAttachLayoutPdf());
-    } finally {
-      setAttachLayoutPdf(false);
     }
   });
 

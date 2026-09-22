@@ -6,7 +6,6 @@ export interface MinerUChunkResult {
   rawResult?: unknown;
   markdown: string;
   images?: MinerUImageFile[];
-  layoutPdf?: Uint8Array;
   /** Page count recorded per chunk, used to offset merged box pages. */
   _chunkPageCount?: number;
 }
@@ -19,7 +18,6 @@ export type MergedParseResult =
       rawResult: unknown;
       markdown: string;
       images: MinerUImageFile[];
-      layoutPdf?: Uint8Array;
       _mergedBoxes: NormalizedBox[];
     };
 
@@ -49,7 +47,6 @@ export function mergeChunkResults(
       rawResult: single.rawResult,
       markdown: single.markdown,
       images: single.images || [],
-      layoutPdf: single.layoutPdf,
       _mergedBoxes: normalizeMinerUBoxes(single.rawResult),
     };
   }
