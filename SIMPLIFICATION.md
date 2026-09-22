@@ -139,9 +139,30 @@ npx esbuild src/index.ts --bundle --target=firefox115 \
 
 **验证**
 
-- [ ] `npm run build`：XPI / JS 体积应减少约 800 KB（对照第 0 节基线）。
+已核实环境：Zotero **10.0.1**（Gecko 140），`app/omni.ja` 内确实存在 `resource/reader/pdf/build/pdf.mjs` 与 `pdf.worker.mjs`，故 `resource://zotero/reader/pdf/build/pdf.mjs` 路径在当前目标版本有效（`application.ini` 的 `Version=10.0.1`）。
+
+最快的手动验证：Zotero → Tools → Developer → Run JavaScript（该窗口包 async，可直接 `await`/`return`）：
+
+```js
+const pdfjs = ChromeUtils.importESModule(
+  "resource://zotero/reader/pdf/build/pdf.mjs",
+);
+pdfjs.GlobalWorkerOptions.workerSrc =
+  "resource://zotero/reader/pdf/build/pdf.worker.mjs";
+const bytes = await IOUtils.read("/path/to/sample.pdf");
+const task = pdfjs.getDocument({ data: bytes, isEvalSupported: false });
+const doc = await task.promise;
+const pages = doc.numPages;
+await task.destroy();
+return pages; // 应与 pdf-lib / pdfinfo 的页数一致
+```
+
+回归验证：
+
+- [ ] `npm run build`：XPI / JS 体积应减少约 800 KB（移除 pdf-lib 后对照第 0 节基线；spike 阶段仍保留 pdf-lib，体积不变）。
 - [ ] `npm test`：`parseManager.test.ts` 注入 `getPdfPageCount`，确认 `-1` 与正常页数两条路径均覆盖。
 - [ ] 手工验证：<=200 页整篇、>200 页分块、加密/损坏 PDF 降级、Zotero 重启后续传。
+- [ ] 看日志区分路径：`MinerU page count source=pdfjs pages=N` 表示内置 pdf.js 生效；出现 `source=pdf-lib` 或 `Failed to get pdf page count via Zotero pdf.js` 则说明 pdf.js 路径在该环境失败（需转方案 2b）。
 
 **风险与回退**：内置 pdf.js 路径/worker 行为随 Zotero 版本变化；保持 `-1` 兜底即可回到「整篇解析」安全路径。若某版本完全不可用，可临时把 `pdf-lib` 作为动态 fallback 或改用方案 2b。
 
