@@ -8,7 +8,7 @@ Core feature modules currently include:
 
 - `mineruClient/` — the unified MinerU V1 client (cloud and local) plus `createMinerUClientForSettings()` selection from `parseSource`/`parseTier`.
 - `parseManager.ts` — item/attachment parsing orchestration (dependency-injected); chunking, merging, resume, and the user-facing failure notices all live here. There is **no** `parseNotice.ts`.
-- `parseMerge.ts`, `parseNetwork.ts`, `parseProgress.ts`, `parseResume.ts`, `pdfPageCount.ts` — chunk merging, reconnecting fetch/backoff, progress reporting, resume caches, and `pdf-lib` page counting.
+- `parseMerge.ts`, `parseNetwork.ts`, `parseProgress.ts`, `parseResume.ts`, `pdfPageCount.ts` — chunk merging, reconnecting fetch/backoff, progress reporting, resume caches, and Zotero bundled pdf.js page counting.
 - `taskStore.ts`, `resultsManager.ts`, `storage.ts`, `storageFs.ts`, `domain.ts` — task persistence and its window, the parsed-results manager UI, per-attachment result storage, the `IOUtils`/`OS.File` filesystem adapter, and shared parse/storage/overlay domain types.
 - `boxNormalizer.ts`, `copyFormatter.ts` — MinerU schema normalization into stable boxes and copy output.
 - `readerToolbar/`, `readerOverlay/` — PDF Reader toolbar UI and box rendering/selection behavior.
@@ -63,8 +63,9 @@ MinerU parsing uses the unified V1 client (`mineruClient/v1.ts`) selected by `cr
 
 MinerU V1 API limits:
 
-- max 200 MB/file, max 1000 pages/file, up to 100 files/job.
-- `files[].page_range` (1-based, e.g. `1-200`) selects pages. Large PDFs are chunked by page range instead of being split locally; `getPdfPageCount()` uses `pdf-lib` only.
+- max 200 MB/file and up to 100 files/job. MinerU NEXT docs list a 1000 pages/file cap, but the production official server caps a file at 200 pages — hence the plugin's `CHUNK_PAGE_LIMIT = 200` and page-range chunking.
+- `files[].page_range` (1-based, e.g. `1-200`) selects pages. Large PDFs are chunked by page range instead of being split locally; `getPdfPageCount()` uses Zotero's bundled pdf.js only.
+- `getPdfPageCount()` must load pdf.js in a **window realm**: it runs `Zotero.getMainWindow().eval(...)` with a dynamic `import("resource://zotero/reader/pdf/build/pdf.mjs")`. Do **not** use `ChromeUtils.importESModule` — Zotero 10's system module realm has frozen built-ins and pdf.js's top-level `Map.prototype.getOrInsertComputed` polyfill throws `TypeError: Map.prototype is not extensible`. Zotero's own reader loads pdf.js the same way (module script in a content realm).
 - `MINERU_API_MAX_CONCURRENT_REQUESTS` limits cross-attachment concurrency (clamped 1-10, default 3). Tests override it via `getMaxConcurrentRequests`.
 
 ### V1 Parsing Flow
@@ -117,7 +118,7 @@ The optional sync folder copies results into `[CitationKey] - [Title]` format. S
 
 ### Large PDFs
 
-Large PDFs are chunked by passing `page_range` (for example `201-400`) to `POST /v1/parse/jobs`; the plugin never splits the PDF locally. `getPdfPageCount()` uses `pdf-lib` to decide chunk count. Do not reintroduce `pdftk`, `parallelSplit`, or local chunk files.
+Large PDFs are chunked by passing `page_range` (for example `201-400`) to `POST /v1/parse/jobs`; the plugin never splits the PDF locally. `getPdfPageCount()` (Zotero bundled pdf.js) decides the chunk count. Do not reintroduce `pdftk`, `parallelSplit`, or local chunk files.
 
 ## Cross-Platform Compatibility
 
@@ -159,7 +160,7 @@ Access plugin via `(Zotero as any).MinerUForZotero`.
 
 ### Logging
 
-For diagnostics, emit to `Zotero.debug` (see `readerOverlay/diagnostics.ts` and `readerToolbar/diagnostics.ts`, both guarded because `Zotero.debug` is absent in isolated test runtimes) or `ztoolkit.log`. Avoid `console.*` in `src/`.
+For diagnostics, emit to `Zotero.debug` (see `readerOverlay/diagnostics.ts` and `readerToolbar/diagnostics.ts`, both guarded because `Zotero.debug` is absent in isolated test runtimes) or `ztoolkit.log`. `ztoolkit` is a local mini-toolkit in `src/utils/ztoolkit.ts` (log/getGlobal/Clipboard/unregisterAll); the third-party `zotero-plugin-toolkit` dependency was removed and should not be reintroduced (it is not tree-shakeable and eagerly registers unused global listeners). Avoid `console.*` in `src/`.
 
 ### Preferences & Fluent Locale Files
 
