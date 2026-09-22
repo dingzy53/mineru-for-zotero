@@ -18,22 +18,22 @@ npx esbuild src/index.ts --bundle --target=firefox115 \
 
 关键基线：
 
-| 指标 | 数值 |
-|---|---|
-| `node_modules` 体积 / 包数 | 231 MB / 232 |
-| XPI 体积 | 344 KB |
-| 打包后 JS（未压缩） | 1.31 MB（`.scaffold/build/addon/content/scripts/mineruForZotero.js`） |
-| `src/` 总行数 | 15,911 |
-| `test/` 总行数 | 13,346 |
+| 指标                       | 数值                                                                  |
+| -------------------------- | --------------------------------------------------------------------- |
+| `node_modules` 体积 / 包数 | 231 MB / 232                                                          |
+| XPI 体积                   | 344 KB                                                                |
+| 打包后 JS（未压缩）        | 1.31 MB（`.scaffold/build/addon/content/scripts/mineruForZotero.js`） |
+| `src/` 总行数              | 15,911                                                                |
+| `test/` 总行数             | 13,346                                                                |
 
 ### 打包构成（esbuild `bytesInOutput`）
 
-| 组成 | 体积 | 占比 |
-|---|---|---|
+| 组成                                                                                   | 体积       | 占比     |
+| -------------------------------------------------------------------------------------- | ---------- | -------- |
 | **pdf-lib 全家桶**（`pdf-lib` + `pako` + `@pdf-lib/standard-fonts` + `@pdf-lib/upng`） | **824 KB** | **≈63%** |
-| 本项目 `src/` | 333 KB | 25% |
-| `zotero-plugin-toolkit` | 119 KB | 9% |
-| `tslib` | 4 KB | <1% |
+| 本项目 `src/`                                                                          | 333 KB     | 25%      |
+| `zotero-plugin-toolkit`                                                                | 119 KB     | 9%       |
+| `tslib`                                                                                | 4 KB       | <1%      |
 
 > 结论：**超过一半的打包体积只服务于「读取 PDF 页数」这一件事。**
 
@@ -43,10 +43,10 @@ npx esbuild src/index.ts --bundle --target=firefox115 \
 
 ### 1.1 运行时依赖（`package.json` → `dependencies`，仅 2 个）
 
-| 依赖 | 版本 | 实际用途 | 可替换性 |
-|---|---|---|---|
-| `pdf-lib` | `^1.17.1` | **仅** `src/modules/pdfPageCount.ts` 的 `getPdfPageCount()` 数页数 | 高 |
-| `zotero-plugin-toolkit` | `^5.1.0-beta.13` | `log` / `Clipboard` / `getGlobal` / `unregisterAll` / 少量类型 | 高 |
+| 依赖                    | 版本             | 实际用途                                                           | 可替换性 |
+| ----------------------- | ---------------- | ------------------------------------------------------------------ | -------- |
+| `pdf-lib`               | `^1.17.1`        | **仅** `src/modules/pdfPageCount.ts` 的 `getPdfPageCount()` 数页数 | 高       |
+| `zotero-plugin-toolkit` | `^5.1.0-beta.13` | `log` / `Clipboard` / `getGlobal` / `unregisterAll` / 少量类型     | 高       |
 
 `pdf-lib` 传递依赖：`@pdf-lib/standard-fonts`、`@pdf-lib/upng`、`pako`、`tslib`。
 
@@ -64,13 +64,13 @@ npx esbuild src/index.ts --bundle --target=firefox115 \
 
 ## 2. 简化项总览（按收益排序）
 
-| 编号 | 项目 | 预估收益 | 风险 | 依赖决策 |
-|---|---|---|---|---|
-| **A** | 移除/替换 `pdf-lib` | 体积 −约 63% | 中 | 需确认 Zotero 页数 API |
-| **B** | 精简/移除 `zotero-plugin-toolkit` | 体积 −9%（119 KB） | 低-中 | 否 |
-| **C** | 删除死代码 | 维护性；体积少量 | 低 | 否 |
-| **D** | 功能/结构合并 | 行数与维护面大幅下降 | 高 | 需产品取舍 |
-| **E** | 依赖与工程卫生 | 安装体积、清晰度 | 低 | 否 |
+| 编号  | 项目                              | 预估收益             | 风险  | 依赖决策            |
+| ----- | --------------------------------- | -------------------- | ----- | ------------------- |
+| **A** | 移除/替换 `pdf-lib`               | 体积 −约 65%（实测） | 中    | ✅ 已完成（本分支） |
+| **B** | 精简/移除 `zotero-plugin-toolkit` | 体积 −9%（119 KB）   | 低-中 | 否                  |
+| **C** | 删除死代码                        | 维护性；体积少量     | 低    | 否                  |
+| **D** | 功能/结构合并                     | 行数与维护面大幅下降 | 高    | 需产品取舍          |
+| **E** | 依赖与工程卫生                    | 安装体积、清晰度     | 低    | 否                  |
 
 ---
 
@@ -113,14 +113,14 @@ npx esbuild src/index.ts --bundle --target=firefox115 \
 
 #### A.4 方案决策矩阵
 
-| 方案 | 新增依赖 | 保留分块 | 支持 >200 页（生产限制） | 备注 |
-|---|---|---|---|---|
-| 1. 直接删 pdf-lib，走整篇解析 | 无 | 否 | 否（官方 200 页会被拒） | 不满足生产需求 |
-| **2a. 换用 Zotero 自带 pdf.js（已选）** | 无（用内置资源） | 是 | 是 | 与 Zotero 版本耦合，需探测+兜底 |
-| 2b. 用打开 reader 的 `pagesCount` | 无 | 部分是 | 部分是 | 仅覆盖已打开 reader，不覆盖后台/右键 |
-| 2c. 极简 `/Count` 解析 | 无 | 是 | 是 | 压缩 xref 需 fallback，实现量大 |
-| 3. 让服务端在 File/job 响应里加 `page_count` | 服务端改动 | 是 | 是 | 需改 MinerU，不在本仓库 |
-| 4. 保留 pdf-lib | — | 是 | 是 | 接受体积 |
+| 方案                                         | 新增依赖         | 保留分块 | 支持 >200 页（生产限制） | 备注                                 |
+| -------------------------------------------- | ---------------- | -------- | ------------------------ | ------------------------------------ |
+| 1. 直接删 pdf-lib，走整篇解析                | 无               | 否       | 否（官方 200 页会被拒）  | 不满足生产需求                       |
+| **2a. 换用 Zotero 自带 pdf.js（已选）**      | 无（用内置资源） | 是       | 是                       | 与 Zotero 版本耦合，需探测+兜底      |
+| 2b. 用打开 reader 的 `pagesCount`            | 无               | 部分是   | 部分是                   | 仅覆盖已打开 reader，不覆盖后台/右键 |
+| 2c. 极简 `/Count` 解析                       | 无               | 是       | 是                       | 压缩 xref 需 fallback，实现量大      |
+| 3. 让服务端在 File/job 响应里加 `page_count` | 服务端改动       | 是       | 是                       | 需改 MinerU，不在本仓库              |
+| 4. 保留 pdf-lib                              | —                | 是       | 是                       | 接受体积                             |
 
 **决策：采用 2a。** 理由：官方生产限制 200 页 ⇒ 分块不可移除 ⇒ 必须有页数；而 Zotero 已内置 pdf.js，用它替代 `pdf-lib` 既不新增依赖，又能删掉约 800 KB 打包体积。
 
@@ -180,15 +180,15 @@ return pages;
 
 **实际使用点（全量）**
 
-| API | 位置 |
-|---|---|
-| `ztoolkit.log` | 33 处（`taskStore.ts`、`agentSync.ts`、`parseManager.ts` 等） |
-| `ztoolkit.Clipboard()` | `src/modules/readerOverlay/copy.ts:46`、`:70` |
-| `ztoolkit.getGlobal("Localization")` | `src/utils/locale.ts:12` |
-| `ztoolkit.unregisterAll()` | `src/hooks.ts:140`、`:160` |
-| `ztoolkit.ProgressWindow.setIconURI` | `src/utils/ztoolkit.ts:28`（**无 ProgressWindow 实例，疑似遗留**） |
-| 类型 `ColumnOptions` / `DialogHelper` | `src/addon.ts:2`（仅类型） |
-| `BasicTool` / `ZoteroToolkit` / `UITool` / `unregister` | `src/index.ts:1`、`src/utils/ztoolkit.ts` |
+| API                                                     | 位置                                                               |
+| ------------------------------------------------------- | ------------------------------------------------------------------ |
+| `ztoolkit.log`                                          | 33 处（`taskStore.ts`、`agentSync.ts`、`parseManager.ts` 等）      |
+| `ztoolkit.Clipboard()`                                  | `src/modules/readerOverlay/copy.ts:46`、`:70`                      |
+| `ztoolkit.getGlobal("Localization")`                    | `src/utils/locale.ts:12`                                           |
+| `ztoolkit.unregisterAll()`                              | `src/hooks.ts:140`、`:160`                                         |
+| `ztoolkit.ProgressWindow.setIconURI`                    | `src/utils/ztoolkit.ts:28`（**无 ProgressWindow 实例，疑似遗留**） |
+| 类型 `ColumnOptions` / `DialogHelper`                   | `src/addon.ts:2`（仅类型）                                         |
+| `BasicTool` / `ZoteroToolkit` / `UITool` / `unregister` | `src/index.ts:1`、`src/utils/ztoolkit.ts`                          |
 
 **问题**
 
@@ -254,15 +254,15 @@ return pages;
 
 `src/` 行数分布：
 
-| 子系统 | 行数 |
-|---|---|
-| `readerOverlay/` | 3,616 |
-| `parse*`（编排/合并/网络/进度/续传） | 2,150 |
-| `mineruClient/` | 2,037 |
-| `markdownQuery/` | 1,781 |
-| `readerToolbar/` | 1,382 |
-| `storage.ts` + `storageFs.ts` | 952 |
-| `preferenceScript.ts` | 727 |
+| 子系统                                                 | 行数  |
+| ------------------------------------------------------ | ----- |
+| `readerOverlay/`                                       | 3,616 |
+| `parse*`（编排/合并/网络/进度/续传）                   | 2,150 |
+| `mineruClient/`                                        | 2,037 |
+| `markdownQuery/`                                       | 1,781 |
+| `readerToolbar/`                                       | 1,382 |
+| `storage.ts` + `storageFs.ts`                          | 952   |
+| `preferenceScript.ts`                                  | 727   |
 | `addon/content/*.html`（Task/Results 管理器 + 首选项） | 1,724 |
 
 - [ ] **Task Manager 与 Results Manager 合并**：`taskStore.ts`/`taskManager.html` 与 `resultsManager.ts`/`resultsManager.html` 为两套独立窗口，评估合并为单窗口多标签。
@@ -322,9 +322,9 @@ unzip -l .scaffold/build/mineru-for-zotero.xpi | grep scripts
 
 ## 6. 待确认的开放问题
 
-1. ~~Zotero 9/10 是否有稳定的内置「PDF 页数」接口？~~ **已核实（见 A.2）**：无 `PDFWorker.getPageCount`；仅打开 reader 时有 `pagesCount`，另可 `importESModule` 内置 pdf.js。剩余决策：是否保留分块。
-2. ~~官方云是否严格执行「1000 页/文件」上限？~~ **已确认：生产官方 server 限制 200 页**（与 `CHUNK_PAGE_LIMIT` 一致），必须保留分块。剩余待办：内置 pdf.js 资源路径与 worker 行为在目标 Zotero 版本上的实测。
-2. `ztoolkit.ProgressWindow.setIconURI` 是否真有对应窗口？若无，是否随 B 删除？
-3. `ztoolkit.unregisterAll()` 是否注册过实际 UI？无注册项则可安全移除。
-4. Task Manager / Results Manager 是否有用户依赖「两个独立窗口」？
-5. `markdownQuery` HTTP API 与 CLI 是否为必须随主插件发布的能力？
+1. ~~Zotero 9/10 是否有稳定的内置「PDF 页数」接口？~~ **已解决（见 A.2/A.5）**：系统模块 realm 被冻结，不能用 `ChromeUtils.importESModule`；已在主窗口 realm 用动态 `import()` 实现并验证（`===>7<===`，插件内 `[Auto-Split] … 1/2 (Pages 1-200)`）。
+2. ~~官方云是否严格执行「1000 页/文件」上限？~~ **已确认：生产官方 server 限制 200 页**（与 `CHUNK_PAGE_LIMIT` 一致），必须保留分块；已完成并实测。
+3. `ztoolkit.ProgressWindow.setIconURI` 是否真有对应窗口？若无，是否随 B 删除？
+4. `ztoolkit.unregisterAll()` 是否注册过实际 UI？无注册项则可安全移除。
+5. Task Manager / Results Manager 是否有用户依赖「两个独立窗口」？
+6. `markdownQuery` HTTP API 与 CLI 是否为必须随主插件发布的能力？
