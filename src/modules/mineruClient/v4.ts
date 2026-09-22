@@ -74,9 +74,52 @@ export function createV4MinerUClient(
   const modelVersion = options.modelVersion ?? "vlm";
   const request = options.fetch ?? createDefaultRequest();
   const readBinary = options.readBinary ?? readFileBytes;
-  const uploadBinary =
-    options.uploadBinary ??
-    (options.fetch ? fetchUploadBinary(request) : xhrUploadBinary);
+  const fetchLikeUpload = fetchUploadBinary(request);
+  const globalFetch = (
+    globalThis as typeof globalThis & { fetch?: typeof fetch }
+  ).fetch;
+  // Pre-signed PUT to external object storage. Bare sandbox XHR can fail at the
+  // cross-origin layer, so try the privileged global fetch (no Content-Type)
+  // first, then Zotero.HTTP, then sandbox XHR.
+  const uploadCandidates: Array<
+    (url: string, body: Uint8Array) => Promise<Response>
+  > = [];
+  if (options.uploadBinary) {
+    const upload = options.uploadBinary;
+    uploadCandidates.push((url, body) => upload(url, body));
+  } else if (options.fetch) {
+    uploadCandidates.push((url, body) => fetchLikeUpload(url, body));
+  } else {
+    if (globalFetch) {
+      uploadCandidates.push((url, body) =>
+        globalFetch(url, { method: "PUT", body }),
+      );
+    }
+    uploadCandidates.push((url, body) => fetchLikeUpload(url, body));
+    uploadCandidates.push((url, body) => xhrUploadBinary(url, body));
+  }
+  const uploadBinary = async (
+    url: string,
+    body: Uint8Array,
+  ): Promise<Response> => {
+    let lastError: unknown;
+    for (const candidate of uploadCandidates) {
+      try {
+        const response = await candidate(url, body);
+        if (response.ok) {
+          return response;
+        }
+        lastError = new MinerUTaskError(
+          `MinerU v4 upload failed with status ${response.status}`,
+        );
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError instanceof Error
+      ? lastError
+      : new MinerUTaskError("MinerU v4 upload failed");
+  };
   const downloadBinary =
     options.downloadBinary ??
     (options.fetch
