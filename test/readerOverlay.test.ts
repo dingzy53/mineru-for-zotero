@@ -266,6 +266,44 @@ describe("readerOverlay", function () {
     assert.lengthOf(findElementsByClass(root, "mineru-copy-select-panel"), 6);
   });
 
+  it("renders MinerU layout index badges with 1-based sourceIndex", function () {
+    const doc = createDocumentStub();
+
+    const { root } = buildReaderOverlayRoot(
+      doc as unknown as Document,
+      [
+        createBox(0, "title", "标题"),
+        { ...createBox(1, "text", "正文"), sourceIndex: 41 },
+        { ...createBox(2, "reference", "[1]"), sourceIndex: 9 },
+      ],
+      "all",
+    );
+
+    assert.deepEqual(
+      findElementsByClass(root, "mineru-copy-box-index").map(
+        (element) => element.textContent,
+      ),
+      ["1", "42", "10"],
+    );
+  });
+
+  it("emits per-type color variables for the official layout palette", function () {
+    const doc = createDocumentStub();
+
+    buildReaderOverlayRoot(
+      doc as unknown as Document,
+      [createBox(0, "text", "正文")],
+      "all",
+    );
+    ensureReaderOverlayStyles(doc as unknown as Document);
+
+    const css = doc.headChildren[0].textContent;
+    assert.include(css, '.mineru-copy-box[data-mineru-box-type="text"] {');
+    assert.include(css, "--mineru-box-color: rgb(153, 13, 77);");
+    assert.include(css, "--mineru-box-fill: rgba(153, 13, 77, 0.15);");
+    assert.include(css, ".mineru-copy-mode-all .mineru-copy-box-index {");
+  });
+
   it("renders selectable copy panels from raw markdown and keeps formula dollars", function () {
     const doc = createDocumentStub();
 

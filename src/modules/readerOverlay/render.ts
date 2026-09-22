@@ -185,6 +185,7 @@ export function createBoxElement(
   });
   element.append(
     createBoxLabel(doc, box),
+    createBoxIndexBadge(doc, box),
     createBoxActions(doc, box, selectionOptions),
   );
   return element;
@@ -199,6 +200,28 @@ export function createBoxLabel(
   label.className = "mineru-copy-box-label";
   label.textContent = formatBoxTypeLabel(box.type);
   return label;
+}
+
+/** 为 box 渲染右上角的 MinerU 布局序号（对应官方 layout.pdf 的数字）。 */
+export function createBoxIndexBadge(
+  doc: Document,
+  box: NormalizedBox,
+): HTMLSpanElement {
+  const badge = doc.createElement("span");
+  badge.className = "mineru-copy-box-index";
+  badge.textContent = String(getBoxIndexLabel(box));
+  badge.setAttribute("aria-hidden", "true");
+  return badge;
+}
+
+/** 计算官方 layout.pdf 风格的 1-based 布局序号。 */
+export function getBoxIndexLabel(box: NormalizedBox): number {
+  const sourceIndex = box.sourceIndex;
+  const index =
+    typeof sourceIndex === "number" && Number.isFinite(sourceIndex)
+      ? sourceIndex
+      : box.rawIndex;
+  return index + 1;
 }
 
 /** 为 box 渲染复制动作区域，公式与普通文本走不同按钮集合。 */

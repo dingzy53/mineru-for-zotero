@@ -1,3 +1,4 @@
+import { getBoxTypeColorStyles } from "./boxColors";
 import { getParentWindow, getWindowDocument } from "./windows";
 
 export const READER_OVERLAY_STYLE_ID = "mineru-copy-overlay-styles";
@@ -37,8 +38,8 @@ export const READER_OVERLAY_CSS = `
 .mineru-copy-box {
   position: absolute;
   box-sizing: border-box;
-  border: 1px solid rgba(33, 99, 235, 0.9);
-  background: transparent;
+  border: 1px solid var(--mineru-box-color, rgba(33, 99, 235, 0.9));
+  background: var(--mineru-box-fill, transparent);
   pointer-events: none;
 }
 
@@ -48,7 +49,7 @@ export const READER_OVERLAY_CSS = `
 
 .mineru-copy-overlay-root:not(.mineru-copy-select-panel-active):not(.mineru-copy-formula-menu-active) .mineru-copy-box:hover,
 .mineru-copy-box-hovered {
-  background: rgba(64, 156, 255, 0.18);
+  background: var(--mineru-box-hover-fill, rgba(64, 156, 255, 0.18));
   z-index: 2147483001;
 }
 
@@ -76,8 +77,8 @@ export const READER_OVERLAY_CSS = `
 .mineru-copy-mode-hover .mineru-copy-box-hovered,
 .mineru-copy-mode-hover .mineru-copy-box-actions-active {
   opacity: 1;
-  border-color: rgba(33, 99, 235, 0.9);
-  background: rgba(64, 156, 255, 0.18);
+  border-color: var(--mineru-box-color, rgba(33, 99, 235, 0.9));
+  background: var(--mineru-box-fill, rgba(64, 156, 255, 0.18));
 }
 
 .mineru-copy-mode-hover .mineru-copy-box-selected {
@@ -103,7 +104,7 @@ export const READER_OVERLAY_CSS = `
   transform: translateY(-100%);
   padding: 2px 4px;
   border-radius: 3px 3px 0 0;
-  background: rgba(33, 99, 235, 0.95);
+  background: var(--mineru-box-color, rgba(33, 99, 235, 0.95));
   color: #fff;
   font-size: 12px;
   line-height: 1.2;
@@ -115,6 +116,37 @@ export const READER_OVERLAY_CSS = `
 .mineru-copy-box-selected .mineru-copy-box-label,
 .mineru-copy-mode-hover .mineru-copy-box-selected .mineru-copy-box-label {
   background: rgba(217, 119, 6, 0.95);
+}
+
+.mineru-copy-box-index {
+  position: absolute;
+  right: 0;
+  top: 0;
+  transform: translateY(-100%);
+  display: none;
+  min-width: 14px;
+  padding: 1px 3px;
+  border-radius: 3px 3px 0 0;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--mineru-box-color, rgba(33, 99, 235, 0.95));
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: center;
+  white-space: nowrap;
+  writing-mode: horizontal-tb;
+  pointer-events: none;
+}
+
+.mineru-copy-mode-all .mineru-copy-box-index {
+  display: block;
+}
+
+.mineru-copy-mode-hover .mineru-copy-box:hover .mineru-copy-box-index,
+.mineru-copy-mode-hover .mineru-copy-box-hovered .mineru-copy-box-index,
+.mineru-copy-mode-hover .mineru-copy-box-actions-active .mineru-copy-box-index,
+.mineru-copy-mode-hover .mineru-copy-box-selected .mineru-copy-box-index {
+  display: block;
 }
 
 .mineru-copy-box-actions {
@@ -364,7 +396,7 @@ export const READER_OVERLAY_CSS = `
 
 /** 确保 reader 文档已经注入 overlay 样式，并在主题变化时刷新内容。 */
 export function ensureReaderOverlayStyles(doc: Document): void {
-  const css = `${createReaderOverlayThemeCss(doc)}${READER_OVERLAY_CSS}`;
+  const css = `${createReaderOverlayThemeCss(doc)}${createBoxTypeColorCss()}${READER_OVERLAY_CSS}`;
   const existingStyle = doc.getElementById(READER_OVERLAY_STYLE_ID);
   if (existingStyle) {
     if (existingStyle.textContent !== css) {
@@ -377,6 +409,18 @@ export function ensureReaderOverlayStyles(doc: Document): void {
   style.id = READER_OVERLAY_STYLE_ID;
   style.textContent = css;
   doc.head?.append(style);
+}
+
+/** 生成按 box 类型着色的 CSS 变量规则：
+ * `.mineru-copy-box[data-mineru-box-type="text"] { --mineru-box-color: …; … }`。
+ * 颜色表来自官方的类型配色，保证不同元素在 all 模式下可用颜色区分。
+ */
+export function createBoxTypeColorCss(): string {
+  return getBoxTypeColorStyles()
+    .map(({ type, color, fill, hoverFill }) => {
+      return `.mineru-copy-box[data-mineru-box-type="${type}"] {\n  --mineru-box-color: ${color};\n  --mineru-box-fill: ${fill};\n  --mineru-box-hover-fill: ${hoverFill};\n}`;
+    })
+    .join("\n");
 }
 
 /** 从父 reader 窗口桥接主题变量，生成 overlay 使用的前缀 CSS。 */

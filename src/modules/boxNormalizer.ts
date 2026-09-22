@@ -164,6 +164,7 @@ function emitV2VisualContainer(
   const imagePath = body ? getBlockImagePath(body) : getBlockImagePath(block);
   const box: NormalizedBox = {
     rawIndex: boxes.length,
+    sourceIndex: getSourceIndex(block),
     page: pageNumber,
     type,
     bbox: normalizedBboxFromV2(bbox),
@@ -196,6 +197,7 @@ function emitV2LeafBox(
   const imagePath = getBlockImagePath(block);
   const box: NormalizedBox = {
     rawIndex: boxes.length,
+    sourceIndex: getSourceIndex(block),
     page: pageNumber,
     type,
     bbox: normalizedBboxFromV2(bbox),
@@ -320,6 +322,7 @@ function normalizeLegacy(result: unknown): NormalizedBox[] {
         : undefined;
       const box: NormalizedBox = {
         rawIndex: boxes.length,
+        sourceIndex: getSourceIndex(block),
         page: pageNumber,
         type,
         bbox: {
@@ -652,6 +655,12 @@ function isSoftHyphenBreak(text: string, nextLine: string): boolean {
 
   const previousToken = text.slice(0, -1).split(/\s+/).pop() ?? "";
   return !previousToken.includes("-");
+}
+
+function getSourceIndex(block: RawBlock): number | undefined {
+  return typeof block.index === "number" && Number.isFinite(block.index)
+    ? block.index
+    : undefined;
 }
 
 function normalizeType(type: unknown): MinerUBoxType {

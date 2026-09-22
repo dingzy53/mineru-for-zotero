@@ -34,6 +34,8 @@ export {
 export {
   buildReaderOverlayRoot,
   computeBoxStyle,
+  createBoxIndexBadge,
+  getBoxIndexLabel,
   removeReaderOverlayRoot,
 } from "./render";
 export { clearReaderOverlaySelectionForReader } from "./selection";
