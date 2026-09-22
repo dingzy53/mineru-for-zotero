@@ -130,10 +130,12 @@ npx esbuild src/index.ts --bundle --target=firefox115 \
 
 **实现要点**
 
-- [ ] 通过 `ChromeUtils.importESModule("resource://zotero/reader/pdf/build/pdf.mjs")` 引入内置 pdf.js（导出 `getDocument`、`GlobalWorkerOptions`）。
-- [ ] 设置 `GlobalWorkerOptions.workerSrc = "resource://zotero/reader/pdf/build/pdf.worker.mjs"`（viewer 使用同一相对路径，`/tmp/zotapp/resource/reader/pdf/web/viewer.mjs:896`）。
-- [ ] 用 `IOUtils.read()` 读字节，`getDocument({ data: bytes, isEvalSupported: false }).promise`，取 `doc.numPages`，最后 `loadingTask.destroy()` 释放 worker/资源。
-- [ ] 资源路径需**运行时探测**：不同 Zotero 版本路径可能变化；import 失败或 worker 创建失败时回退 `pagesCount`（若 reader 已打开）→ 再回退 `-1`。
+> ⚠️ **关键：不能用 `ChromeUtils.importESModule`。** Zotero 10 / Gecko 140 的系统模块 realm 内置对象被冻结，pdf.js 顶层 `Map.prototype.getOrInsertComputed = …` polyfill 会抛 `TypeError: Map.prototype is not extensible`。实测（Run JavaScript，主窗口 realm）：窗口 realm `Object.isExtensible(Map.prototype) === true`，`ChromeUtils.importESModule` 失败，而**窗口 realm 动态 `import()` 可用**。Zotero reader 本身也是用 `<script type="module">` 在内容 realm 加载 pdf.js。
+
+- [ ] 在主窗口 realm 中用**动态 `import()`** 加载 pdf.js：通过 `Zotero.getMainWindow().eval(...)` 执行（与 Run JavaScript 机制一致）。
+- [ ] 在窗口 realm 内设置 `GlobalWorkerOptions.workerSrc = "resource://zotero/reader/pdf/build/pdf.worker.mjs"`。
+- [ ] 在窗口 realm 内用 `IOUtils.read()` 读字节，`getDocument({ data: bytes, isEvalSupported: false }).promise` 取 `numPages`，最后 `destroy()`；把路径作为字符串传入，避免跨 realm 传递 `Uint8Array`。
+- [ ] 资源路径需**运行时探测**：不同 Zotero 版本路径可能变化；主窗口缺失、eval 被拒或 worker 创建失败时回退 `-1`。
 - [ ] 对加密/损坏 PDF、超大文件设置超时与 try/catch，确保任何异常都返回 `-1`，不阻断整篇解析降级路径。
 - [ ] 删除 `pdf-lib` 依赖与 import；移除 `pdfPageCount.ts` 中的 `PDFDocument`。
 
@@ -141,12 +143,10 @@ npx esbuild src/index.ts --bundle --target=firefox115 \
 
 已核实环境：Zotero **10.0.1**（Gecko 140），`app/omni.ja` 内确实存在 `resource/reader/pdf/build/pdf.mjs` 与 `pdf.worker.mjs`，故 `resource://zotero/reader/pdf/build/pdf.mjs` 路径在当前目标版本有效（`application.ini` 的 `Version=10.0.1`）。
 
-最快的手动验证：Zotero → Tools → Developer → Run JavaScript（该窗口包 async，可直接 `await`/`return`）：
+最快的手动验证：Zotero → Tools → Developer → Run JavaScript（该窗口用 `win.eval`，本身就在窗口 realm，可直接 `await`/`return`）：
 
 ```js
-const pdfjs = ChromeUtils.importESModule(
-  "resource://zotero/reader/pdf/build/pdf.mjs",
-);
+const pdfjs = await import("resource://zotero/reader/pdf/build/pdf.mjs");
 pdfjs.GlobalWorkerOptions.workerSrc =
   "resource://zotero/reader/pdf/build/pdf.worker.mjs";
 const bytes = await IOUtils.read("/path/to/sample.pdf");
@@ -154,10 +154,10 @@ const task = pdfjs.getDocument({ data: bytes, isEvalSupported: false });
 const doc = await task.promise;
 const pages = doc.numPages;
 await task.destroy();
-return pages; // 应与 pdf-lib / pdfinfo 的页数一致
+return pages;
 ```
 
-回归验证：
+这组代码与插件的 `Zotero.getMainWindow().eval(...)` 路径等价；返回的页数应与 pdf-lib / pdfinfo 一致。
 
 - [ ] `npm run build`：XPI / JS 体积应减少约 800 KB（移除 pdf-lib 后对照第 0 节基线；spike 阶段仍保留 pdf-lib，体积不变）。
 - [ ] `npm test`：`parseManager.test.ts` 注入 `getPdfPageCount`，确认 `-1` 与正常页数两条路径均覆盖。
