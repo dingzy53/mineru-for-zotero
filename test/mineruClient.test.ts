@@ -2,6 +2,7 @@ import { assert } from "chai";
 import {
   createMinerUClientForSettings,
   createV1MinerUClient,
+  createV4MinerUClient,
   MinerUTaskError,
 } from "../src/modules/mineruClient";
 import { fallbackDownloadBinary } from "../src/modules/mineruClient/http";
@@ -59,7 +60,7 @@ function healthResponse(sources: string[]): Response {
 }
 
 describe("mineruClient (V1)", function () {
-  it("uses the official V1 base URL for online parsing", async function () {
+  it("uses the official v4 API for online parsing", async function () {
     const calls: RecordedCall[] = [];
     const client = createMinerUClientForSettings({
       source: "online",
@@ -68,29 +69,17 @@ describe("mineruClient (V1)", function () {
       readBinary: async () => new Uint8Array([37, 80, 68, 70]),
       fetch: async (url, init) => {
         const call = recordCall(calls, url, init);
-        if (call.url.endsWith("/v1/health")) {
-          return healthResponse(["file_id", "url"]);
-        }
-        if (call.url.endsWith("/v1/uploads")) {
+        if (call.url.endsWith("/v4/file-urls/batch")) {
           return jsonResponse({
-            id: "upload_1",
-            status: "pending",
-            upload_url: "https://upload.example/u/1",
-            upload_method: "PUT",
-            upload_headers: {
-              "Content-Type": "application/pdf",
-              "x-amz-content-sha256": "abc",
+            code: 0,
+            data: {
+              batch_id: "batch-1",
+              file_urls: ["https://oss.example/upload/1.pdf"],
             },
           });
         }
-        if (call.url === "https://upload.example/u/1") {
+        if (call.url === "https://oss.example/upload/1.pdf") {
           return new Response("", { status: 200 });
-        }
-        if (call.url.endsWith("/v1/uploads/upload_1/complete")) {
-          return jsonResponse({ status: "completed", file: { id: "file-1" } });
-        }
-        if (call.url.endsWith("/v1/parse/jobs")) {
-          return jsonResponse({ job_id: "job-1", status: "queued" }, 202);
         }
         throw new Error(`unexpected ${call.method} ${call.url}`);
       },
@@ -98,49 +87,70 @@ describe("mineruClient (V1)", function () {
 
     const result = await client.submitPdf("C:/tmp/a.pdf");
 
-    assert.deepEqual(result, { taskID: "job-1" });
-    assert.equal(calls[0].method, "GET");
-    assert.equal(calls[0].url, `${ONLINE_BASE}/v1/health`);
-
-    const createUpload = calls.find((call) => call.url.endsWith("/v1/uploads"));
+    assert.deepEqual(result, { taskID: "batch-1" });
+    const createUpload = calls.find((call) =>
+      call.url.endsWith("/v4/file-urls/batch"),
+    );
     assert.isDefined(createUpload);
     assert.equal(createUpload!.method, "POST");
     assert.equal(createUpload!.headers.Authorization, "Bearer secret-token");
     const uploadBody = JSON.parse(String(createUpload!.body));
-    assert.equal(uploadBody.filename, "a.pdf");
-    assert.equal(uploadBody.bytes, 4);
-    assert.equal(uploadBody.mime_type, "application/pdf");
-    assert.equal(uploadBody.purpose, "parse");
-    assert.match(uploadBody.sha256sum, /^[0-9a-f]{64}$/);
+    assert.equal(uploadBody.model_version, "vlm");
+    assert.deepEqual(uploadBody.files, [{ name: "a.pdf" }]);
 
     const upload = calls.find(
-      (call) => call.url === "https://upload.example/u/1",
+      (call) => call.url === "https://oss.example/upload/1.pdf",
     );
     assert.isDefined(upload);
     assert.equal(upload!.method, "PUT");
-    assert.equal(upload!.headers["Content-Type"], "application/pdf");
-    assert.equal(upload!.headers["x-amz-content-sha256"], "abc");
-    // The presigned host differs from the API origin, so the key must not leak.
+    // Pre-signed object storage: the API key must not leak and, per the
+    // official docs, the upload must not set a Content-Type header.
     assert.isUndefined(upload!.headers.Authorization);
+    assert.isUndefined(upload!.headers["Content-Type"]);
+  });
 
-    const complete = calls.find((call) =>
-      call.url.endsWith("/v1/uploads/upload_1/complete"),
-    );
-    assert.isDefined(complete);
-    assert.equal(complete!.headers.Authorization, "Bearer secret-token");
+  it("downloads and parses the v4 full_zip_url result", async function () {
+    const zip = createStoredZipBytes({
+      "full.md": "# Title",
+      "layout.json": JSON.stringify({
+        pdf_info: [{ para_blocks: [{ type: "text", bbox: [0, 0, 1, 1] }] }],
+      }),
+      "images/pic.png": new Uint8Array([137, 80, 78, 71]),
+    });
+    const client = createV4MinerUClient({
+      apiKey: "k",
+      baseURL: ONLINE_BASE,
+      fetch: async (url) => {
+        const value = String(url);
+        if (value.endsWith("/v4/extract-results/batch/batch-1")) {
+          return jsonResponse({
+            code: 0,
+            data: {
+              batch_id: "batch-1",
+              extract_result: [
+                { state: "done", full_zip_url: "https://cdn.example/r.zip" },
+              ],
+            },
+          });
+        }
+        if (value === "https://cdn.example/r.zip") {
+          return new Response(zip, { status: 200 });
+        }
+        throw new Error(`unexpected ${value}`);
+      },
+    });
 
-    const job = calls.find((call) => call.url.endsWith("/v1/parse/jobs"));
-    assert.isDefined(job);
-    const jobBody = JSON.parse(String(job!.body));
-    assert.deepEqual(jobBody.files, [
-      { source: { type: "file_id", file_id: "file-1" } },
+    const result = await client.downloadResult("batch-1");
+
+    assert.equal(result.kind, "precise");
+    if (result.kind !== "precise") {
+      return;
+    }
+    assert.equal(result.markdown, "# Title");
+    assert.deepEqual(result.images, [
+      { path: "pic.png", bytes: new Uint8Array([137, 80, 78, 71]) },
     ]);
-    assert.equal(jobBody.tier, "standard");
-    assert.includeMembers(jobBody.output_formats, [
-      "markdown",
-      "middle_json",
-      "zip",
-    ]);
+    assert.isObject(result.rawResult);
   });
 
   it("uses the local source without uploading when health advertises it", async function () {
@@ -225,9 +235,10 @@ describe("mineruClient (V1)", function () {
   it("reuses a deduplicated file without re-uploading", async function () {
     const calls: RecordedCall[] = [];
     const client = createMinerUClientForSettings({
-      source: "online",
-      apiKey: "secret-token",
+      source: "local",
+      apiKey: "local-key",
       tier: "standard",
+      localApiBaseURL: LOCAL_BASE,
       readBinary: async () => new Uint8Array([37, 80, 68, 70]),
       fetch: async (url, init) => {
         const call = recordCall(calls, url, init);

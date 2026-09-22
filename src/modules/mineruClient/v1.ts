@@ -22,7 +22,11 @@ import {
 } from "./http";
 import type { MinerUImageFile } from "../domain";
 import { basename, normalizeBaseURL } from "./path";
-import { readImagesFromZip, readRawResultFromZip } from "./result";
+import {
+  readImagesFromZip,
+  readMarkdownFromZip,
+  readRawResultFromZip,
+} from "./result";
 import type {
   MinerUClient,
   MinerUClientOptions,
@@ -392,19 +396,6 @@ export function extractJobError(job: V1ParseJob): string {
   return (
     message || code || `MinerU job ended with status ${job.status ?? "unknown"}`
   );
-}
-
-/**
- * 从结果 ZIP 中读取 Markdown 正文。
- */
-function readMarkdownFromZip(zip: ZipEntries): string {
-  const entry =
-    zip.get("markdown.md") ??
-    zip.get("full.md") ??
-    Array.from(zip.entries()).find(([name]) =>
-      name.toLowerCase().endsWith(".md"),
-    )?.[1];
-  return entry ? decodeText(entry.bytes) : "";
 }
 
 /**

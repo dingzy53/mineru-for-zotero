@@ -6,7 +6,7 @@ This repository is a Zotero 9/10 plugin built with TypeScript and `zotero-plugin
 
 Core feature modules currently include:
 
-- `mineruClient/` — the unified MinerU V1 client (cloud and local) plus `createMinerUClientForSettings()` selection from `parseSource`/`parseTier`.
+- `mineruClient/` — the MinerU clients: `v4.ts` for the official cloud (`https://mineru.net/api/v4/*`) and `v1.ts` for self-hosted/local (`…/v1/*`), plus `createMinerUClientForSettings()` selection from `parseSource`.
 - `parseManager.ts` — item/attachment parsing orchestration (dependency-injected); chunking, merging, resume, and the user-facing failure notices all live here. There is **no** `parseNotice.ts`.
 - `parseMerge.ts`, `parseNetwork.ts`, `parseProgress.ts`, `parseResume.ts`, `pdfPageCount.ts` — chunk merging, reconnecting fetch/backoff, progress reporting, resume caches, and Zotero bundled pdf.js page counting.
 - `taskStore.ts`, `resultsManager.ts`, `storage.ts`, `storageFs.ts`, `domain.ts` — task persistence and its window, the parsed-results manager UI, per-attachment result storage, the `IOUtils`/`OS.File` filesystem adapter, and shared parse/storage/overlay domain types.
@@ -59,18 +59,23 @@ Parse notices are failure-only. Success states emit no UI notices. Errors (empty
 
 ### Client Selection & API Limits
 
-MinerU parsing uses the unified V1 client (`mineruClient/v1.ts`) selected by `createMinerUClientForSettings()` from `parseSource` (`online`/`local`) and `parseTier` (`flash`/`basic`/`standard`/`advanced`). The official API (`https://mineru.net/api/v1/*`) and the local server (`http://127.0.0.1:8000/v1/*`) share the same uploads → parse jobs → files flow. The official cloud only exposes `standard`; `parseManager` forces `standard` for online.
+`createMinerUClientForSettings()` selects a client from `parseSource`:
 
-MinerU V1 API limits:
+- `online` → `mineruClient/v4.ts`, the documented official precise API (`POST /v4/file-urls/batch` → PUT → `GET /v4/extract-results/batch/{batch_id}` → `full_zip_url`).
+- `local` → `mineruClient/v1.ts`, the self-hosted MinerU 4.0 V1 API (`/v1/health`, `/v1/uploads`, `/v1/parse/jobs`, `/v1/files/…/content`), selected per `parseTier`.
 
-- max 200 MB/file and up to 100 files/job. MinerU NEXT docs list a 1000 pages/file cap, but the production official server caps a file at 200 pages — hence the plugin's `CHUNK_PAGE_LIMIT = 200` and page-range chunking.
-- `files[].page_range` (1-based, e.g. `1-200`) selects pages. Large PDFs are chunked by page range instead of being split locally; `getPdfPageCount()` uses Zotero's bundled pdf.js only.
+Do **not** route the official cloud through V1: its output-format conversion can fail with `file_conversion_failed` (`-60015`/`-60016`, “文件转换失败”), while v4 reliably returns a single `full_zip_url`. The official cloud only exposes `standard`, so `parseManager` forces `standard` for online (v4 uses `model_version: "vlm"`).
+
+API limits:
+
+- max 200 MB/file and 200 pages/file (official), up to 100 files/job.
+- Large PDFs are chunked by page range instead of being split locally; `getPdfPageCount()` uses Zotero's bundled pdf.js only. v1 sends `files[].page_range`, v4 sends `file.page_ranges`.
 - `getPdfPageCount()` must load pdf.js in a **window realm**: it runs `Zotero.getMainWindow().eval(...)` with a dynamic `import("resource://zotero/reader/pdf/build/pdf.mjs")`. Do **not** use `ChromeUtils.importESModule` — Zotero 10's system module realm has frozen built-ins and pdf.js's top-level `Map.prototype.getOrInsertComputed` polyfill throws `TypeError: Map.prototype is not extensible`. Zotero's own reader loads pdf.js the same way (module script in a content realm).
 - `MINERU_API_MAX_CONCURRENT_REQUESTS` limits cross-attachment concurrency (clamped 1-10, default 3). Tests override it via `getMaxConcurrentRequests`.
 
-### V1 Parsing Flow
+### V1 Parsing Flow (local)
 
-The client (`mineruClient/v1.ts`) runs a single flow for both deployments:
+The local client (`mineruClient/v1.ts`):
 
 1. `GET /v1/health` discovers `features.sources` and `features.output_formats`.
 2. If `local` is advertised, submit `source: { type: "local", path }`; otherwise upload via `POST /v1/uploads` → PUT `upload_url` with `upload_headers` → `POST /v1/uploads/{id}/complete` to obtain `file_id`. The client caches the `file_id` per instance so chunked jobs reuse one upload.
@@ -78,13 +83,25 @@ The client (`mineruClient/v1.ts`) runs a single flow for both deployments:
 4. `GET /v1/parse/jobs/{job_id}` polls `queued`/`running`/`completed`/`partial`/`failed`/`canceled`.
 5. Results are read from `files[0].output_files` via `GET /v1/files/{file_id}/content`: `markdown`, `middle_json`, and `zip` (for image sidecars).
 
-### Presigned URL Uploads
+### V4 Parsing Flow (online)
 
-Send exactly the `upload_method`, `upload_url`, and `upload_headers` returned by `POST /v1/uploads`. Attach the MinerU Bearer token only when the upload URL is same-origin with the API base; never send it to an external presigned host.
+The official client (`mineruClient/v4.ts`):
+
+1. `POST /v4/file-urls/batch` with `{ files: [{ name, page_ranges? }], model_version: "vlm" }` returns `batch_id` and pre-signed `file_urls`.
+2. PUT the PDF bytes to `file_urls[0]` with **no `Content-Type`** and **no MinerU Bearer token** (pre-signed object storage).
+3. `GET /v4/extract-results/batch/{batch_id}` polls `extract_result[0].state` (`waiting-file`/`pending`/`running`/`converting`/`done`/`failed`).
+4. Download `full_zip_url` (CDN, no auth) and read `full.md`, `layout.json`, `images/…` from the zip.
+
+## Presigned URL Uploads
+
+The V1 client sends exactly the `upload_method`, `upload_url`, and `upload_headers` returned by `POST /v1/uploads`, attaching the MinerU Bearer token only when the upload URL is same-origin with the API base — never to an external presigned host. The V4 client uploads to the pre-signed OSS URL with no headers.
 
 ### Result Download & ZIP Handling
 
-Download outputs through `GET /v1/files/{file_id}/content` (the official API answers with a 302 to CDN). Prefer the `middle_json` output for boxes and the `zip` output for image sidecars. New ZIP members are `markdown.md`, `middle_json.json`, `structured_content.json`, and `images/…`; keep legacy `layout.json` / `*_middle.json` fallbacks. ZIPs are parsed in memory first (`readZip`/`inflateRaw`), with a temp-file `nsIZipReader` fallback (`readZipFile`) for runtimes where `DecompressionStream` is unavailable; keep both paths working.
+- V1: download `markdown`/`middle_json`/`zip` through `GET /v1/files/{file_id}/content` (may answer with a 302 to CDN).
+- V4: download the single `full_zip_url`.
+
+Prefer the `middle_json`/`layout.json` output for boxes and the `zip` output for image sidecars. New ZIP members are `markdown.md`, `middle_json.json`, `structured_content.json`, and `images/…`; keep legacy `full.md` / `layout.json` / `*_middle.json` fallbacks. ZIPs are parsed in memory first (`readZip`/`inflateRaw`), with a temp-file `nsIZipReader` fallback (`readZipFile`) for runtimes where `DecompressionStream` is unavailable; keep both paths working.
 
 ### Task Persistence, Resume & Reconnect
 

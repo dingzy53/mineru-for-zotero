@@ -66,6 +66,19 @@ export function readImagesFromZip(
 }
 
 /**
+ * 从结果 ZIP 中读取 Markdown 正文（新成员 `markdown.md`，旧成员 `full.md`）。
+ */
+export function readMarkdownFromZip(zip: ZipEntries): string {
+  const entry =
+    zip.get("markdown.md") ??
+    zip.get("full.md") ??
+    Array.from(zip.entries()).find(([name]) =>
+      name.toLowerCase().endsWith(".md"),
+    )?.[1];
+  return entry ? decodeText(entry.bytes) : "";
+}
+
+/**
  * 把 ZIP 内图片条目转换为存储使用的相对图片路径。
  */
 export function getZipImagePath(name: string): string | null {
