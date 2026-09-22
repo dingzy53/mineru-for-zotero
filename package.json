@@ -26,9 +26,9 @@
     "lint:check": "prettier --check . && eslint .",
     "lint:fix": "prettier --write . && eslint . --fix",
     "release": "zotero-plugin release",
-    "pretest": "node scripts/fix-test-profile.mjs",
+    "pretest": "node scripts/fix-test-profile.mjs && node scripts/ensure-test-libraries.mjs",
     "test": "zotero-plugin test",
-    "preserve": "node scripts/fix-test-profile.mjs",
+    "preserve": "node scripts/fix-test-profile.mjs && node scripts/ensure-test-libraries.mjs",
     "update-deps": "npm update --save"
   },
   "dependencies": {
