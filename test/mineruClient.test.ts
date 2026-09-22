@@ -5,6 +5,7 @@ import {
   MinerUTaskError,
 } from "../src/modules/mineruClient";
 import { fallbackDownloadBinary } from "../src/modules/mineruClient/http";
+import { extractJobError } from "../src/modules/mineruClient/v1";
 
 const ONLINE_BASE = "https://mineru.net/api";
 const LOCAL_BASE = "http://127.0.0.1:8000";
@@ -295,6 +296,19 @@ describe("mineruClient (V1)", function () {
       status: "failed",
       error: "boom",
     });
+  });
+
+  it("surfaces the MinerU job error code together with the message", function () {
+    assert.equal(
+      extractJobError({
+        status: "failed",
+        error: {
+          code: "-60015",
+          message: "convert failed, please try again later",
+        },
+      }),
+      "convert failed, please try again later (-60015)",
+    );
   });
 
   it("forwards authorization headers through the download fallback wrapper", async function () {

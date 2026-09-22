@@ -384,10 +384,13 @@ export function mapJobStatus(job: V1ParseJob): {
 export function extractJobError(job: V1ParseJob): string {
   const fileError = job.files?.find((file) => file.error)?.error;
   const error = job.error ?? fileError;
+  const message = error?.message;
+  const code = error?.code;
+  if (message && code) {
+    return `${message} (${code})`;
+  }
   return (
-    error?.message ||
-    error?.code ||
-    `MinerU job ended with status ${job.status ?? "unknown"}`
+    message || code || `MinerU job ended with status ${job.status ?? "unknown"}`
   );
 }
 
