@@ -1,5 +1,4 @@
 import { config } from "../package.json";
-import { ColumnOptions, DialogHelper } from "zotero-plugin-toolkit";
 import hooks from "./hooks";
 import type { ItemTreeColumnState } from "./modules/itemTreeColumn";
 import type {
@@ -31,15 +30,9 @@ class Addon {
     locale?: {
       current: any;
     };
-    prefs?: {
-      window: Window;
-      columns: Array<ColumnOptions>;
-      rows: Array<{ [dataKey: string]: string }>;
-    };
     itemTreeColumn?: ItemTreeColumnState;
     readerOverlays?: Map<ReaderOverlayKey, ReaderOverlayState>;
     readerToolbar?: ReaderToolbarRegistration;
-    dialog?: DialogHelper;
   };
   // Lifecycle hooks
   public hooks: typeof hooks;

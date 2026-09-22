@@ -67,7 +67,7 @@ npx esbuild src/index.ts --bundle --target=firefox115 \
 | 编号  | 项目                              | 预估收益             | 风险  | 依赖决策            |
 | ----- | --------------------------------- | -------------------- | ----- | ------------------- |
 | **A** | 移除/替换 `pdf-lib`               | 体积 −约 65%（实测） | 中    | ✅ 已完成（本分支） |
-| **B** | 精简/移除 `zotero-plugin-toolkit` | 体积 −9%（119 KB）   | 低-中 | 否                  |
+| **B** | 精简/移除 `zotero-plugin-toolkit` | 体积 −26% / −120 KB  | 低-中 | ✅ 已完成（B2）     |
 | **C** | 删除死代码                        | 维护性；体积少量     | 低    | ✅ 已完成（C1+C2）  |
 | **D** | 功能/结构合并                     | 行数与维护面大幅下降 | 高    | 需产品取舍          |
 | **E** | 依赖与工程卫生                    | 安装体积、清晰度     | 低    | 否                  |
@@ -220,15 +220,19 @@ esbuild 对 toolkit **无法 tree-shake**（单文件 rolldown 产物 + 无 `sid
 - **启动**：不再构造 15 个 tool、不再 import `Console.sys.mjs`，启动更轻。
 - **类型**：移除 `ColumnOptions`/`DialogHelper` 后，`addon.data.prefs`/`data.dialog` 需一并删除；`hooks.ts` 的 `addon.data.dialog?.window?.close()` 是死代码，可删。
 
-#### B.5 实施清单（B2）
+#### B.5 实施清单（B2）—— ✅ 已完成
 
-- [ ] 重写 `src/utils/ztoolkit.ts`：本地 `createZToolkit()` 返回 `{ log, getGlobal, Clipboard, unregisterAll }`；`Clipboard` 复刻 toolkit 的 text/image 逻辑。
-- [ ] `src/index.ts`：去掉 `BasicTool` import，改用本地 `getGlobal`。
-- [ ] `src/addon.ts`：去掉 `ColumnOptions`/`DialogHelper` import 及 `prefs`/`dialog` 字段。
-- [ ] `src/hooks.ts`：删除 `addon.data.dialog?.window?.close()`。
-- [ ] `src/utils/locale.ts`：改用 `globalThis.Localization`（保留 `typeof Localization` 回退）。
-- [ ] `package.json`：`npm uninstall zotero-plugin-toolkit`。
-- [ ] 回归：`npm run build`（对比体积）、`tsc`（src+test）、`lint:check`、`npm test --exit-on-finish`；手工验证三种复制与 reader 诊断日志。
+- [x] 重写 `src/utils/ztoolkit.ts`：本地 `createZToolkit()` 返回 `{ log, getGlobal, Clipboard, unregisterAll }`；`Clipboard` 复刻 toolkit 的 text/image 逻辑。
+- [x] `src/index.ts`：去掉 `BasicTool` import，改用本地 `getZotero()`/`defineGlobal`。
+- [x] `src/addon.ts`：去掉 `ColumnOptions`/`DialogHelper` import 及 `prefs`/`dialog` 死字段。
+- [x] `src/hooks.ts`：删除 `addon.data.dialog?.window?.close()`（死代码）。
+- [x] `src/utils/locale.ts`：保持 `ztoolkit.getGlobal<typeof Localization>("Localization")`（本地 getGlobal 同形）。
+- [x] `package.json`：`npm uninstall zotero-plugin-toolkit`（`dependencies` 已为空，全部走 devDependencies）。
+- [x] 回归：`npm run build`、`tsc`（src+test）、`lint:check`、`npm test --exit-on-finish` 均通过。
+
+**B 实施结果**：bundle **465,037 → 345,459 B（−119,578 B，−25.7%）**；XPI **132,013 → 104,289 B**。相对最初 1.32 MB 累计 **−74%**。
+**测试**：**326 passed**。**关键设计**：保留 `ztoolkit` 全局名与 `log`/`getGlobal`/`Clipboard`/`unregisterAll` 形状，因此 33 处调用点与 `readerOverlay.test.ts` 的测试缝零改动。
+**待人工回归**（唯一中风险）：三种复制——文本框选、box 文本、box 图片；以及 reader 诊断日志。
 
 **风险与回退**：唯一真实风险是图片剪贴板复刻；若回归可将该函数回退为原 toolkit 调用（保留依赖）或改为“图片复制失败”降级提示。
 

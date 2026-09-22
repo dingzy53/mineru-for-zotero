@@ -138,7 +138,6 @@ async function onMainWindowUnload(win: Window): Promise<void> {
   removeMainWindowStylesheet(win);
   unregisterReaderToolbar(win);
   ztoolkit.unregisterAll();
-  addon.data.dialog?.window?.close();
 }
 
 async function onShutdown(): Promise<void> {
@@ -158,7 +157,6 @@ async function onShutdown(): Promise<void> {
   destroyAllReaderOverlays();
   unregisterItemTreeColumn();
   ztoolkit.unregisterAll();
-  addon.data.dialog?.window?.close();
   // Remove addon object
   addon.data.alive = false;
   // @ts-expect-error - Plugin instance is not typed
