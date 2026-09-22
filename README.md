@@ -3,10 +3,6 @@
 [![zotero target version](https://img.shields.io/badge/Zotero-9%2F10-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org)
 [![Using Zotero Plugin Template](https://img.shields.io/badge/Using-Zotero%20Plugin%20Template-blue?style=flat-square&logo=github)](https://github.com/windingwind/zotero-plugin-template)
 
-<p align="center">
-    <img src="assets/cover.png" alt="cover" width=100%/>
-</p>
-
 ## What You Can Do
 
 - Parse one or more selected PDF attachments from the Zotero item list.
@@ -44,10 +40,6 @@ The API Key is stored only in local Zotero preferences.
 
 ## Parse a PDF
 
-<p align="center">
-    <img src="assets/context-menu.png" alt="context menu" width=80%/>
-</p>
-
 1. In the Zotero item list, select one or more PDF attachments.
 2. Right-click the selection and choose `Parse PDF with MinerU`.
 3. Wait until Zotero shows `MinerU parsing finished`.
@@ -59,10 +51,6 @@ If a selected PDF already has a parse result, choose one of these options:
 - `Reparse and overwrite`: submit the PDF again and replace the result after parsing succeeds.
 
 If parsing fails during replacement, the existing usable result is kept.
-
-<p align="center">
-    <img src="assets/status.png" alt="status" width=80%/>
-</p>
 
 ## Copy in the Reader
 
@@ -79,10 +67,6 @@ For multi-box copying, hold `Shift` or `Ctrl` while clicking boxes. Then use the
 
 ## Local Results & Task Manager
 
-<p align="center">
-    <img src="assets/task-manager.png" alt="task manager" width=80%/>
-</p>
-
 Open `Edit` -> `Settings` -> `MinerU for Zotero` and click `Open Data Folder` to view local parse results. The settings page also shows how many PDFs currently have usable results.
 
 You can also open the **MinerU Task Manager** from the settings page to view the real-time status of your parsing jobs, view error messages, and clear your history. Each running job shows a live progress bar.
@@ -92,10 +76,6 @@ Parsing jobs survive Zotero restarts. If Zotero closes while a job is running, t
 The result folder contains the parsed Markdown, box data used by the reader, and optional images. External tools may read these files, but editing them is not recommended.
 
 ### Agent-friendly Sync Folder
-
-<p align="center">
-    <img src="assets/settings-page.png" alt="settings page" width=80%/>
-</p>
 
 For AI workflows, you can configure an **Agent-friendly Sync Folder** in the settings. When enabled, MinerU for Zotero will automatically copy parsed results (Markdown + images) into a clean, flat directory structure named after the citation key and title (`[CitationKey] - Title/`).
 It will also automatically generate a `metadata.bib` file containing the BibTeX metadata for each item. You can click `Sync All Results Now` in the settings to bulk-export all existing historical results to this folder.

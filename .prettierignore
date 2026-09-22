@@ -1,5 +1,4 @@
 .scaffold
-.vscode
 build
 logs
 node_modules
