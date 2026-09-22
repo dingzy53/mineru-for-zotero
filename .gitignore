@@ -15,6 +15,10 @@ tsconfig.tsbuildinfo
 build
 logs
 
+# Zotero test binary (downloaded by `zotero-plugin test` on Linux)
+Zotero_linux-x86_64/
+zotero.tar.bz2
+
 # agent
 
 .codex
