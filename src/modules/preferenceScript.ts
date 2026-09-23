@@ -1,16 +1,11 @@
 import { config } from "../../package.json";
 import {
-  generateMarkdownApiToken,
   getMarkdownApiEnabled,
-  getMarkdownApiRequireToken,
-  getMarkdownApiToken,
   getSaveImages,
   getLocalApiTimeoutMinutes,
   getParseTier,
   getParseSource,
   setMarkdownApiEnabled,
-  setMarkdownApiRequireToken,
-  setMarkdownApiToken,
   setApiKey,
   setLocalApiBaseURL,
   setLocalApiTimeoutMinutes,
@@ -46,7 +41,6 @@ export async function registerPrefsScripts(_window: Window) {
   const document = _window.document;
 
   registerPreferenceValueSync(document);
-  void updateMarkdownApiTokenStatus(_window);
 
   setText(
     document,
@@ -227,13 +221,6 @@ export async function registerPrefsScripts(_window: Window) {
       if (addonObj?.api?.openTaskManagerWindow) {
         addonObj.api.openTaskManagerWindow();
       }
-    });
-
-  document
-    .getElementById(`${config.addonRef}-api-regenerate-token`)
-    ?.addEventListener("click", () => {
-      setMarkdownApiToken(generateMarkdownApiToken());
-      void updateMarkdownApiTokenStatus(_window);
     });
 
   const syncAllButton = document.getElementById(`${config.addonRef}-sync-all`);
@@ -478,12 +465,6 @@ export function registerPreferenceValueSync(document: Document): void {
   );
   registerCheckboxPreferenceSync(
     document,
-    `zotero-prefpane-${config.addonRef}-api-require-token`,
-    getMarkdownApiRequireToken,
-    setMarkdownApiRequireToken,
-  );
-  registerCheckboxPreferenceSync(
-    document,
     `zotero-prefpane-${config.addonRef}-save-images`,
     getSaveImages,
     setSaveImages,
@@ -654,22 +635,6 @@ async function updateParsedCount(
   }
 }
 
-/**
- * Refresh the visible value and status text of the Markdown query API token.
- */
-async function updateMarkdownApiTokenStatus(_window: Window): Promise<void> {
-  const token = getMarkdownApiToken();
-  setInputValue(_window.document, `${config.addonRef}-api-token`, token);
-  setText(
-    _window.document,
-    `${config.addonRef}-api-token-status`,
-    await formatL10n(
-      _window,
-      token ? "pref-query-api-token-ready" : "pref-query-api-token-empty",
-    ),
-  );
-}
-
 async function formatL10n(
   _window: Window,
   id: string,
@@ -689,12 +654,6 @@ async function formatL10n(
   if (id === "pref-parsed-count") {
     return `Parsed PDFs: ${args?.count ?? 0}`;
   }
-  if (id === "pref-query-api-token-ready") {
-    return "Token generated";
-  }
-  if (id === "pref-query-api-token-empty") {
-    return "No token generated";
-  }
   return "Parsed PDFs: failed to read";
 }
 
@@ -703,17 +662,4 @@ function setText(document: Document, id: string, value: string): void {
   if (element) {
     element.textContent = value;
   }
-}
-
-/**
- * Synchronize the read-only input value and value attribute so the preference pane immediately displays the token.
- */
-function setInputValue(document: Document, id: string, value: string): void {
-  const element = document.getElementById(id) as HTMLInputElement | null;
-  if (!element) {
-    return;
-  }
-
-  element.value = value;
-  element.setAttribute("value", value);
 }

@@ -4,7 +4,7 @@ pref("parseTier", "standard");
 pref("localApiBaseURL", "http://127.0.0.1:8000");
 pref("localApiTimeoutMinutes", 30);
 pref("apiEnabled", false);
-pref("apiRequireToken", true);
+pref("apiRequireToken", false);
 pref("apiToken", "");
 pref("saveImages", true);
 pref("syncFolder", "");

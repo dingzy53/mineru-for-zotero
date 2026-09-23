@@ -14,7 +14,7 @@ import {
 describe("markdownApiEndpoint", function () {
   afterEach(function () {
     setMarkdownApiEnabled(false);
-    setMarkdownApiRequireToken(true);
+    setMarkdownApiRequireToken(false);
     setMarkdownApiToken("");
   });
 

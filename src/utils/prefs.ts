@@ -126,10 +126,10 @@ export function setMarkdownApiEnabled(value: boolean) {
 }
 
 /**
- * Read whether the Markdown query API requires a token (enabled by default).
+ * Read whether the Markdown query API requires a token (disabled by default).
  */
 export function getMarkdownApiRequireToken(): boolean {
-  return getPref("apiRequireToken") !== false;
+  return getPref("apiRequireToken") === true;
 }
 
 /**
