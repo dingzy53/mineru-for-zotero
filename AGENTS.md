@@ -139,21 +139,9 @@ Large PDFs are chunked by passing `page_range` (for example `201-400`) to `POST 
 
 ## Cross-Platform Compatibility
 
-### Platform Detection
+### Zero External Binary Dependencies
 
-`getRuntimePlatform()` must check `AppConstants.platform` for exact string matches first (`"win"`, `"macosx"`, `"linux"`). Remember that Mac is `"macosx"`, not `"mac"`.
-
-### Subprocess Module Loading
-
-`download.ts` loads the Zotero-provided Subprocess module through `ChromeUtils.importESModule` only, guarded with optional chaining so the download reports `{ used: false }` instead of throwing when it is unavailable:
-
-```typescript
-const process = (globalThis as any).ChromeUtils?.importESModule?.(
-  "chrome://zotero/content/Subprocess.sys.mjs",
-)?.Subprocess;
-```
-
-There is no legacy `resource://gre/modules/Subprocess.jsm` fallback. The subprocess path is Windows-only (invoking `curl.exe`) and is never used for uploads or job submission.
+File downloads rely purely on `Zotero.File.download` with fallback to global `fetch`. The plugin has zero external system binary dependencies (no `curl.exe`, no subprocess spawns).
 
 ### OS.File Deprecation
 
