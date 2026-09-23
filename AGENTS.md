@@ -131,7 +131,7 @@ Use `storage.readPreferredMarkdown()` to read precise first, then lite fallback.
 
 ### Agent-Friendly Sync Folder
 
-The optional sync folder copies results into `[CitationKey] - [Title]` format. Sync happens once per successful parse. `_index.json` maintains the list of synced entries.
+The optional sync folder copies results into `[CitationKey] - [Title]` format. Sync happens on demand when the user triggers "Sync All Results Now" in Preferences. `_index.json` maintains the list of synced entries.
 
 ### Large PDFs
 

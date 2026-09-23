@@ -16,7 +16,6 @@ import {
   markAttachmentParseReady,
   markAttachmentParseRunning,
 } from "./itemTreeColumn";
-import { syncResultToAgentFolder } from "./agentSync";
 import {
   taskStore,
   openTaskManagerWindow,
@@ -842,12 +841,6 @@ async function parseAttachmentWithDependencies(
         dependencies.log("Failed to update Zotero tags", e);
       }
 
-      // Sync to Agent folder
-      await syncResultToAgentFolder(
-        attachment,
-        storage.getAttachmentDir(attachmentRef),
-      );
-
       await taskStore.updateTaskStatus(String(attachment.id), "succeeded");
 
       return;
@@ -916,12 +909,6 @@ async function parseAttachmentWithDependencies(
     } catch (e) {
       dependencies.log("Failed to update Zotero tags", e);
     }
-
-    // Sync to Agent folder
-    await syncResultToAgentFolder(
-      attachment,
-      storage.getAttachmentDir(attachmentRef),
-    );
 
     await taskStore.updateTaskStatus(String(attachment.id), "succeeded");
   } catch (error) {
