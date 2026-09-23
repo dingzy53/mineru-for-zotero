@@ -46,7 +46,6 @@ import {
   getTaskResumeDirectory,
   ensureTaskResumeDirectory,
   resetTaskResumeDirectory,
-  cleanupLegacyChunkCacheFiles,
   readChunkResult,
   writeChunkResult,
   serializeChunkValue,
@@ -523,7 +522,6 @@ async function parseAttachmentWithDependencies(
     const resumeDirectory = getTaskResumeDirectory(attachment.id);
     if (!canResume) {
       await resetTaskResumeDirectory(resumeDirectory);
-      await cleanupLegacyChunkCacheFiles(attachment.id);
     }
     await ensureTaskResumeDirectory(resumeDirectory);
 
@@ -1404,7 +1402,6 @@ export {
   getTaskResumeDirectory,
   ensureTaskResumeDirectory,
   resetTaskResumeDirectory,
-  cleanupLegacyChunkCacheFiles,
   readChunkResult,
   writeChunkResult,
   serializeChunkValue,

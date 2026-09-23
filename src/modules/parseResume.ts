@@ -117,36 +117,6 @@ export async function resetTaskResumeDirectory(path: string): Promise<void> {
     // A first parse has no resume directory yet.
   }
 }
-export async function cleanupLegacyChunkCacheFiles(
-  attachmentID: number,
-): Promise<void> {
-  if (typeof IOUtils === "undefined") {
-    return;
-  }
-  try {
-    const children = await IOUtils.getChildren(Zotero.DataDirectory.dir);
-    const prefix = `mineru-part-${attachmentID}-`;
-    for (const entry of children) {
-      const file = entry as { path?: string; name?: string; type?: string };
-      if (
-        !file.path ||
-        file.type !== "file" ||
-        !file.name ||
-        !file.name.startsWith(prefix) ||
-        !file.name.endsWith("-result.json")
-      ) {
-        continue;
-      }
-      try {
-        await IOUtils.remove(file.path);
-      } catch {
-        // Best effort; leftover files are harmless.
-      }
-    }
-  } catch {
-    // The data directory may be unavailable in tests.
-  }
-}
 export async function readChunkResult(path: string): Promise<any | null> {
   if (typeof IOUtils === "undefined") {
     return null;
