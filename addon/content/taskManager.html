@@ -216,31 +216,24 @@
       }
 
       /* Parsed Results styles */
-      .summary-cards {
+      .summary-bar {
         display: flex;
-        gap: 12px;
-        margin-bottom: 16px;
-        flex-wrap: wrap;
-      }
-      .summary-card {
-        flex: 1;
-        min-width: 120px;
-        background: #fff;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 14px;
+        padding: 8px 12px;
+        background: #f8f9fa;
         border: 1px solid #e0e0e0;
         border-radius: 6px;
-        padding: 12px;
-        text-align: center;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-      }
-      .summary-card .value {
-        font-size: 1.4rem;
-        font-weight: bold;
-        color: #2a6099;
-      }
-      .summary-card .label {
-        font-size: 0.85rem;
+        font-size: 0.88rem;
         color: #555;
-        margin-top: 4px;
+      }
+      .summary-bar strong {
+        color: #2a6099;
+        font-weight: 600;
+      }
+      .summary-bar .summary-dot {
+        color: #aaa;
       }
 
       .filter-bar {
@@ -259,17 +252,7 @@
         color: #15141a;
         box-sizing: border-box;
       }
-
-      /* Custom Dropdowns */
-      .custom-dropdown {
-        position: relative;
-        display: inline-block;
-      }
-      .dropdown-btn {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
+      .filter-bar select {
         padding: 6px 10px;
         border: 1px solid #e0e0e0;
         border-radius: 4px;
@@ -277,58 +260,12 @@
         background: #fff;
         color: #15141a;
         cursor: pointer;
-        user-select: none;
-        white-space: nowrap;
         box-sizing: border-box;
         font-family: inherit;
       }
-      .dropdown-btn:hover {
+      .filter-bar select:hover {
         background: #f5f5f5;
         border-color: #ccc;
-      }
-      .dropdown-arrow {
-        font-size: 0.65rem;
-        color: #777;
-        transition: transform 0.2s;
-        pointer-events: none;
-      }
-      .custom-dropdown.open .dropdown-arrow {
-        transform: rotate(180deg);
-      }
-      .dropdown-menu {
-        display: none;
-        position: absolute;
-        top: calc(100% + 4px);
-        left: 0;
-        min-width: 100%;
-        background: #fff;
-        border: 1px solid #e0e0e0;
-        border-radius: 6px;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
-        z-index: 50;
-        padding: 4px 0;
-        max-height: 250px;
-        overflow-y: auto;
-      }
-      .custom-dropdown.open .dropdown-menu {
-        display: block;
-      }
-      .dropdown-item {
-        padding: 7px 12px;
-        font-size: 0.88rem;
-        color: #333;
-        cursor: pointer;
-        white-space: nowrap;
-        user-select: none;
-      }
-      .dropdown-item:hover {
-        background: #f0f4f8;
-        color: #2a6099;
-      }
-      .dropdown-item.selected {
-        font-weight: 600;
-        color: #2a6099;
-        background: #eef4fb;
       }
 
       .list-controls {
@@ -512,7 +449,6 @@
           border-bottom-color: #90caf9;
         }
         .task-item,
-        .summary-card,
         .result-card,
         .bottom-bar,
         .modal {
@@ -520,44 +456,30 @@
           border-color: #404040;
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
         }
-        .summary-card .value {
+        .summary-bar {
+          background: #252525;
+          border-color: #404040;
+          color: #aaa;
+        }
+        .summary-bar strong {
           color: #90caf9;
         }
-        .summary-card .label {
-          color: #aaa;
+        .summary-bar .summary-dot {
+          color: #666;
         }
         .filter-bar input[type="text"] {
           background: #2d2d2d;
           color: #e0e0e0;
           border-color: #555;
         }
-        .dropdown-btn {
+        .filter-bar select {
           background: #2d2d2d;
           color: #e0e0e0;
           border-color: #555;
         }
-        .dropdown-btn:hover {
+        .filter-bar select:hover {
           background: #383838;
           border-color: #777;
-        }
-        .dropdown-arrow {
-          color: #aaa;
-        }
-        .dropdown-menu {
-          background: #2d2d2d;
-          border-color: #555;
-          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
-        }
-        .dropdown-item {
-          color: #ddd;
-        }
-        .dropdown-item:hover {
-          background: #3d4a58;
-          color: #90caf9;
-        }
-        .dropdown-item.selected {
-          color: #90caf9;
-          background: #253342;
         }
         .status-pending {
           background: #404040;
@@ -665,23 +587,16 @@
         </div>
       </div>
 
-      <div class="summary-cards">
-        <div class="summary-card">
-          <div class="value" id="valTotal">0</div>
-          <div class="label" id="lblTotal">Total</div>
-        </div>
-        <div class="summary-card">
-          <div class="value" id="valPrecise">0</div>
-          <div class="label" id="lblPrecise">Precise</div>
-        </div>
-        <div class="summary-card">
-          <div class="value" id="valLite">0</div>
-          <div class="label" id="lblLite">Lite</div>
-        </div>
-        <div class="summary-card">
-          <div class="value" id="valSize">0 B</div>
-          <div class="label" id="lblSize">Total Disk Usage</div>
-        </div>
+      <div class="summary-bar" id="summaryBar">
+        <span
+          ><strong id="valTotal">0</strong> items parsed (<strong
+            id="valPrecise"
+            >0</strong
+          >
+          Precise, <strong id="valLite">0</strong> Lite)</span
+        >
+        <span class="summary-dot">·</span>
+        <span><strong id="valSize">0 B</strong> total disk usage</span>
       </div>
 
       <div class="filter-bar">
@@ -692,87 +607,25 @@
           style="flex: 1"
         />
 
-        <div class="custom-dropdown" id="dropdownMode">
-          <input type="hidden" id="modeFilter" value="all" />
-          <button
-            type="button"
-            class="dropdown-btn"
-            aria-haspopup="listbox"
-            aria-expanded="false"
-          >
-            <span class="dropdown-selected-text">All Modes</span>
-            <span class="dropdown-arrow">▼</span>
-          </button>
-          <div class="dropdown-menu" role="listbox">
-            <div class="dropdown-item selected" role="option" data-value="all">
-              All Modes
-            </div>
-            <div class="dropdown-item" role="option" data-value="precise">
-              Precise Only
-            </div>
-            <div class="dropdown-item" role="option" data-value="lite">
-              Lite Only
-            </div>
-          </div>
-        </div>
+        <select id="modeFilter">
+          <option value="all">All Modes</option>
+          <option value="precise">Precise Only</option>
+          <option value="lite">Lite Only</option>
+        </select>
 
-        <div class="custom-dropdown" id="dropdownContent">
-          <input type="hidden" id="contentFilter" value="all" />
-          <button
-            type="button"
-            class="dropdown-btn"
-            aria-haspopup="listbox"
-            aria-expanded="false"
-          >
-            <span class="dropdown-selected-text">All Content</span>
-            <span class="dropdown-arrow">▼</span>
-          </button>
-          <div class="dropdown-menu" role="listbox">
-            <div class="dropdown-item selected" role="option" data-value="all">
-              All Content
-            </div>
-            <div class="dropdown-item" role="option" data-value="images">
-              Has Images
-            </div>
-            <div class="dropdown-item" role="option" data-value="orphans">
-              Orphans Only
-            </div>
-          </div>
-        </div>
+        <select id="contentFilter">
+          <option value="all">All Content</option>
+          <option value="images">Has Images</option>
+          <option value="orphans">Orphans Only</option>
+        </select>
 
-        <div class="custom-dropdown" id="dropdownSort">
-          <input type="hidden" id="sortOrder" value="dateDesc" />
-          <button
-            type="button"
-            class="dropdown-btn"
-            aria-haspopup="listbox"
-            aria-expanded="false"
-          >
-            <span class="dropdown-selected-text">Date (Newest)</span>
-            <span class="dropdown-arrow">▼</span>
-          </button>
-          <div class="dropdown-menu" role="listbox">
-            <div
-              class="dropdown-item selected"
-              role="option"
-              data-value="dateDesc"
-            >
-              Date (Newest)
-            </div>
-            <div class="dropdown-item" role="option" data-value="dateAsc">
-              Date (Oldest)
-            </div>
-            <div class="dropdown-item" role="option" data-value="sizeDesc">
-              Size (Largest)
-            </div>
-            <div class="dropdown-item" role="option" data-value="sizeAsc">
-              Size (Smallest)
-            </div>
-            <div class="dropdown-item" role="option" data-value="titleAsc">
-              Title (A-Z)
-            </div>
-          </div>
-        </div>
+        <select id="sortOrder">
+          <option value="dateDesc">Date (Newest)</option>
+          <option value="dateAsc">Date (Oldest)</option>
+          <option value="sizeDesc">Size (Largest)</option>
+          <option value="sizeAsc">Size (Smallest)</option>
+          <option value="titleAsc">Title (A-Z)</option>
+        </select>
       </div>
 
       <div class="list-controls">
@@ -1565,72 +1418,6 @@
         document
           .getElementById("sortOrder")
           .addEventListener("change", applyFilters);
-
-        function initCustomDropdown(dropdownEl) {
-          if (!dropdownEl) return;
-          var btn = dropdownEl.querySelector(".dropdown-btn");
-          var hiddenInput = dropdownEl.querySelector("input[type='hidden']");
-          var label = dropdownEl.querySelector(".dropdown-selected-text");
-          var items = dropdownEl.querySelectorAll(".dropdown-item");
-
-          btn.addEventListener("click", function (e) {
-            e.stopPropagation();
-            var isOpen = dropdownEl.classList.contains("open");
-            document
-              .querySelectorAll(".custom-dropdown.open")
-              .forEach(function (d) {
-                d.classList.remove("open");
-                var b = d.querySelector(".dropdown-btn");
-                if (b) b.setAttribute("aria-expanded", "false");
-              });
-            if (!isOpen) {
-              dropdownEl.classList.add("open");
-              btn.setAttribute("aria-expanded", "true");
-            }
-          });
-
-          items.forEach(function (item) {
-            item.addEventListener("click", function (e) {
-              e.stopPropagation();
-              var val = item.dataset.value;
-              var text = item.textContent.trim();
-              hiddenInput.value = val;
-              label.textContent = text;
-              items.forEach(function (it) {
-                it.classList.toggle("selected", it === item);
-              });
-              dropdownEl.classList.remove("open");
-              btn.setAttribute("aria-expanded", "false");
-              hiddenInput.dispatchEvent(new Event("change"));
-            });
-          });
-        }
-
-        initCustomDropdown(document.getElementById("dropdownMode"));
-        initCustomDropdown(document.getElementById("dropdownContent"));
-        initCustomDropdown(document.getElementById("dropdownSort"));
-
-        document.addEventListener("click", function () {
-          document
-            .querySelectorAll(".custom-dropdown.open")
-            .forEach(function (d) {
-              d.classList.remove("open");
-              var b = d.querySelector(".dropdown-btn");
-              if (b) b.setAttribute("aria-expanded", "false");
-            });
-        });
-
-        document.addEventListener("keydown", function (e) {
-          if (e.key === "Escape") {
-            document
-              .querySelectorAll(".custom-dropdown.open")
-              .forEach(function (d) {
-                d.classList.remove("open");
-                var b = d.querySelector(".dropdown-btn");
-                if (b) b.setAttribute("aria-expanded", "false");
-              });
-          }
-        });
 
         document
           .getElementById("btnRefreshResults")
