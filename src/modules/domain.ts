@@ -12,8 +12,8 @@ export interface AttachmentRef {
 export interface NormalizedBox {
   rawIndex: number;
   /**
-   * MinerU 原始 block index；官方 layout.pdf 用它作为 1-based 布局序号。
-   * 旧缓存结果可能缺失，此时回退到 rawIndex。
+   * Original MinerU block index; official layout.pdf uses it as a 1-based layout index.
+   * Legacy cached results may lack this field, falling back to rawIndex.
    */
   sourceIndex?: number;
   page: number;

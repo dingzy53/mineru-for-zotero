@@ -2,10 +2,11 @@ import Addon from "./addon";
 import { config } from "../package.json";
 
 /**
- * 在极早的打包加载阶段安全获取 Zotero 对象。
+ * Safely obtain the Zotero object during the early bundled loading stage.
  *
- * 正常情况下 `Zotero` 已在插件 scope 中可用；若尚未注入，则回退到
- * `chrome://zotero/content/zotero.mjs`，与旧 toolkit 的 `getGlobal` 行为一致。
+ * Under normal circumstances, `Zotero` is already available in the plugin scope;
+ * if not yet injected, fall back to `chrome://zotero/content/zotero.mjs`,
+ * matching the behavior of the legacy toolkit's `getGlobal`.
  */
 function getZotero(): typeof Zotero {
   if (typeof Zotero !== "undefined") {

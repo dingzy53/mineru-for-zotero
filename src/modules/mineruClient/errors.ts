@@ -1,9 +1,9 @@
 /**
- * 表示 MinerU HTTP 请求阶段失败的错误。
+ * Error representing a failure during a MinerU HTTP request stage.
  */
 export class MinerURequestError extends Error {
   /**
-   * 构造包含请求阶段、HTTP 状态码和错误详情的请求错误。
+   * Construct a request error with stage, HTTP status code, and error details.
    */
   constructor(
     public readonly stage: string,
@@ -20,11 +20,11 @@ export class MinerURequestError extends Error {
 }
 
 /**
- * 表示读取本地 PDF 文件失败的错误。
+ * Error representing a failure to read a local PDF file.
  */
 export class MinerUFileAccessError extends Error {
   /**
-   * 构造包含文件路径和底层失败详情的文件访问错误。
+   * Construct a file access error with file path and underlying failure details.
    */
   constructor(
     public readonly filePath: string,
@@ -40,11 +40,11 @@ export class MinerUFileAccessError extends Error {
 }
 
 /**
- * 表示 MinerU 任务提交、轮询、下载或解析阶段失败的错误。
+ * Error representing a failure during MinerU task submission, polling, download, or parsing.
  */
 export class MinerUTaskError extends Error {
   /**
-   * 构造可携带 cause 的 MinerU 任务错误。
+   * Construct a MinerU task error with an optional cause.
    */
   constructor(message: string, options?: { cause?: unknown }) {
     super(message);

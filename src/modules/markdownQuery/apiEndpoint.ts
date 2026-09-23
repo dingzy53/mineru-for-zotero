@@ -32,7 +32,7 @@ export const MARKDOWN_ENDPOINT_PATHS = [
 ] as const;
 
 /**
- * 注册 Markdown 查询 HTTP endpoint，供外部本地客户端调用。
+ * Register the Markdown query HTTP endpoint for external local clients.
  */
 export function registerMarkdownQueryApiEndpoint(): void {
   const service = createMarkdownQueryService({
@@ -48,7 +48,7 @@ export function registerMarkdownQueryApiEndpoint(): void {
 }
 
 /**
- * 卸载 Markdown 查询 HTTP endpoint，避免插件停用后残留路由。
+ * Unregister the Markdown query HTTP endpoint to avoid residual routes when the plugin is disabled.
  */
 export function unregisterMarkdownQueryApiEndpoint(): void {
   for (const path of MARKDOWN_ENDPOINT_PATHS) {
@@ -57,7 +57,7 @@ export function unregisterMarkdownQueryApiEndpoint(): void {
 }
 
 /**
- * 创建同时处理标题检索与 Markdown 读取的 endpoint 实例。
+ * Create an endpoint instance handling both title search and Markdown retrieval.
  */
 export function createMarkdownQueryEndpoint(service: MarkdownQueryService) {
   return {
@@ -144,7 +144,7 @@ export function createMarkdownQueryEndpoint(service: MarkdownQueryService) {
 }
 
 /**
- * 创建 Zotero.Server.Endpoints 需要的可构造 endpoint class。
+ * Create constructible endpoint class required by Zotero.Server.Endpoints.
  */
 export function createMarkdownQueryEndpointClass(
   service: MarkdownQueryService,
@@ -155,7 +155,7 @@ export function createMarkdownQueryEndpointClass(
     supportedMethods = endpoint.supportedMethods;
 
     /**
-     * 代理到共享 endpoint 逻辑，保持测试和运行时行为一致。
+     * Delegate to shared endpoint logic to maintain consistent behavior across tests and runtime.
      */
     init(options: MarkdownEndpointRequest) {
       return endpoint.init(options);
@@ -164,7 +164,7 @@ export function createMarkdownQueryEndpointClass(
 }
 
 /**
- * 将 promise-style endpoint 对象适配到 zotero-types 当前的 endpoint 注册类型。
+ * Adapt promise-style endpoint object to zotero-types current endpoint registration type.
  */
 function toZoteroEndpoint(
   EndpointClass: ReturnType<typeof createMarkdownQueryEndpointClass>,
@@ -173,7 +173,7 @@ function toZoteroEndpoint(
 }
 
 /**
- * 通过 Zotero.Search 按标题、创作者、分类等条件模糊检索库内条目。
+ * Fuzzy search items in the library via Zotero.Search by title, creator, tag, etc.
  */
 async function searchItems(input: ItemSearchInput): Promise<ZoteroItemLike[]> {
   const search = new Zotero.Search({ libraryID: input.libraryID });
@@ -309,14 +309,14 @@ function resolveCollection(
 }
 
 /**
- * 判断条目 date 字段是否以指定四位年份开头。
+ * Check whether the item's date field begins with the specified four-digit year.
  */
 function itemMatchesYear(item: ZoteroItemLike, year: string): boolean {
   return (item.getField("date") ?? "").trim().startsWith(year);
 }
 
 /**
- * 校验 API 开关与 token，支持 Bearer 和 query token 两种来源。
+ * Verify API enabled state and token, supporting both Bearer header and query parameter sources.
  */
 function authorize(
   query: Record<string, string>,
@@ -341,7 +341,7 @@ function authorize(
 }
 
 /**
- * 兼容单元测试中的 query 字典和 Zotero 运行时传入的 searchParams。
+ * Support both query dictionary in unit tests and searchParams passed by Zotero runtime.
  */
 function getQuery(options: MarkdownEndpointRequest): Record<string, string> {
   if (options.searchParams) {
@@ -351,7 +351,7 @@ function getQuery(options: MarkdownEndpointRequest): Record<string, string> {
 }
 
 /**
- * 从 Authorization header 提取 Bearer token。
+ * Extract Bearer token from the Authorization header.
  */
 function getBearerToken(headers: Record<string, string>): string {
   const header = headers.authorization ?? headers.Authorization ?? "";
@@ -360,7 +360,7 @@ function getBearerToken(headers: Record<string, string>): string {
 }
 
 /**
- * 读取必填字符串参数，并在缺失时抛出标准请求错误。
+ * Read a required string parameter, throwing standard request error if missing.
  */
 function requireString(value: string | undefined, name: string): string {
   const text = optionalString(value);
@@ -375,7 +375,7 @@ function requireString(value: string | undefined, name: string): string {
 }
 
 /**
- * 读取必填整数参数，并拒绝非整数值。
+ * Read a required integer parameter, rejecting non-integer values.
  */
 function requireInteger(value: string | undefined, name: string): number {
   const parsed = Number(value);
@@ -390,7 +390,7 @@ function requireInteger(value: string | undefined, name: string): number {
 }
 
 /**
- * 清理可选字符串参数，空白值会被视为未提供。
+ * Sanitize optional string parameter, treating whitespace as absent.
  */
 function optionalString(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
@@ -398,7 +398,7 @@ function optionalString(value: string | undefined): string | undefined {
 }
 
 /**
- * 去掉值为 undefined 的字段，保持注入边界上的参数形状干净。
+ * Strip undefined fields to keep injected parameter shapes clean.
  */
 function pickDefined<T extends Record<string, unknown>>(input: T): Partial<T> {
   return Object.fromEntries(
@@ -407,7 +407,7 @@ function pickDefined<T extends Record<string, unknown>>(input: T): Partial<T> {
 }
 
 /**
- * 解析可选年份参数，必须是恰好四位的数字字符串。
+ * Parse optional year parameter, requiring an exact four-digit numeric string.
  */
 function parseYearParam(value: string | undefined): string | undefined {
   const text = optionalString(value);
@@ -425,7 +425,7 @@ function parseYearParam(value: string | undefined): string | undefined {
 }
 
 /**
- * 解析可选正整数 limit 参数，非法值直接拒绝。
+ * Parse optional positive integer limit parameter, rejecting invalid values.
  */
 function parseOptionalLimit(value: string | undefined): number | undefined {
   const parsed = parseOptionalInteger(value);
@@ -440,7 +440,7 @@ function parseOptionalLimit(value: string | undefined): number | undefined {
 }
 
 /**
- * 解析可选排序字段。
+ * Parse optional sort field.
  */
 function parseSortBy(
   value: string | undefined,
@@ -460,7 +460,7 @@ function parseSortBy(
 }
 
 /**
- * 解析可选排序方向。
+ * Parse optional sort direction.
  */
 function parseSortOrder(value: string | undefined): "asc" | "desc" | undefined {
   const text = optionalString(value);
@@ -479,7 +479,7 @@ function parseSortOrder(value: string | undefined): "asc" | "desc" | undefined {
 }
 
 /**
- * 解析可选布尔参数，仅接受 true/1 为真值。
+ * Parse optional boolean parameter, accepting only true/1 as truthy.
  */
 function parseOptionalBoolean(value: string | undefined): boolean | undefined {
   const text = optionalString(value);
@@ -490,7 +490,7 @@ function parseOptionalBoolean(value: string | undefined): boolean | undefined {
 }
 
 /**
- * 解析可选整数参数，非法值交给下游默认逻辑处理。
+ * Parse optional integer parameter, letting downstream defaults handle invalid values.
  */
 function parseOptionalInteger(value: string | undefined): number | undefined {
   if (value === undefined) {
@@ -501,7 +501,7 @@ function parseOptionalInteger(value: string | undefined): number | undefined {
 }
 
 /**
- * 允许 sectionPath 以 JSON 数组、slash path 或单值字符串形式传入。
+ * Allow sectionPath as JSON array, slash-delimited path, or single string.
  */
 function parseSectionPath(
   value: string | undefined,
@@ -520,7 +520,7 @@ function parseSectionPath(
         return parsed;
       }
     } catch {
-      // 保持回退到字符串路径解析。
+      // Fall back to string path parsing.
     }
   }
 
@@ -532,14 +532,14 @@ function parseSectionPath(
 }
 
 /**
- * 生成标准 JSON HTTP 响应。
+ * Generate a standard JSON HTTP response tuple.
  */
 function json(code: number, payload: unknown) {
   return [code, "application/json", JSON.stringify(payload)] as const;
 }
 
 /**
- * 将领域错误映射为稳定的 JSON 错误响应。
+ * Map domain errors to a stable JSON error response.
  */
 function jsonError(error: unknown) {
   if (error instanceof MarkdownQueryError) {
@@ -560,7 +560,7 @@ function jsonError(error: unknown) {
 }
 
 /**
- * 将未知内部异常写入 Zotero debug，但不影响测试环境或 HTTP 响应。
+ * Log unexpected internal errors to Zotero debug without impacting test environment or HTTP response.
  */
 function logUnexpectedError(error: unknown): void {
   const debug = (

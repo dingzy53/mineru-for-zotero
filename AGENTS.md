@@ -29,7 +29,7 @@ Treat `npm run lint:check` as a CI gate. Run it before commits and fix all issue
 
 ## Coding Style & Naming Conventions
 
-Use TypeScript ES modules and follow two-space indentation. Prettier uses `printWidth: 80`, `tabWidth: 2`, LF. Keep module filenames descriptive and lower camel case. Locale keys belong in Fluent files, not inline UI strings.
+Use TypeScript ES modules and follow two-space indentation. Prettier uses `printWidth: 80`, `tabWidth: 2`, LF. Keep module filenames descriptive and lower camel case. Locale keys belong in Fluent files, not inline UI strings. Write all code comments, JSDoc docstrings, and in-code documentation in English only.
 
 ## Testing Guidelines
 

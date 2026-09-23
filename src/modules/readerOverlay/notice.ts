@@ -1,7 +1,7 @@
 import type { FluentMessageId } from "../../../typings/i10n";
 import { getString } from "../../utils/locale";
 
-/** 读取 overlay 相关本地化文案，并在失败时回退到内置文本。 */
+/** Reads overlay localization text and falls back to built-in strings on failure. */
 export function readerOverlayString(
   id: FluentMessageId,
   fallback: string,
@@ -12,7 +12,7 @@ export function readerOverlayString(
       return value;
     }
   } catch {
-    // 继续回退到内置文本。
+    // Fall back to built-in text.
   }
   return fallback;
 }
@@ -25,11 +25,11 @@ export function showReaderOverlayNotice(id: FluentMessageId): void {
       mainWin.alert(text);
     }
   } catch {
-    // 提示窗口不能影响 reader 交互。
+    // Notice dialogs must not interfere with reader interactions.
   }
 }
 
-/** 返回 overlay 提示文案，并为关键场景提供本地 fallback。 */
+/** Returns overlay notice text with localized fallbacks for key scenarios. */
 export function getReaderOverlayNoticeText(id: FluentMessageId): string {
   try {
     const value = getString(id);
@@ -37,7 +37,7 @@ export function getReaderOverlayNoticeText(id: FluentMessageId): string {
       return value;
     }
   } catch {
-    // 继续回退到内置文本。
+    // Fall back to built-in text.
   }
 
   if (id === "reader-overlay-missing-result") {

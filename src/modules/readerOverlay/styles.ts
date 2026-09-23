@@ -394,7 +394,7 @@ export const READER_OVERLAY_CSS = `
 }
 `;
 
-/** 确保 reader 文档已经注入 overlay 样式，并在主题变化时刷新内容。 */
+/** Ensures overlay styles are injected into the reader document and refreshes content on theme changes. */
 export function ensureReaderOverlayStyles(doc: Document): void {
   const css = `${createReaderOverlayThemeCss(doc)}${createBoxTypeColorCss()}${READER_OVERLAY_CSS}`;
   const existingStyle = doc.getElementById(READER_OVERLAY_STYLE_ID);
@@ -411,9 +411,9 @@ export function ensureReaderOverlayStyles(doc: Document): void {
   doc.head?.append(style);
 }
 
-/** 生成按 box 类型着色的 CSS 变量规则：
- * `.mineru-copy-box[data-mineru-box-type="text"] { --mineru-box-color: …; … }`。
- * 颜色表来自官方的类型配色，保证不同元素在 all 模式下可用颜色区分。
+/** Generates CSS variable rules colored by box type:
+ * `.mineru-copy-box[data-mineru-box-type="text"] { --mineru-box-color: …; … }`.
+ * The color table comes from the official type palette, ensuring distinct elements can be differentiated by color in all mode.
  */
 export function createBoxTypeColorCss(): string {
   return getBoxTypeColorStyles()
@@ -423,7 +423,7 @@ export function createBoxTypeColorCss(): string {
     .join("\n");
 }
 
-/** 从父 reader 窗口桥接主题变量，生成 overlay 使用的前缀 CSS。 */
+/** Bridges theme variables from parent reader windows to generate prefix CSS used by the overlay. */
 export function createReaderOverlayThemeCss(doc: Document): string {
   const declarations = READER_OVERLAY_THEME_VARIABLES.flatMap((name) => {
     const value = resolveCssVariableFromWindowTree(doc, name);
@@ -434,7 +434,7 @@ export function createReaderOverlayThemeCss(doc: Document): string {
     : "";
 }
 
-/** 沿着父窗口链查找 reader 主题变量，避免读取到 overlay 自身注入的旧值。 */
+/** Traverses parent window chain to find reader theme variables, avoiding stale values injected by the overlay itself. */
 export function resolveCssVariableFromWindowTree(
   doc: Document,
   name: string,
@@ -461,7 +461,7 @@ export function resolveCssVariableFromWindowTree(
   return readCssVariable(doc, name);
 }
 
-/** 从当前文档的根元素或 body 读取单个 CSS 自定义属性。 */
+/** Reads a single CSS custom property from the root element or body of the current document. */
 export function readCssVariable(doc: Document, name: string): string | null {
   const win = doc.defaultView;
   if (!win) {
@@ -484,12 +484,12 @@ export function readCssVariable(doc: Document, name: string): string | null {
   return null;
 }
 
-/** 校验 CSS 变量值是否可安全拼接进样式文本。 */
+/** Validates whether a CSS variable value can be safely spliced into style text. */
 export function isSafeCssCustomPropertyValue(value: string): boolean {
   return value.length > 0 && !/[;{}]/.test(value);
 }
 
-/** 兼容测试桩对象，安全读取 getPropertyValue 的返回值。 */
+/** Safely reads return value of getPropertyValue, compatible with test stub objects. */
 function getPropertyValue(
   computedStyle:
     | CSSStyleDeclaration

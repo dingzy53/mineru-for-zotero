@@ -22,27 +22,27 @@ export let readerToolbarIconLoadPromise: Promise<void> | undefined;
 export let readerToolbarModeIconLoadPromise: Promise<void> | undefined;
 export let readerToolbarActionIconLoadPromise: Promise<void> | undefined;
 
-/** 返回已加载的 toolbar button icon URI，未加载时返回空字符串。 */
+/** Returns the loaded toolbar button icon URI, or an empty string if not loaded. */
 export function getReaderToolbarIconURI(): string {
   return readerToolbarIconURI;
 }
 
-/** 返回某个 toolbar mode 已加载的 icon SVG，未加载时返回空字符串。 */
+/** Returns the loaded icon SVG for a toolbar mode, or an empty string if not loaded. */
 export function getReaderToolbarModeSVG(mode: ReaderOverlayMode): string {
   return readerToolbarModeSVGs[mode] ?? "";
 }
 
-/** 返回已加载的清空选择 action SVG，未加载时返回空字符串。 */
+/** Returns the loaded clear selection action SVG, or an empty string if not loaded. */
 export function getReaderToolbarClearSelectionSVG(): string {
   return readerToolbarClearSelectionSVG;
 }
 
-/** 返回已加载的复制选择 action SVG，未加载时返回空字符串。 */
+/** Returns the loaded copy selection action SVG, or an empty string if not loaded. */
 export function getReaderToolbarCopySelectionSVG(): string {
   return readerToolbarCopySelectionSVG;
 }
 
-/** 保存已加载的 mode SVG，供后续 toolbar 渲染使用。 */
+/** Stores loaded mode SVG for subsequent toolbar rendering. */
 export function setReaderToolbarModeIconSVG(
   mode: ReaderOverlayMode,
   svg: string,
@@ -50,45 +50,45 @@ export function setReaderToolbarModeIconSVG(
   readerToolbarModeSVGs[mode] = svg;
 }
 
-/** 保存清空选择 action SVG，供后续 toolbar 渲染使用。 */
+/** Stores clear selection action SVG for subsequent toolbar rendering. */
 export function setReaderToolbarClearSelectionSVG(svg: string): void {
   readerToolbarClearSelectionSVG = svg;
 }
 
-/** 保存复制选择 action SVG，供后续 toolbar 渲染使用。 */
+/** Stores copy selection action SVG for subsequent toolbar rendering. */
 export function setReaderToolbarCopySelectionSVG(svg: string): void {
   readerToolbarCopySelectionSVG = svg;
 }
 
-/** 保存主 toolbar icon 的 data URI，供后续 button 渲染使用。 */
+/** Stores the data URI for the main toolbar icon for subsequent button rendering. */
 export function setReaderToolbarIconURI(iconURI: string): void {
   readerToolbarIconURI = iconURI;
 }
 
-/** 将 SVG 字符串转换为适合 image source 的 data URI。 */
+/** Converts an SVG string into a data URI suitable for an image source. */
 export function createReaderToolbarIconDataURI(svg: string): string {
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
-/** 确保主 toolbar icon 只加载一次。 */
+/** Ensures the main toolbar icon is loaded only once. */
 export async function ensureReaderToolbarIconLoaded(): Promise<void> {
   readerToolbarIconLoadPromise ??= loadReaderToolbarIconURI();
   await readerToolbarIconLoadPromise;
 }
 
-/** 确保所有 mode SVG icon 只加载一次。 */
+/** Ensures all mode SVG icons are loaded only once. */
 export async function ensureReaderToolbarModeIconLoaded(): Promise<void> {
   readerToolbarModeIconLoadPromise ??= loadReaderToolbarModeSVGs();
   await readerToolbarModeIconLoadPromise;
 }
 
-/** 确保所有 action SVG icon 只加载一次。 */
+/** Ensures all action SVG icons are loaded only once. */
 export async function ensureReaderToolbarActionIconLoaded(): Promise<void> {
   readerToolbarActionIconLoadPromise ??= loadReaderToolbarActionIconSVGs();
   await readerToolbarActionIconLoadPromise;
 }
 
-/** 确保所有 toolbar asset 组都已加载。 */
+/** Ensures all toolbar asset groups are loaded. */
 export async function ensureReaderToolbarAssetsLoaded(): Promise<void> {
   await Promise.all([
     ensureReaderToolbarIconLoaded(),
@@ -97,7 +97,7 @@ export async function ensureReaderToolbarAssetsLoaded(): Promise<void> {
   ]);
 }
 
-/** 从插件 chrome root 加载主 toolbar icon。 */
+/** Loads the main toolbar icon from the plugin chrome root. */
 export async function loadReaderToolbarIconURI(): Promise<void> {
   try {
     const response = await fetch(rootURI + READER_TOOLBAR_ICON_PATH);
@@ -114,14 +114,14 @@ export async function loadReaderToolbarIconURI(): Promise<void> {
   }
 }
 
-/** 从插件 chrome root 加载 mode SVG。 */
+/** Loads mode SVGs from the plugin chrome root. */
 export async function loadReaderToolbarModeSVGs(): Promise<void> {
   const entries = Object.entries(READER_TOOLBAR_MODE_ICON_PATHS) as Array<
     [ReaderOverlayMode, string]
   >;
   await Promise.all(
     entries.map(
-      /** 加载并保存一个 toolbar mode 的 SVG。 */
+      /** Loads and stores the SVG for a toolbar mode. */
       async ([mode, path]) => {
         try {
           const response = await fetch(rootURI + path);
@@ -144,7 +144,7 @@ export async function loadReaderToolbarModeSVGs(): Promise<void> {
   );
 }
 
-/** 从插件 chrome root 加载 action SVG。 */
+/** Loads action SVGs from the plugin chrome root. */
 export async function loadReaderToolbarActionIconSVGs(): Promise<void> {
   await Promise.all([
     loadReaderToolbarActionIconSVG(
@@ -160,7 +160,7 @@ export async function loadReaderToolbarActionIconSVGs(): Promise<void> {
   ]);
 }
 
-/** 从插件 chrome root 加载一个 action SVG。 */
+/** Loads a single action SVG from the plugin chrome root. */
 export async function loadReaderToolbarActionIconSVG(
   action: string,
   path: string,
@@ -184,7 +184,7 @@ export async function loadReaderToolbarActionIconSVG(
   }
 }
 
-/** 规范化内置 SVG 颜色，使 toolbar button 继承 currentColor。 */
+/** Normalizes built-in SVG colors so toolbar buttons inherit currentColor. */
 export function normalizeReaderToolbarModeSVG(svg: string): string {
   return svg
     .replace(/\sfill="#333333"/g, ' fill="currentColor"')

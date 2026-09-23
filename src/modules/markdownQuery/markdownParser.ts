@@ -11,7 +11,7 @@ const ATX_HEADING = /^(#{1,6})\s+(.+?)\s*#*\s*$/;
 const TOP_LEVEL_TITLE = /^#\s+.+$/;
 
 /**
- * 解析 Markdown ATX 标题，并为每个标题生成层级路径。
+ * Parse Markdown ATX headings and generate hierarchical paths for each heading.
  */
 export function parseHeadings(markdown: string): MarkdownHeading[] {
   const headings: MarkdownHeading[] = [];
@@ -43,19 +43,19 @@ export function parseHeadings(markdown: string): MarkdownHeading[] {
 }
 
 /**
- * 表示读取章节时的可选行为。
+ * Optional behaviors when reading a section.
  */
 export interface ReadSectionOptions {
   /**
-   * 包含同级及以下全部子节内容。
-   * MinerU 常把 "3.1" 这类编号子节渲染成与父节同级的标题，
-   * 开启后结束边界改为下一个更高级别标题，一次返回整棵子树。
+   * Include all sibling and subordinate subsections.
+   * MinerU often renders numbered subsections like "3.1" at the same heading level as their parent;
+   * when enabled, the end boundary becomes the next higher-level heading, returning the full subtree.
    */
   includeSubsections?: boolean;
 }
 
 /**
- * 根据 heading path 返回章节内容，包含章节标题行。
+ * Return section content based on heading path, including the heading title line.
  */
 export function readSection(
   markdown: string,
@@ -91,7 +91,7 @@ export function readSection(
 }
 
 /**
- * 默认边界：下一个同级或更高级标题。
+ * Default boundary: the next heading at the same or higher level.
  */
 function findSectionEndLine(
   headings: MarkdownHeading[],
@@ -105,12 +105,12 @@ function findSectionEndLine(
 }
 
 /**
- * 子树边界：下一个更高层标题，或编号切换到另一组的同级标题。
+ * Subtree boundary: the next higher-level heading, or a sibling heading switching to another section group.
  *
- * MinerU 常把 "3.1" 这类编号子节渲染成与父节同级的标题，
- * 单靠层级无法区分子节与下一章，因此借助标题的数字前缀：
- * 同级且顶层编号不同的标题（如 "4."）结束当前组；
- * 无编号的同级标题（如 "References"）也视为新的一节。
+ * MinerU often renders numbered subsections like "3.1" at the same heading level as their parent;
+ * heading level alone cannot differentiate subsections from the next chapter. We therefore inspect
+ * numeric prefixes: sibling headings with a different top-level number (e.g. "4.") terminate the current
+ * group, and unnumbered sibling headings (e.g. "References") are also treated as a new section.
  */
 function findSubtreeEndLine(
   headings: MarkdownHeading[],
@@ -137,7 +137,7 @@ function findSubtreeEndLine(
 }
 
 /**
- * 提取标题开头的顶层数字编号，例如 "3.1. Task" 返回 3。
+ * Extract leading top-level numeric prefix, e.g. "3.1. Task" returns 3.
  */
 function leadingNumber(title: string): number | undefined {
   const match = /^(\d+)\b/.exec(title.trim());
@@ -145,7 +145,7 @@ function leadingNumber(title: string): number | undefined {
 }
 
 /**
- * 按空行分隔段落，返回包含前后上下文的关键词命中。
+ * Split paragraphs by blank lines and return keyword hits with surrounding context.
  */
 export function searchMarkdown(
   markdown: string,
@@ -237,7 +237,7 @@ export function searchBoxes(
 }
 
 /**
- * 统一 section path 的字符串与数组输入格式。
+ * Normalize section path string and array inputs into a uniform format.
  */
 function normalizeSectionPath(path: string[] | string): string[] {
   if (Array.isArray(path)) {
@@ -251,7 +251,7 @@ function normalizeSectionPath(path: string[] | string): string[] {
 }
 
 /**
- * 判断两个标题路径是否完全一致。
+ * Determine whether two heading paths are identical.
  */
 function samePath(left: string[], right: string[]): boolean {
   return (

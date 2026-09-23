@@ -3,7 +3,7 @@ import { isSafeRelativePath, summarizeBytes } from "./path";
 import type { ZipEntries } from "./types";
 
 /**
- * 使用 Zotero nsIZipReader 从本地 ZIP 文件读取需要保留的条目。
+ * Read entries to retain from a local ZIP file using Zotero nsIZipReader.
  */
 export function readZipFile(path: string): ZipEntries | null {
   const xpcom = globalThis as typeof globalThis & {
@@ -47,7 +47,7 @@ export function readZipFile(path: string): ZipEntries | null {
 }
 
 /**
- * 从 nsIZipReader 中读取单个 ZIP 条目的完整字节。
+ * Read the full bytes of a single ZIP entry from nsIZipReader.
  */
 export function readZipEntryBytes(
   reader: nsIZipReader,
@@ -71,7 +71,7 @@ export function readZipEntryBytes(
 }
 
 /**
- * 解析 ZIP ArrayBuffer 并返回 MinerU 结果需要的条目集合。
+ * Parse a ZIP ArrayBuffer and return the set of entries needed for MinerU results.
  */
 export async function readZip(buffer: ArrayBuffer): Promise<ZipEntries> {
   const bytes = new Uint8Array(buffer);
@@ -108,7 +108,7 @@ export async function readZip(buffer: ArrayBuffer): Promise<ZipEntries> {
 }
 
 /**
- * 先直接解析 ZIP；失败时写入临时文件并使用 nsIZipReader 回退解析。
+ * Parse ZIP directly first; on failure, write to a temporary file and fall back to nsIZipReader parsing.
  */
 export async function readZipWithFileFallback(
   buffer: ArrayBuffer,
@@ -142,7 +142,7 @@ export async function readZipWithFileFallback(
 }
 
 /**
- * 按本地文件头偏移读取 ZIP 条目并按压缩方法解码。
+ * Reads a ZIP entry by local header offset and decodes it according to its compression method.
  */
 export async function readZipEntry(
   bytes: Uint8Array,
@@ -170,7 +170,7 @@ export async function readZipEntry(
 }
 
 /**
- * 使用运行时 DecompressionStream 解压 deflate-raw 数据。
+ * Decompresses deflate-raw data using runtime DecompressionStream.
  */
 export async function inflateRaw(
   compressed: Uint8Array,
@@ -199,14 +199,14 @@ export async function inflateRaw(
 }
 
 /**
- * 使用 UTF-8 解码 ZIP 条目字节。
+ * Decodes ZIP entry bytes using UTF-8.
  */
 export function decodeText(bytes: Uint8Array): string {
   return new TextDecoder().decode(bytes);
 }
 
 /**
- * 在系统临时目录下创建 ZIP 回退读取使用的临时文件路径。
+ * Creates a temporary file path under the system temp directory for ZIP fallback reading.
  */
 async function createTemporaryPath(fileName: string): Promise<string> {
   const baseDir = PathUtils.tempDir;
@@ -215,7 +215,7 @@ async function createTemporaryPath(fileName: string): Promise<string> {
 }
 
 /**
- * 写入临时 ZIP 字节供 nsIZipReader 读取。
+ * Writes temporary ZIP bytes for nsIZipReader to read.
  */
 async function writeTemporaryZip(
   path: string,
@@ -225,13 +225,13 @@ async function writeTemporaryZip(
 }
 
 /**
- * 删除 ZIP 回退读取产生的临时文件。
+ * Removes temporary files created during ZIP fallback reading.
  */
 async function removeTemporaryZip(path: string): Promise<void> {
   try {
     await IOUtils.remove(path, { ignoreAbsent: true });
   } catch {
-    // 临时文件清理失败不应覆盖 ZIP 解析结果或原始错误。
+    // Temporary file cleanup failures should not mask ZIP parse results or original errors.
   }
 }
 
@@ -240,7 +240,7 @@ function errorText(error: unknown): string {
 }
 
 /**
- * 判断 ZIP 条目是否需要读取到内存。
+ * Determines whether a ZIP entry needs to be read into memory.
  */
 function shouldReadZipEntry(name: string): boolean {
   return (
@@ -252,7 +252,7 @@ function shouldReadZipEntry(name: string): boolean {
 }
 
 /**
- * 判断 ZIP 图片条目是否位于安全的 images 相对路径下。
+ * Determines whether a ZIP image entry is located under a safe relative path within images/.
  */
 function isReadableZipImageEntry(name: string): boolean {
   const normalized = name.replace(/\\/g, "/");
@@ -264,7 +264,7 @@ function isReadableZipImageEntry(name: string): boolean {
 }
 
 /**
- * 定位 ZIP 中央目录起始偏移。
+ * Locates the starting offset of the ZIP central directory.
  */
 export function findCentralDirectoryOffset(bytes: Uint8Array): number {
   for (let offset = bytes.length - 22; offset >= 0; offset -= 1) {
@@ -278,7 +278,7 @@ export function findCentralDirectoryOffset(bytes: Uint8Array): number {
 }
 
 /**
- * 从字节数组指定偏移读取 little-endian uint16。
+ * Reads a little-endian uint16 from the byte array at the specified offset.
  */
 export function readUint16(bytes: Uint8Array, offset: number): number {
   return new DataView(bytes.buffer, bytes.byteOffset + offset, 2).getUint16(
@@ -288,7 +288,7 @@ export function readUint16(bytes: Uint8Array, offset: number): number {
 }
 
 /**
- * 从字节数组指定偏移读取 little-endian uint32。
+ * Reads a little-endian uint32 from the byte array at the specified offset.
  */
 export function readUint32(bytes: Uint8Array, offset: number): number {
   return new DataView(bytes.buffer, bytes.byteOffset + offset, 4).getUint32(

@@ -1,5 +1,5 @@
 /**
- * Markdown Query API 使用的标准错误码集合。
+ * Standard error codes used by the Markdown Query API.
  */
 export type MarkdownQueryErrorCode =
   | "api-disabled"
@@ -16,7 +16,7 @@ export type MarkdownQueryErrorCode =
   | "internal-error";
 
 /**
- * 封装 Markdown Query API 的错误码、HTTP 状态与附加细节。
+ * Encapsulate error code, HTTP status, and additional details for the Markdown Query API.
  */
 export class MarkdownQueryError extends Error {
   constructor(
@@ -31,7 +31,7 @@ export class MarkdownQueryError extends Error {
 }
 
 /**
- * 表示一个带层级路径信息的 Markdown 标题。
+ * Markdown heading with hierarchical path information.
  */
 export interface MarkdownHeading {
   level: number;
@@ -41,7 +41,7 @@ export interface MarkdownHeading {
 }
 
 /**
- * 表示按标题路径读取出的章节内容。
+ * Section content retrieved by heading path.
  */
 export interface MarkdownSectionResult {
   heading: MarkdownHeading;
@@ -49,7 +49,7 @@ export interface MarkdownSectionResult {
 }
 
 /**
- * 表示一个带前后文的 Markdown 段落搜索命中。
+ * Search hit in a Markdown paragraph with surrounding context.
  */
 export interface MarkdownSearchMatch {
   paragraphIndex: number;
@@ -106,13 +106,13 @@ export interface TagSummary {
 }
 
 /**
- * 表示搜索条目时允许的组合条件。
+ * Combined query criteria permitted when searching items.
  */
 export interface ItemSearchInput {
   libraryID: number;
   title?: string;
   creator?: string;
-  /** 四位年份，按条目 date 字段前缀过滤。 */
+  /** Four-digit year filtered by item date field prefix. */
   year?: string;
   tag?: string;
   collection?: string;
@@ -130,7 +130,7 @@ export interface ItemSearchInput {
 }
 
 /**
- * 表示 Zotero 创作者的最小视图，兼容单名字段。
+ * Minimal view of a Zotero creator, compatible with single-name fields.
  */
 export interface CreatorLike {
   firstName?: string;
@@ -139,7 +139,7 @@ export interface CreatorLike {
 }
 
 /**
- * 表示 Markdown Query API 解析附件时依赖的最小 Zotero item 视图。
+ * Minimal Zotero item view required for attachment resolution in the Markdown Query API.
  */
 export interface ZoteroItemLike {
   id: number;
@@ -160,7 +160,7 @@ export interface ZoteroItemLike {
 }
 
 /**
- * 表示 Attachment Resolver 读取 Zotero items 所需的最小网关接口。
+ * Minimal gateway interface for the Attachment Resolver to fetch Zotero items.
  */
 export interface ZoteroItemsGateway {
   getAsync(ids: number[]): Promise<ZoteroItemLike[]>;
@@ -171,7 +171,7 @@ export interface ZoteroItemsGateway {
 }
 
 /**
- * 表示一个 PDF 附件候选项的评分与状态信息。
+ * Scoring and status information for a candidate PDF attachment.
  */
 export interface AttachmentCandidate {
   itemID: number;
@@ -185,7 +185,7 @@ export interface AttachmentCandidate {
 }
 
 /**
- * 表示附件解析完成后的父条目、目标附件与可选候选列表。
+ * Parent item, target attachment, and optional candidate list after attachment resolution.
  */
 export interface ResolvedAttachment {
   item: ZoteroItemLike;
@@ -194,7 +194,7 @@ export interface ResolvedAttachment {
 }
 
 /**
- * 表示读取附件解析状态所需的最小存储接口。
+ * Minimal storage interface for reading attachment parse statuses.
  */
 export interface ParseStatusReader {
   readParseStatus(ref: {
@@ -204,7 +204,7 @@ export interface ParseStatusReader {
 }
 
 /**
- * 表示 Markdown 查询返回内容的粒度。
+ * Content granularity returned by Markdown queries.
  */
 export type MarkdownGranularity =
   | "full"
@@ -214,7 +214,7 @@ export type MarkdownGranularity =
   | "locate";
 
 /**
- * 表示查询结果中的条目摘要信息。
+ * Summary information for an item in query results.
  */
 export interface ItemSummary {
   itemID: number;
@@ -222,9 +222,9 @@ export interface ItemSummary {
   key: string;
   type: "regular" | "attachment";
   title: string;
-  /** 条目 date 字段中的四位年份，缺失时不输出。 */
+  /** Four-digit year in item date field; omitted when absent. */
   year?: string;
-  /** 格式化后的创作者列表，缺失或为空时不输出。 */
+  /** Formatted creator list; omitted when absent or empty. */
   creators?: string[];
   itemType?: string;
   publication?: string;
@@ -233,7 +233,7 @@ export interface ItemSummary {
 }
 
 /**
- * 表示查询结果中的附件摘要信息。
+ * Summary information for an attachment in query results.
  */
 export interface AttachmentSummary {
   itemID: number;

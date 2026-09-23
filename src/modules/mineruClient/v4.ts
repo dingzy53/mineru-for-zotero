@@ -54,18 +54,18 @@ interface V4ExtractResultsData {
 }
 
 /**
- * 创建官方 MinerU v4 精准解析 API client。
+ * Create official MinerU v4 precise parsing API client.
  *
- * 官方文档：https://mineru.net/apiManage/docs
+ * Official docs: https://mineru.net/apiManage/docs
  *
- * 本地文件流程（与 v1 的 uploads/parse jobs 不同）：
- *   POST /v4/file-urls/batch → 拿到 batch_id + 预签名上传链接
- *   PUT 字节（不带 Content-Type）
- *   轮询 GET /v4/extract-results/batch/{batch_id}
- *   下载 full_zip_url（zip 内含 full.md/layout.json/images）
+ * Local file workflow (differing from v1's uploads/parse jobs):
+ *   POST /v4/file-urls/batch -> obtain batch_id + presigned upload URL
+ *   PUT bytes (without Content-Type)
+ *   poll GET /v4/extract-results/batch/{batch_id}
+ *   download full_zip_url (zip containing full.md/layout.json/images)
  *
- * 之所以 online 走 v4：官方 v1 在转换 `middle_json`/`zip` 等输出格式时可能
- * 返回 `file_conversion_failed`，而文档化的 v4 稳定产出标准 zip。
+ * Why online uses v4: official v1 output-format conversions for `middle_json`/`zip`
+ * may fail with `file_conversion_failed`, whereas documented v4 reliably outputs a standard zip.
  */
 export function createV4MinerUClient(
   options: V4MinerUClientOptions,
@@ -266,7 +266,7 @@ export function createV4MinerUClient(
 }
 
 /**
- * 生成独立 ArrayBuffer，供 ZIP 回退解析使用。
+ * Create an independent ArrayBuffer for ZIP fallback decoding.
  */
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const copy = new Uint8Array(bytes.byteLength);

@@ -31,7 +31,7 @@ const HORIZONTAL_PLACEMENT_CLASSES = [
   "mineru-copy-select-panel-left",
 ] as const;
 
-/** 把归一化 bbox 转成可直接赋给 DOM style 的百分比定位样式。 */
+/** Converts a normalized bbox into percentage positioning styles directly assignable to DOM style. */
 export function computeBoxStyle(box: NormalizedBox): ReaderOverlayBoxStyle {
   return {
     left: `${formatPercent(box.bbox.x)}`,
@@ -41,7 +41,7 @@ export function computeBoxStyle(box: NormalizedBox): ReaderOverlayBoxStyle {
   };
 }
 
-/** 根据当前 boxes 和 mode 构建完整 overlay root。 */
+/** Builds a complete overlay root according to current boxes and mode. */
 export function buildReaderOverlayRoot(
   doc: Document,
   boxes: NormalizedBox[],
@@ -114,7 +114,7 @@ export function buildReaderOverlayRoot(
   };
 }
 
-/** Shift 范围选择默认跳过页眉、页脚、页码等页面装饰 box。 */
+/** Shift range selection skips page decoration boxes such as headers, footers, and page numbers by default. */
 function isRangeSelectableBox(box: NormalizedBox): boolean {
   return !isPageDecorationBoxType(box.type);
 }
@@ -130,12 +130,12 @@ function isPageDecorationBoxType(type: string): boolean {
   );
 }
 
-/** 安全移除 overlay root，兼容 dead object teardown。 */
+/** Safely removes the overlay root, accommodating dead object teardown. */
 export function removeReaderOverlayRoot(root: Element | null): void {
   safeReaderOverlayCleanup(() => root?.remove());
 }
 
-/** 创建单个 box 的 DOM 节点，并挂载选择与复制交互。 */
+/** Creates a DOM node for an individual box and attaches selection and copy interactions. */
 export function createBoxElement(
   doc: Document,
   box: NormalizedBox,
@@ -191,7 +191,7 @@ export function createBoxElement(
   return element;
 }
 
-/** 为 box 渲染顶部标签。 */
+/** Renders the top label for a box. */
 export function createBoxLabel(
   doc: Document,
   box: NormalizedBox,
@@ -202,7 +202,7 @@ export function createBoxLabel(
   return label;
 }
 
-/** 为 box 渲染右上角的 MinerU 布局序号（对应官方 layout.pdf 的数字）。 */
+/** Renders the MinerU layout index badge in the top right corner of a box (corresponding to numbers in the official layout.pdf). */
 export function createBoxIndexBadge(
   doc: Document,
   box: NormalizedBox,
@@ -214,7 +214,7 @@ export function createBoxIndexBadge(
   return badge;
 }
 
-/** 计算官方 layout.pdf 风格的 1-based 布局序号。 */
+/** Computes the 1-based layout index in the style of the official layout.pdf. */
 export function getBoxIndexLabel(box: NormalizedBox): number {
   const sourceIndex = box.sourceIndex;
   const index =
@@ -224,7 +224,7 @@ export function getBoxIndexLabel(box: NormalizedBox): number {
   return index + 1;
 }
 
-/** 为 box 渲染复制动作区域，公式与普通文本走不同按钮集合。 */
+/** Renders the copy action area for a box, using different button sets for formulas versus regular text. */
 export function createBoxActions(
   doc: Document,
   box: NormalizedBox,
@@ -285,7 +285,7 @@ export function createBoxActions(
   return actions;
 }
 
-/** 把复制下拉菜单纳入 overlay active 状态，避免浮层下方 box 被 hover。 */
+/** Integrates the copy dropdown menu into the overlay active state to prevent boxes beneath the floating layer from receiving hover hits. */
 function bindCopyMenuActiveState(
   copyControl: HTMLButtonElement | HTMLDivElement,
   doc: Document,
@@ -314,7 +314,7 @@ interface ToolbarButtonOptions {
   showText?: boolean;
 }
 
-/** 创建普通文本或公式复制入口。 */
+/** Creates a copy entry point for plain text or formulas. */
 function createToolbarCopyControl(
   doc: Document,
   box: NormalizedBox,
@@ -465,7 +465,7 @@ function copyTableBoxByFormat(
   copyText(formatTableBoxForCopy(box, format as TableCopyTextFormat));
 }
 
-/** 创建 toolbar 按钮并阻止事件继续进入 PDF.js 选择逻辑。 */
+/** Creates a toolbar button and prevents events from continuing into PDF.js selection logic. */
 function createToolbarButton(
   doc: Document,
   options: ToolbarButtonOptions,
@@ -486,7 +486,7 @@ function createToolbarButton(
   return button;
 }
 
-/** 创建 toolbar 分隔线。 */
+/** Creates a toolbar divider. */
 function createToolbarDivider(doc: Document): HTMLSpanElement {
   const divider = doc.createElement("span");
   divider.className = "mineru-copy-toolbar-divider";
@@ -494,7 +494,7 @@ function createToolbarDivider(doc: Document): HTMLSpanElement {
   return divider;
 }
 
-/** 创建复制下拉菜单中的具体复制动作。 */
+/** Creates a concrete copy action in the copy dropdown menu. */
 function createCopyMenuItem(
   doc: Document,
   label: string,
@@ -523,7 +523,7 @@ function createTableCopyMenuItem(
   return button;
 }
 
-/** 创建可选中文本的 readonly 面板。 */
+/** Creates a readonly panel allowing text selection. */
 function createSelectCopyPanel(
   doc: Document,
   box: NormalizedBox,
@@ -557,7 +557,7 @@ function createSelectCopyPanel(
   return panel;
 }
 
-/** 获取 select-copy 面板中允许用户手动选择的文本。 */
+/** Retrieves text allowed for manual selection in the select-copy panel. */
 export function getSelectableBoxText(box: NormalizedBox): string {
   if (isFormulaBox(box)) {
     return formatFormulaBoxForCopy(box, "with-dollar");
@@ -570,7 +570,7 @@ export function getSelectableBoxText(box: NormalizedBox): string {
   return box.markdown || formatBoxesForCopy([box]);
 }
 
-/** 根据文本长度估算 textarea 初始行数，避免长内容面板仍只有默认两行。 */
+/** Estimates initial textarea rows based on text length, preventing long content panels from defaulting to just two rows. */
 export function computeSelectPanelRows(value: string): number {
   const minRows = 4;
   const maxRows = 12;
@@ -581,13 +581,13 @@ export function computeSelectPanelRows(value: string): number {
   return Math.max(minRows, Math.min(maxRows, rows));
 }
 
-/** 阻止 overlay action 的事件继续触发 PDF.js 或 box 选择。 */
+/** Prevents overlay action events from triggering PDF.js or box selection. */
 export function stopOverlayActionEvent(event: Event): void {
   event.preventDefault();
   event.stopPropagation();
 }
 
-/** 隔离 textarea 键盘事件，Ctrl/Cmd+C 直接复制选区，避免 reader 全局 copy handler 接管。 */
+/** Isolates textarea keyboard events, allowing Ctrl/Cmd+C to directly copy selection and preventing the reader global copy handler from taking over. */
 function stopSelectPanelKeydownEvent(this: EventTarget, event: Event): void {
   const textarea = findSelectPanelTextareaTarget(event.target ?? this);
   if (textarea && isSelectPanelCopyShortcut(event)) {
@@ -601,7 +601,7 @@ function stopSelectPanelKeydownEvent(this: EventTarget, event: Event): void {
   event.stopPropagation();
 }
 
-/** 只隔离面板指针事件冒泡，保留 textarea 的原生选择、滚动条与 resize 行为。 */
+/** Isolates panel pointer event bubbling while preserving textarea native selection, scrollbar, and resize behavior. */
 function stopSelectPanelPointerEvent(this: EventTarget, event: Event): void {
   focusSelectPanelTextareaForPointerStart(event, this);
   event.stopPropagation();
@@ -648,7 +648,7 @@ function focusSelectPanelTextareaForPointerStart(
     try {
       textarea.focus();
     } catch {
-      // 焦点诊断不能影响 textarea 原生指针行为。
+      // Focus diagnostics must not affect native textarea pointer behavior.
     }
   }
 }
@@ -860,7 +860,7 @@ function ensureSelectPanelCloseHandlers(
   );
 }
 
-/** 判断当前 box 是否属于公式类。 */
+/** Determines whether the current box belongs to a formula category. */
 export function isFormulaBox(box: NormalizedBox): boolean {
   return [
     "formula",
@@ -880,14 +880,14 @@ function hasCopyMenu(box: NormalizedBox): boolean {
   return isFormulaBox(box) || isTableBox(box);
 }
 
-/** 过滤出当前页真正需要渲染的 box 集合。 */
+/** Filters out the set of boxes that genuinely need to be rendered for the current page. */
 export function getRenderablePageBoxes(
   boxes: NormalizedBox[],
 ): NormalizedBox[] {
   return boxes.filter((box) => !isStructuralReferenceContainerBox(box, boxes));
 }
 
-/** 判断 list 容器是否只是 reference boxes 的结构包裹层。 */
+/** Determines whether a list container is merely a structural wrapper around reference boxes. */
 export function isStructuralReferenceContainerBox(
   box: NormalizedBox,
   boxes: NormalizedBox[],
@@ -903,7 +903,7 @@ export function isStructuralReferenceContainerBox(
   );
 }
 
-/** 判断 child 是否完全位于 container 内部。 */
+/** Determines whether child is completely contained inside container. */
 export function containsBox(
   container: NormalizedBox,
   child: NormalizedBox,
@@ -926,7 +926,7 @@ export function containsBox(
   );
 }
 
-/** 把内部 box type 归一成 reader UI 展示标签。 */
+/** Normalizes an internal box type into a reader UI display label. */
 export function formatBoxTypeLabel(type: string): string {
   const normalized = normalizeBoxType(type);
   const labels: Record<string, { id: string; fallback: string }> = {
@@ -1008,19 +1008,19 @@ export function formatBoxTypeLabel(type: string): string {
     : normalized;
 }
 
-/** 判断当前 type 是否属于 reference 类 box。 */
+/** Determines whether the current type belongs to a reference category box. */
 export function isReferenceBoxType(type: string): boolean {
   return ["ref_text", "reference", "citation", "bibliography"].includes(
     normalizeBoxType(type),
   );
 }
 
-/** 统一 box type 的大小写与空白，便于后续判断。 */
+/** Normalizes box type casing and whitespace for subsequent checks. */
 export function normalizeBoxType(type: string): string {
   return type.trim().toLowerCase();
 }
 
-/** 按页对 boxes 分组，并保持页码升序。 */
+/** Groups boxes by page and maintains ascending page order. */
 export function groupBoxesByPage(
   boxes: NormalizedBox[],
 ): Array<{ page: number; boxes: NormalizedBox[] }> {
@@ -1039,13 +1039,13 @@ export function groupBoxesByPage(
     .map(([page, pageBoxes]) => ({ page, boxes: pageBoxes }));
 }
 
-/** 把 0-1 范围的数值格式化成最多四位小数的百分比字符串。 */
+/** Formats a 0-1 range value as a percentage string with up to four decimal places. */
 export function formatPercent(value: number): string {
   const percent = clamp01(value) * 100;
   return `${Number(percent.toFixed(4))}%`;
 }
 
-/** 把非法或越界数值钳制到 0-1 区间。 */
+/** Clamps invalid or out-of-bounds numbers to the 0-1 interval. */
 export function clamp01(value: number): number {
   if (!Number.isFinite(value)) {
     return 0;

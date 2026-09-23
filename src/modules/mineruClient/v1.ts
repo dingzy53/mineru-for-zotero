@@ -50,17 +50,17 @@ export interface V1MinerUClientOptions extends MinerUClientOptions {
   tier?: MinerUTier;
   outputFormats?: MinerUOutputFormat[];
   /**
-   * 当服务端 /v1/health 声明支持 `local` source 时优先直接引用本地路径。
-   * 默认允许；显式设为 false 可强制走上传流程。
+   * Directly reference local file paths when server /v1/health advertises `local` source support.
+   * Allowed by default; explicitly setting to false forces the upload pipeline.
    */
   useLocalSource?: boolean;
 }
 
 /**
- * 创建统一的 MinerU V1 API client，同时用于官方远程 API 和本地服务。
+ * Create a unified MinerU V1 API client for both official remote and local services.
  *
- * 官方远程 base URL 为 `https://mineru.net/api`，本地为
- * `http://127.0.0.1:8000`；两者的 endpoint 与请求结构一致。
+ * Official remote base URL is `https://mineru.net/api`, local service is
+ * `http://127.0.0.1:8000`; both share identical endpoints and request structures.
  */
 export function createV1MinerUClient(
   options: V1MinerUClientOptions,
@@ -361,7 +361,7 @@ export function createV1MinerUClient(
 }
 
 /**
- * 把 V1 job 状态映射为插件内部状态。
+ * Map V1 job status to plugin internal status.
  */
 export function mapJobStatus(job: V1ParseJob): {
   status: "running" | "succeeded" | "failed";
@@ -383,7 +383,7 @@ export function mapJobStatus(job: V1ParseJob): {
 }
 
 /**
- * 从 job 或文件级错误中提取可读消息。
+ * Extract a readable message from job-level or file-level errors.
  */
 export function extractJobError(job: V1ParseJob): string {
   const fileError = job.files?.find((file) => file.error)?.error;
@@ -399,7 +399,7 @@ export function extractJobError(job: V1ParseJob): string {
 }
 
 /**
- * 解析 JSON 文本，失败时返回 null。
+ * Parse JSON text, returning null on failure.
  */
 function parseJson(text: string): unknown {
   if (!text.trim()) {
@@ -413,7 +413,7 @@ function parseJson(text: string): unknown {
 }
 
 /**
- * 生成独立 ArrayBuffer，供 ZIP 回退解析使用。
+ * Create an independent ArrayBuffer for ZIP fallback decoding.
  */
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const copy = new Uint8Array(bytes.byteLength);

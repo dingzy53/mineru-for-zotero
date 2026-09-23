@@ -135,7 +135,7 @@ export function createStorage(rootDir: string): StorageAdapter {
           statuses.set(child, status);
         }
       }
-      // readdir 顺序随文件系统变化，按目录名排序保证输出稳定。
+      // readdir order varies by filesystem; sort by directory name for stable output.
       return new Map(
         [...statuses.entries()].sort(([a], [b]) =>
           a < b ? -1 : a > b ? 1 : 0,
@@ -265,7 +265,7 @@ export function createStorage(rootDir: string): StorageAdapter {
             count += 1;
           }
         } catch {
-          // 忽略损坏或非结果目录。
+          // Ignore corrupted or non-result directories.
         }
       }
       return count;

@@ -3,7 +3,7 @@ import { errorMessage } from "./http";
 import { toNativePath } from "./path";
 
 /**
- * 读取 PDF 字节，并把底层文件访问失败转换为面向 MinerU 的错误。
+ * Read PDF bytes, converting underlying file access failures to MinerUFileAccessError.
  */
 export async function readPdfBytes(
   readBinary: (filePath: string) => Promise<Uint8Array>,
@@ -17,7 +17,7 @@ export async function readPdfBytes(
 }
 
 /**
- * 使用 Zotero 运行时可用的文件 API 读取本地文件字节。
+ * Read local file bytes using file APIs available in the Zotero runtime.
  */
 export async function readFileBytes(filePath: string): Promise<Uint8Array> {
   if (typeof IOUtils !== "undefined") {

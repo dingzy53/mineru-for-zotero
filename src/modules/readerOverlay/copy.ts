@@ -6,7 +6,7 @@ import type { NormalizedBox } from "./types";
 import { getReaderOverlayStateForReader } from "./state";
 import { getReaderAttachmentRef } from "./windows";
 
-/** 复制当前 reader 已选 box；若没有选择，则回退复制全文 markdown。 */
+/** Copies selected boxes for the current reader; falls back to copying full markdown if none are selected. */
 export async function copySelectedBoxesForReader(
   reader: _ZoteroTypes.ReaderInstance,
 ): Promise<string | null> {
@@ -28,7 +28,7 @@ export async function copySelectedBoxesForReader(
   return text || null;
 }
 
-/** 依照原始 rawIndex 过滤 box，并复用统一格式化逻辑生成复制文本。 */
+/** Filters boxes by original rawIndex and reuses unified formatting logic to generate copy text. */
 export function formatSelectedBoxesForCopy(
   boxes: NormalizedBox[],
   selectedRawIndexes: Set<number>,
@@ -38,7 +38,7 @@ export function formatSelectedBoxesForCopy(
   );
 }
 
-/** 把文本写入 Zotero clipboard；空字符串时保持静默。 */
+/** Writes text to Zotero clipboard; stays silent on empty string. */
 export function copyText(text: string): void {
   if (!text) {
     return;
@@ -46,7 +46,7 @@ export function copyText(text: string): void {
   new ztoolkit.Clipboard().addText(text, "text/unicode").copy();
 }
 
-/** 复制视觉类 box 对应的解析图片，成功时返回 true。 */
+/** Copies parsed image corresponding to visual box, returning true on success. */
 export async function copyBoxImageFromStorage(
   box: NormalizedBox,
   attachment: Pick<AttachmentRef, "libraryID" | "key"> | undefined,
@@ -75,7 +75,7 @@ export async function copyBoxImageFromStorage(
   }
 }
 
-/** 判断当前 box 是否应优先按图片复制。 */
+/** Determines whether the current box should preferentially be copied as an image. */
 export function isImageCopyBox(box: NormalizedBox): boolean {
   return [
     "figure",
@@ -88,7 +88,7 @@ export function isImageCopyBox(box: NormalizedBox): boolean {
   ].includes(box.type.trim().toLowerCase());
 }
 
-/** 从 box markdown 中提取第一个 MinerU 图片链接。 */
+/** Extracts the first MinerU image link from box markdown. */
 export function extractFirstMinerUImagePath(markdown: string): string | null {
   for (const pattern of [
     /!\[[^\]]*]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,

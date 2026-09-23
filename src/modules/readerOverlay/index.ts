@@ -67,7 +67,7 @@ export type {
   ReaderOverlayState,
 } from "./types";
 
-/** 设置 reader overlay mode，并触发对应的重渲染。 */
+/** Sets the reader overlay mode and triggers the corresponding re-render. */
 export async function applyReaderOverlayMode(
   reader: _ZoteroTypes.ReaderInstance,
   mode: import("./types").OverlayMode,
@@ -81,7 +81,7 @@ export async function applyReaderOverlayMode(
   return state;
 }
 
-/** 读取当前 attachment 的 boxes，并把 overlay 渲染到 reader 的所有相关窗口。 */
+/** Reads boxes for the current attachment and renders the overlay into all relevant reader windows. */
 export async function renderReaderOverlayForReader(
   reader: _ZoteroTypes.ReaderInstance,
   expectedRevision?: number,
@@ -164,7 +164,7 @@ export async function renderReaderOverlayForReader(
   return state;
 }
 
-/** 基于当前 state 构造渲染与定位共用的 selection options。 */
+/** Constructs shared selection options for rendering and positioning based on the current state. */
 function createSelectionOptions(
   state: ReaderOverlayState,
   attachment: { libraryID: number; key: string },
@@ -188,7 +188,7 @@ function createSelectionOptions(
   };
 }
 
-/** 同步 select-copy 面板交互锁，避免 split/iframe roots 继续激活下层 box。 */
+/** Synchronizes the select-copy panel interaction lock to prevent split/iframe roots from continuing to activate underlying boxes. */
 function syncSelectPanelActiveClasses(
   state: ReaderOverlayState,
   active: boolean,
@@ -202,7 +202,7 @@ function syncSelectPanelActiveClasses(
   }
 }
 
-/** 同步公式复制菜单交互锁，避免浮动菜单下方 box 被 hover 命中。 */
+/** Synchronizes the formula copy menu interaction lock to prevent boxes beneath floating menus from receiving hover hits. */
 function syncFormulaMenuActiveClasses(
   state: ReaderOverlayState,
   active: boolean,

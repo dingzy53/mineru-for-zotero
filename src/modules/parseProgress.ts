@@ -2,7 +2,7 @@ import { FluentMessageId } from "../../typings/i10n";
 
 export type ProgressWindowText = { text: string };
 
-/** 把 Fluent 文本折叠成单行，避免进度/提示文本出现多余换行。 */
+/** Collapse Fluent text into a single line to prevent unwanted newlines in progress/notice texts. */
 function normalizeProgressWindowText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
@@ -72,7 +72,7 @@ function createParseTaskDetailText(
   );
 }
 
-/** 把一条 parse 通知解析为主行 + 可选详情行（用于 alert/日志等纯文本场景）。 */
+/** Parse a notification into a primary line and optional detail line (for plain text contexts like alerts/logs). */
 export function createProgressWindowTexts(
   id: FluentMessageId,
   args: Record<string, string> | undefined,

@@ -4,12 +4,12 @@ import type { ZipEntries } from "./types";
 import { decodeText } from "./zip";
 
 /**
- * ZIP 中已知的中间 JSON 文件名，按优先级排序。
+ * Known middle JSON file names in ZIP archives, ordered by priority.
  */
 const MIDDLE_JSON_NAMES = ["middle_json.json", "layout.json"];
 
 /**
- * 从 MinerU 结果 ZIP 中读取最合适的原始 JSON 结果。
+ * Read the most appropriate raw JSON result from a MinerU result ZIP.
  */
 export function readRawResultFromZip(zip: ZipEntries): unknown | null {
   let firstJson: unknown | null = null;
@@ -49,7 +49,7 @@ export function readRawResultFromZip(zip: ZipEntries): unknown | null {
 }
 
 /**
- * 从 MinerU 结果 ZIP 中提取可保存的图片资源。
+ * Extract saveable image assets from a MinerU result ZIP.
  */
 export function readImagesFromZip(
   zip: ZipEntries,
@@ -66,7 +66,7 @@ export function readImagesFromZip(
 }
 
 /**
- * 从结果 ZIP 中读取 Markdown 正文（新成员 `markdown.md`，旧成员 `full.md`）。
+ * Read Markdown content from the result ZIP (new member `markdown.md`, legacy `full.md`).
  */
 export function readMarkdownFromZip(zip: ZipEntries): string {
   const entry =
@@ -79,7 +79,7 @@ export function readMarkdownFromZip(zip: ZipEntries): string {
 }
 
 /**
- * 把 ZIP 内图片条目转换为存储使用的相对图片路径。
+ * Convert an in-ZIP image entry into a relative image path for storage.
  */
 export function getZipImagePath(name: string): string | null {
   const normalized = name.replace(/\\/g, "/");
@@ -95,7 +95,7 @@ export function getZipImagePath(name: string): string | null {
 }
 
 /**
- * 判断原始 MinerU JSON 是否包含可归一化的页面 box 数据。
+ * Determine whether raw MinerU JSON contains normalizable page box data.
  */
 export function hasPageBoxData(value: unknown): boolean {
   const raw = value as { pages?: unknown; pdf_info?: unknown };
@@ -122,7 +122,7 @@ export function hasPageBoxData(value: unknown): boolean {
 }
 
 /**
- * 判断单个 block 是否带有 bbox 或 poly 几何信息。
+ * Determine whether a single block carries bbox or poly geometry information.
  */
 export function hasBlockGeometry(value: unknown): boolean {
   const block = value as { bbox?: unknown; poly?: unknown };

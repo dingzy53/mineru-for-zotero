@@ -2,7 +2,7 @@ import { MinerUTaskError } from "./errors";
 import type { FetchLike } from "./types";
 
 /**
- * 选择 Zotero HTTP、全局 fetch 或错误回退作为默认请求实现。
+ * Selects Zotero HTTP, global fetch, or an error fallback as the default request implementation.
  */
 export function createDefaultRequest(): FetchLike {
   const zotero = (
@@ -31,7 +31,7 @@ export function createDefaultRequest(): FetchLike {
 }
 
 /**
- * 基于 fetch-like 请求器创建裸 PUT 二进制上传函数。
+ * Creates a bare PUT binary upload function based on a fetch-like requester.
  */
 export function fetchUploadBinary(request: FetchLike) {
   return async (
@@ -47,7 +47,7 @@ export function fetchUploadBinary(request: FetchLike) {
 }
 
 /**
- * 基于 fetch-like 请求器创建 GET 二进制下载函数。
+ * Creates a GET binary download function based on a fetch-like requester.
  */
 export function fetchDownloadBinary(request: FetchLike) {
   return async (
@@ -58,7 +58,7 @@ export function fetchDownloadBinary(request: FetchLike) {
 }
 
 /**
- * 创建失败后自动改用备用下载实现的下载函数。
+ * Creates a download function that automatically falls back to an alternate download implementation on failure.
  */
 export function fallbackDownloadBinary(
   primary: (url: string, headers?: Record<string, string>) => Promise<Response>,
@@ -80,7 +80,7 @@ export function fallbackDownloadBinary(
 }
 
 /**
- * 使用 XMLHttpRequest 向预签名 URL 上传 PDF 字节。
+ * Uploads PDF bytes to a pre-signed URL using XMLHttpRequest.
  */
 export function xhrUploadBinary(
   url: string,
@@ -101,7 +101,7 @@ export function xhrUploadBinary(
 }
 
 /**
- * 使用 XMLHttpRequest 下载二进制响应并包装为 Response。
+ * Downloads a binary response using XMLHttpRequest and wraps it as a Response.
  */
 export function xhrDownloadBinary(
   url: string,
@@ -121,7 +121,7 @@ export function xhrDownloadBinary(
 }
 
 /**
- * 把 Zotero.HTTP.request 适配为 fetch-like Response 接口。
+ * Adapts Zotero.HTTP.request to a fetch-like Response interface.
  */
 export async function zoteroHttpFetch(
   input: RequestInfo | URL,
@@ -142,7 +142,7 @@ export async function zoteroHttpFetch(
 }
 
 /**
- * 把 XMLHttpRequest 响应转换为标准 Response 对象。
+ * Converts an XMLHttpRequest response into a standard Response object.
  */
 export function xhrToResponse(xhr: XMLHttpRequest): Response {
   const status = normalizeResponseStatus(xhr.status, xhr.response);
@@ -155,7 +155,7 @@ export function xhrToResponse(xhr: XMLHttpRequest): Response {
 }
 
 /**
- * 标准化 XHR 状态码，兼容本地运行时可能返回的 status 0。
+ * Normalizes XHR status codes, accommodating status 0 that local runtimes may return.
  */
 export function normalizeResponseStatus(
   status: number,
@@ -168,7 +168,7 @@ export function normalizeResponseStatus(
 }
 
 /**
- * 从 RequestInit 或 Request 对象中解析 HTTP 方法。
+ * Resolves the HTTP method from a RequestInit or Request object.
  */
 export function getRequestMethod(
   input: RequestInfo | URL,
@@ -184,7 +184,7 @@ export function getRequestMethod(
 }
 
 /**
- * 从字符串、URL 或 Request 中解析请求 URL。
+ * Resolves the request URL from a string, URL, or Request object.
  */
 export function getRequestURL(input: RequestInfo | URL): string {
   if (typeof input === "string") {
@@ -197,7 +197,7 @@ export function getRequestURL(input: RequestInfo | URL): string {
 }
 
 /**
- * 把 fetch body 标准化为 Zotero.HTTP 可接受的字符串或字节数组。
+ * Normalizes a fetch body into a string or byte array acceptable to Zotero.HTTP.
  */
 export function normalizeRequestBody(
   body: BodyInit | ArrayBufferView | null | undefined,
@@ -218,7 +218,7 @@ export function normalizeRequestBody(
 }
 
 /**
- * 把 fetch body 转换为 XMLHttpRequest.send 可接受的 body。
+ * Converts a fetch body into a body acceptable to XMLHttpRequest.send.
  */
 export function toXHRBody(
   body: BodyInit | ArrayBufferView | null | undefined,
@@ -251,7 +251,7 @@ export function toXHRBody(
 }
 
 /**
- * 把 ArrayBufferView 标准化为 Uint8Array 视图。
+ * Normalizes an ArrayBufferView into a Uint8Array view.
  */
 export function normalizeBinary(body: ArrayBufferView): Uint8Array {
   if (!ArrayBuffer.isView(body)) {
@@ -261,7 +261,7 @@ export function normalizeBinary(body: ArrayBufferView): Uint8Array {
 }
 
 /**
- * 复制 Uint8Array 到独立 ArrayBuffer，避免上传多余底层缓冲区内容。
+ * Copies a Uint8Array into a standalone ArrayBuffer to avoid uploading surplus underlying buffer content.
  */
 export function toStandaloneArrayBuffer(body: Uint8Array): ArrayBuffer {
   const copy = new Uint8Array(body.byteLength);
@@ -270,7 +270,7 @@ export function toStandaloneArrayBuffer(body: Uint8Array): ArrayBuffer {
 }
 
 /**
- * 把 HeadersInit 标准化为普通对象，便于 Zotero.HTTP 使用。
+ * Normalizes HeadersInit into a plain object convenient for Zotero.HTTP.
  */
 export function normalizeHeaders(
   headers: HeadersInit | undefined,
@@ -290,7 +290,7 @@ export function normalizeHeaders(
 }
 
 /**
- * 解析 XHR 原始响应头字符串为键值对象。
+ * Parses raw XHR response header strings into a key-value object.
  */
 export function parseResponseHeaders(
   rawHeaders: string,
@@ -310,21 +310,21 @@ export function parseResponseHeaders(
 }
 
 /**
- * 判断输入是否是标准 Request 对象。
+ * Determines whether the input is a standard Request object.
  */
 export function isRequest(input: RequestInfo | URL): input is Request {
   return typeof Request !== "undefined" && input instanceof Request;
 }
 
 /**
- * 判断未知值是否是 ArrayBuffer。
+ * Determines whether the unknown value is an ArrayBuffer.
  */
 export function isArrayBuffer(value: unknown): value is ArrayBuffer {
   return Object.prototype.toString.call(value) === "[object ArrayBuffer]";
 }
 
 /**
- * 计算字节的 SHA-256 十六进制摘要，运行时不可用时返回 null。
+ * Computes the SHA-256 hex digest of bytes, returning null when unavailable in the runtime.
  */
 export async function sha256Hex(bytes: Uint8Array): Promise<string | null> {
   const subtle = (
@@ -346,14 +346,14 @@ export async function sha256Hex(bytes: Uint8Array): Promise<string | null> {
 }
 
 /**
- * 把未知错误值转换为可读错误消息。
+ * Converts an unknown error value into a readable error message.
  */
 export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
 /**
- * 读取错误响应正文并生成简短 HTTP 错误详情。
+ * Reads an error response body and produces short HTTP error details.
  */
 export async function responseErrorDetail(response: Response): Promise<string> {
   const text = (await response.clone().text()).trim();
@@ -364,7 +364,7 @@ export async function responseErrorDetail(response: Response): Promise<string> {
 }
 
 /**
- * 从错误响应正文中提取 XML 错误摘要或截断后的文本摘要。
+ * Extracts an XML error summary or truncated text summary from an error response body.
  */
 export function summarizeErrorBody(text: string): string {
   if (!text) {
@@ -381,7 +381,7 @@ export function summarizeErrorBody(text: string): string {
 }
 
 /**
- * 从 V1 错误 envelope ({"error":{"code":..,"message":..}}) 中提取摘要。
+ * Extracts a summary from a V1 error envelope ({"error":{"code":..,"message":..}}).
  */
 export function extractJsonError(text: string): string {
   if (!text.startsWith("{")) {
@@ -407,7 +407,7 @@ export function extractJsonError(text: string): string {
 }
 
 /**
- * 从 XML 文本中提取指定标签的内容。
+ * Extracts the content of a specified tag from XML text.
  */
 export function extractXmlTag(text: string, tagName: string): string {
   const match = new RegExp(`<${tagName}>([\\s\\S]*?)</${tagName}>`, "i").exec(
@@ -417,7 +417,7 @@ export function extractXmlTag(text: string, tagName: string): string {
 }
 
 /**
- * 压缩并截断错误详情，避免日志和异常消息过长。
+ * Compresses and truncates error details to prevent log and exception messages from becoming overly long.
  */
 export function sanitizeErrorDetail(value: string): string {
   return value.replace(/\s+/g, " ").slice(0, 240);

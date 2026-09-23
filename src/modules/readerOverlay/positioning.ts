@@ -17,7 +17,7 @@ import { getReaderOverlayEventWindows } from "./windows";
 
 const forwardedWheelEvents = new WeakSet<Event>();
 
-/** 在缺少 page 元素时，返回基于视口尺寸的后备页矩形。 */
+/** Returns a fallback page rectangle based on viewport dimensions when page elements are missing. */
 export function createFallbackPageRect(doc: Document): PageRect {
   const root = doc.documentElement ?? null;
   const body = doc.body;
@@ -26,7 +26,7 @@ export function createFallbackPageRect(doc: Document): PageRect {
   return createPageRect(0, 0, width, height);
 }
 
-/** 创建 overlay 的定位与交互控制器，负责滚动、hover 与 modifier 模式同步。 */
+/** Creates the overlay positioning and interaction controller responsible for scroll, hover, and modifier mode synchronization. */
 export function createReaderOverlayPositioningController(
   options: ReaderOverlayPositioningControllerOptions,
 ): ReaderOverlayPositioningController {
@@ -190,7 +190,7 @@ export function createReaderOverlayPositioningController(
     },
   };
 
-  /** 合并高频滚动与 resize 更新，并在每次定位前刷新样式桥接。 */
+  /** Coalesces high-frequency scroll and resize updates, refreshing style bridging before each reposition. */
   function schedule(): void {
     if (cleaned || scheduledHandle !== null) {
       return;
@@ -217,7 +217,7 @@ export function createReaderOverlayPositioningController(
     }, 16);
   }
 
-  /** 拦截 overlay 上的滚轮事件，并优先转发给底层 PDF 元素。 */
+  /** Intercepts wheel events on the overlay and preferentially forwards them to underlying PDF elements. */
   function onWheel(event: WheelEvent): void {
     if (forwardedWheelEvents.has(event)) {
       return;
@@ -250,7 +250,7 @@ export function createReaderOverlayPositioningController(
     );
   }
 
-  /** 根据键盘修饰键切换 overlay 的可交互模式。 */
+  /** Toggles the overlay's interactive mode based on keyboard modifier keys. */
   function onModifierKeyChange(event: Event): void {
     if (cleaned) {
       return;
@@ -263,7 +263,7 @@ export function createReaderOverlayPositioningController(
     setOverlayModifierActive(options.root, active);
   }
 
-  /** 处理窗口失焦时的 modifier 态回收，避免卡在可交互模式。 */
+  /** Handles window blur by resetting modifier state to avoid getting stuck in interactive mode. */
   function onWindowBlur(): void {
     pendingMouseMove = null;
     if (hoverScheduledHandle !== null) {
@@ -277,7 +277,7 @@ export function createReaderOverlayPositioningController(
     }
   }
 
-  /** 在鼠标移动时同步 hover box 与 modifier 激活状态。 */
+  /** Synchronizes the hovered box and modifier active state on mouse move. */
   function onMouseMove(event: Event): void {
     if (cleaned) {
       return;
@@ -287,7 +287,7 @@ export function createReaderOverlayPositioningController(
     scheduleHoverUpdate();
   }
 
-  /** 合并高频鼠标移动事件，每帧只处理最新位置。 */
+  /** Coalesces high-frequency mouse move events, processing only the latest position per frame. */
   function scheduleHoverUpdate(): void {
     if (cleaned || hoverScheduledHandle !== null) {
       return;
@@ -304,7 +304,7 @@ export function createReaderOverlayPositioningController(
     }
   }
 
-  /** 按最新鼠标位置同步 hover box 与 modifier 激活状态。 */
+  /** Synchronizes hovered box and modifier active state according to the latest mouse position. */
   function processPendingMouseMove(): void {
     if (cleaned || !pendingMouseMove) {
       return;
@@ -332,7 +332,7 @@ export function createReaderOverlayPositioningController(
     setHoveredBox(options.root, hitBox);
   }
 
-  /** 取消待处理 hover frame，避免 cleanup/blur 后异步恢复旧 hover。 */
+  /** Cancels pending hover frames to avoid asynchronously restoring old hovers after cleanup/blur. */
   function cancelHoverFrame(): void {
     const handle = hoverScheduledHandle;
     hoverScheduledHandle = null;
@@ -343,7 +343,7 @@ export function createReaderOverlayPositioningController(
     options.win.clearTimeout(handle);
   }
 
-  /** 在按住 Shift 或 Ctrl 点击时走 overlay 自己的多选语义。 */
+  /** Applies the overlay's own multi-selection semantics on Shift- or Ctrl-click. */
   function onReaderModifiedDown(event: Event): void {
     const mouseEvent = event as MouseEvent;
     if (!mouseEvent.shiftKey && !mouseEvent.ctrlKey) {
@@ -385,7 +385,7 @@ export function createReaderOverlayPositioningController(
     );
   }
 
-  /** 延迟清理 blur 后的 modifier 态，兼容焦点短暂切换。 */
+  /** Defers clearing modifier state after blur to accommodate brief focus switches. */
   function scheduleModifierBlurCleanup(): void {
     clearPendingModifierBlurCleanup();
     blurCleanupHandle = options.win.setTimeout(() => {
@@ -396,7 +396,7 @@ export function createReaderOverlayPositioningController(
     }, 250);
   }
 
-  /** 取消尚未执行的 blur cleanup 定时器。 */
+  /** Cancels unexecuted blur cleanup timers. */
   function clearPendingModifierBlurCleanup(): void {
     if (blurCleanupHandle === null) {
       return;
@@ -407,7 +407,7 @@ export function createReaderOverlayPositioningController(
   }
 }
 
-/** 判断事件目标是否在 select-copy 面板内，避免拦截 textarea 原生交互。 */
+/** Determines whether the event target is within a select-copy panel to avoid intercepting native textarea interactions. */
 function isInsideSelectPanelTarget(target: EventTarget | null): boolean {
   return isInsideClassTarget(
     target,
@@ -416,7 +416,7 @@ function isInsideSelectPanelTarget(target: EventTarget | null): boolean {
   );
 }
 
-/** 判断事件目标是否在公式复制菜单内，避免修饰键点击穿透为 box 选择。 */
+/** Determines whether the event target is within a formula copy menu to avoid modifier clicks penetrating as box selections. */
 function isInsideFormulaMenuTarget(target: EventTarget | null): boolean {
   return isInsideClassTarget(
     target,
@@ -425,7 +425,7 @@ function isInsideFormulaMenuTarget(target: EventTarget | null): boolean {
   );
 }
 
-/** 从事件 target 反查其所属 actions 的 box，避免工具栏悬浮时 hover 穿透到下方 box。 */
+/** Resolves the box owning the actions toolbar from the event target to prevent hover penetration into underlying boxes when floating. */
 function findActionsOwnerBoxFromTarget(
   root: HTMLElement,
   target: EventTarget | null,
@@ -466,7 +466,7 @@ function findActionsOwnerBoxFromTarget(
   return null;
 }
 
-/** 兼容真实 DOM 与测试桩的祖先关系判断。 */
+/** Checks ancestor relationships compatibility across real DOM and test stubs. */
 function isElementWithinRoot(
   root: HTMLElement,
   element: {
@@ -478,7 +478,7 @@ function isElementWithinRoot(
     try {
       return contains(element as Node);
     } catch {
-      // 测试桩不一定是 Node，继续走 parentElement 链判断。
+      // Test stubs may not be Nodes; continue checking via the parentElement chain.
     }
   }
 
@@ -492,7 +492,7 @@ function isElementWithinRoot(
   return false;
 }
 
-/** 返回 reader 内可能承载 PDF 滚动的容器集合。 */
+/** Returns the set of containers in the reader that may host PDF scrolling. */
 export function getReaderScrollContainers(doc: Document): Element[] {
   const selectors = [
     "#viewerContainer",
@@ -511,7 +511,7 @@ export function getReaderScrollContainers(doc: Document): Element[] {
   return [...containers];
 }
 
-/** 返回 overlay 默认使用的主滚动容器。 */
+/** Returns the primary scroll container used by the overlay by default. */
 export function getPrimaryScrollContainer(doc: Document): Element | null {
   return (
     getReaderScrollContainers(doc)[0] ??
@@ -522,7 +522,7 @@ export function getPrimaryScrollContainer(doc: Document): Element | null {
   );
 }
 
-/** 根据 PDF.js page 元素的位置同步 overlay page layer。 */
+/** Synchronizes overlay page layers according to the positions of PDF.js page elements. */
 export function positionPageLayers(doc: Document, root: HTMLDivElement): void {
   for (const layer of Array.from(
     root.querySelectorAll(".mineru-copy-page-layer"),
@@ -543,7 +543,7 @@ export function positionPageLayers(doc: Document, root: HTMLDivElement): void {
   }
 }
 
-/** 通过 page number 在 reader 文档中查找最合适的 PDF page 元素。 */
+/** Finds the most suitable PDF page element in the reader document by page number. */
 export function findPageElement(
   doc: Document,
   pageNumber: number,
@@ -560,7 +560,7 @@ export function findPageElement(
   );
 }
 
-/** 优先把滚轮事件转发给 overlay 下方真实 PDF 元素，保持原生滚动行为。 */
+/** Preferentially forwards wheel events to real PDF elements beneath the overlay to preserve native scrolling behavior. */
 export function forwardWheelToUnderlyingElement(
   doc: Document,
   root: HTMLElement,
@@ -613,7 +613,7 @@ export function forwardWheelToUnderlyingElement(
   return true;
 }
 
-/** 临时关闭 overlay 命中测试，避免滚轮转发时隐藏工具栏导致闪动。 */
+/** Temporarily disables overlay hit testing to avoid toolbar flicker when forwarding wheel events. */
 function disableOverlayHitTesting(root: HTMLElement): () => void {
   const elements = [root, ...Array.from(root.querySelectorAll?.("*") ?? [])];
   const previousPointerEvents = elements.map((element) => ({
@@ -632,7 +632,7 @@ function disableOverlayHitTesting(root: HTMLElement): () => void {
   };
 }
 
-/** 兼容插件全局缺失 WheelEvent 时，从 reader window 获取构造器。 */
+/** Resolves WheelEvent constructor from the reader window when absent in the plugin global. */
 export function getWheelEventConstructor(
   doc: Document,
 ): typeof WheelEvent | null {
@@ -648,7 +648,7 @@ export function getWheelEventConstructor(
   return null;
 }
 
-/** 在滚轮无法转发时，直接按 delta 驱动滚动容器。 */
+/** Drives the scroll container directly by deltas when wheel forwarding is unavailable. */
 export function scrollElementBy(
   element: Element,
   deltaX: number,
@@ -675,7 +675,7 @@ export function scrollElementBy(
   }
 }
 
-/** 构造标准化的 page rect 对象。 */
+/** Constructs a normalized page rect object. */
 export function createPageRect(
   left: number,
   top: number,

@@ -251,8 +251,8 @@ function getDirectoryServicePath(key: string | undefined): string | null {
 }
 
 /**
- * 安全读取目录服务路径。未知 key 会抛 NS_ERROR_FAILURE 而不是返回 null，
- * 因此需要捕获异常并视为未命中。
+ * Safely read a directory service path. Unknown keys throw NS_ERROR_FAILURE rather
+ * than returning null, so exceptions must be caught and treated as a cache miss.
  */
 function readDirectoryServicePath(
   services:

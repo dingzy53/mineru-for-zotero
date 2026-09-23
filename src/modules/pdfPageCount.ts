@@ -1,28 +1,30 @@
 import { toNativePath } from "./mineruClient/path";
 
 /**
- * PDF 页数探测。
+ * PDF page count detection.
  *
- * 使用 Zotero 内置的 pdf.js（`resource://zotero/reader/pdf/build/pdf.mjs`），
- * 避免为了数页数而把整个 `pdf-lib` 打进插件。之所以必须拿到页数：官方 MinerU
- * server 单文件上限 200 页（`CHUNK_PAGE_LIMIT`），超过需要按 `page_range` 分块。
+ * Uses Zotero's bundled pdf.js (`resource://zotero/reader/pdf/build/pdf.mjs`)
+ * to avoid bundling the heavy `pdf-lib` into the plugin. Knowing the page count
+ * is necessary because the official MinerU server has a 200-page limit per file
+ * (`CHUNK_PAGE_LIMIT`), beyond which chunking by `page_range` is required.
  *
- * 为什么不用 `ChromeUtils.importESModule`：Zotero 10 / Gecko 140 的系统模块
- * realm 内置对象被冻结，而 pdf.js 顶层会执行
- * `Map.prototype.getOrInsertComputed = …` 的 polyfill，直接抛
- * `TypeError: Map.prototype is not extensible`。Zotero 的 reader 用的是
- * `<script type="module">` 在普通 realm 里加载 pdf.js；这里等价地在主窗口
- * realm 里用动态 `import()` 加载，并通过 `Zotero.getMainWindow().eval(...)`
- * 让代码在该 realm 执行（与 Tools → Developer → Run JavaScript 机制一致）。
+ * Why not `ChromeUtils.importESModule`: in Zotero 10 / Gecko 140, system module
+ * realm built-ins are frozen, while pdf.js's top level executes a polyfill
+ * `Map.prototype.getOrInsertComputed = ...`, throwing
+ * `TypeError: Map.prototype is not extensible`. Zotero's own reader loads pdf.js
+ * using `<script type="module">` in a standard content realm. Equivalently, we use
+ * a dynamic `import()` in the main window realm and execute it via
+ * `Zotero.getMainWindow().eval(...)` (matching Tools → Developer → Run JavaScript).
  *
- * 计数代码把文件路径作为字符串传入，在窗口 realm 内用 `IOUtils.read()` 读取，
- * 避免跨 realm 传递 `Uint8Array`。任何失败都返回 `-1`，调用方会退化为整篇解析。
+ * The page counting code passes the file path as a string and reads it via
+ * `IOUtils.read()` within the window realm to avoid passing `Uint8Array` across realms.
+ * Any failure returns `-1`, causing the caller to fall back to unchunked full parsing.
  */
 
 const PDFJS_MODULE_URL = "resource://zotero/reader/pdf/build/pdf.mjs";
 const PDFJS_WORKER_URL = "resource://zotero/reader/pdf/build/pdf.worker.mjs";
 
-/** 主窗口只需暴露 `eval`；实际类型 `MainWindow` 与 DOM `Window` 不重合。 */
+/** The main window only needs to expose `eval`; actual `MainWindow` type differs from DOM `Window`. */
 type EvalWindow = {
   eval: (source: string) => unknown;
 };

@@ -24,7 +24,7 @@ import { exportBibTeX } from "../agentSync";
 import type { NormalizedBox } from "../domain";
 
 /**
- * 表示可读取优先 Markdown 结果与解析状态的存储接口。
+ * Storage interface capable of reading preferred Markdown results and parse statuses.
  */
 export interface PreferredMarkdownReader extends ParseStatusReader {
   readPreferredMarkdown(ref: {
@@ -35,7 +35,7 @@ export interface PreferredMarkdownReader extends ParseStatusReader {
 }
 
 /**
- * 表示 Markdown Query API 对外提供的服务接口。
+ * Service interface exposed by the Markdown Query API.
  */
 export interface MarkdownQueryService {
   searchByTitle(input: ItemSearchInput): Promise<{
@@ -72,7 +72,7 @@ export interface MarkdownQueryService {
 }
 
 /**
- * 创建负责标题检索与 Markdown 读取的查询服务。
+ * Create a query service responsible for title search and Markdown retrieval.
  */
 export function createMarkdownQueryService(deps: {
   items: ZoteroItemsGateway;
@@ -363,7 +363,7 @@ export function createMarkdownQueryService(deps: {
 }
 
 /**
- * 为返回结果提取稳定的条目摘要，附带年份与创作者信息及常用学术元数据。
+ * Extract a stable item summary for return results, including year, creator info, and academic metadata.
  */
 function summarizeItem(item: ZoteroItemLike): ItemSummary {
   const summary: ItemSummary = {
@@ -438,7 +438,7 @@ function extractDoi(item: ZoteroItemLike): string | undefined {
 }
 
 /**
- * 从条目 date 字段提取四位年份。
+ * Extract a four-digit year from the item's date field.
  */
 function extractYear(item: ZoteroItemLike): string | undefined {
   const match = /^\s*(\d{4})/.exec(item.getField("date") ?? "");
@@ -446,7 +446,7 @@ function extractYear(item: ZoteroItemLike): string | undefined {
 }
 
 /**
- * 将 Zotero 创作者格式化为 "Last, First" 或单名形式。
+ * Format Zotero creators into "Last, First" or single-name representation.
  */
 function extractCreators(item: ZoteroItemLike): string[] {
   if (typeof item.getCreators !== "function") {
@@ -466,7 +466,7 @@ function extractCreators(item: ZoteroItemLike): string[] {
 }
 
 /**
- * 为普通条目下的 PDF 附件生成摘要列表。
+ * Generate a summary list of PDF attachments under a regular item.
  */
 async function summarizeAttachments(
   item: ZoteroItemLike,
@@ -483,7 +483,7 @@ async function summarizeAttachments(
 }
 
 /**
- * 为单个 PDF 附件生成包含解析状态的摘要。
+ * Generate a summary for a single PDF attachment, including its parse status.
  */
 async function summarizeAttachment(
   attachment: ZoteroItemLike,

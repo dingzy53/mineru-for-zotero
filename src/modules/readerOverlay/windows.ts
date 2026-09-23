@@ -1,6 +1,6 @@
 import { getReaderOverlayStateForReader } from "./state";
 
-/** 判断当前 reader 的 overlay root 集合是否需要重新同步窗口。 */
+/** Determines whether the current reader's overlay root set needs to re-synchronize windows. */
 export function readerOverlayNeedsWindowSync(
   reader: _ZoteroTypes.ReaderInstance,
 ): boolean {
@@ -17,14 +17,14 @@ export function readerOverlayNeedsWindowSync(
   return windows.some((win) => !state.rootsByWindow.has(win));
 }
 
-/** 返回当前 reader 最终应操作的 overlay 窗口。 */
+/** Returns the overlay window that the current reader should ultimately operate on. */
 export function getReaderOverlayWindow(
   reader: _ZoteroTypes.ReaderInstance,
 ): Window | null {
   return getReaderOverlayWindows(reader).at(-1) ?? null;
 }
 
-/** 枚举 reader 及其同源嵌套 iframe 对应的全部窗口。 */
+/** Enumerates all windows corresponding to the reader and its same-origin nested iframes. */
 export function getReaderOverlayWindows(
   reader: _ZoteroTypes.ReaderInstance,
 ): Window[] {
@@ -43,7 +43,7 @@ export function getReaderOverlayWindows(
   return [...windows];
 }
 
-/** 把当前窗口及其同源子 frame 递归加入窗口集合。 */
+/** Recursively adds current window and its same-origin child frames to the window set. */
 export function addReaderOverlayWindowWithDescendants(
   windows: Set<Window>,
   win: Window,
@@ -66,7 +66,7 @@ export function addReaderOverlayWindowWithDescendants(
   }
 }
 
-/** 安全读取 frame 的 contentWindow，只接受可访问且已就绪的同源窗口。 */
+/** Safely reads frame contentWindow, accepting only accessible and ready same-origin windows. */
 export function getFrameContentWindow(frame: Element): Window | null {
   try {
     const win = (frame as HTMLIFrameElement | HTMLFrameElement).contentWindow;
@@ -79,7 +79,7 @@ export function getFrameContentWindow(frame: Element): Window | null {
   }
 }
 
-/** 收集 Zotero reader 在不同版本与 split view 下暴露的视图集合。 */
+/** Collects the set of views exposed by Zotero reader across different versions and split views. */
 export function getReaderViews(
   reader: _ZoteroTypes.ReaderInstance,
 ): Array<{ _iframeWindow?: Window | null } | null> {
@@ -101,7 +101,7 @@ export function getReaderViews(
   ];
 }
 
-/** 返回 positioning 需要监听键盘与 pointer 事件的窗口链。 */
+/** Returns the window chain that positioning needs to monitor for keyboard and pointer events. */
 export function getReaderOverlayEventWindows(win: Window): Window[] {
   const windows = new Set<Window>();
   let current: Window | null = win;
@@ -116,7 +116,7 @@ export function getReaderOverlayEventWindows(win: Window): Window[] {
   return [...windows];
 }
 
-/** 安全读取 window.document，避免跨域或 dead object 异常。 */
+/** Safely reads window.document, avoiding cross-origin or dead object exceptions. */
 export function getWindowDocument(win: Window): Document | null {
   try {
     return win.document ?? null;
@@ -125,7 +125,7 @@ export function getWindowDocument(win: Window): Document | null {
   }
 }
 
-/** 安全读取父窗口引用。 */
+/** Safely reads the parent window reference. */
 export function getParentWindow(win: Window): Window | null {
   try {
     return win.parent ?? null;
@@ -134,7 +134,7 @@ export function getParentWindow(win: Window): Window | null {
   }
 }
 
-/** 从 reader 当前 attachment 中解析出 key。 */
+/** Resolves key from the reader's current attachment. */
 export function getReaderAttachmentKey(
   reader: _ZoteroTypes.ReaderInstance,
 ): string | null {
@@ -142,7 +142,7 @@ export function getReaderAttachmentKey(
   return typeof key === "string" && key.length > 0 ? key : null;
 }
 
-/** 返回 storage 访问所需的 attachment 引用信息。 */
+/** Returns attachment reference information required for storage access. */
 export function getReaderAttachmentRef(
   reader: _ZoteroTypes.ReaderInstance,
 ): { libraryID: number; key: string } | null {
@@ -155,7 +155,7 @@ export function getReaderAttachmentRef(
   return { libraryID, key };
 }
 
-/** 返回 overlay root 应挂载的 reader 文档容器。 */
+/** Returns the reader document container where the overlay root should be mounted. */
 export function getReaderOverlayMountContainer(doc: Document): Element | null {
   return doc.body ?? doc.documentElement;
 }

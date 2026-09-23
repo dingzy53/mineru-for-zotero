@@ -11,7 +11,7 @@ const DERIVED_NAME_PATTERN =
   /(annotated|annotation|annotations|highlight|highlights|note|notes|translated|translation|copy|edited|批注|注释|高亮|笔记|翻译|译文|副本|修改)/i;
 
 /**
- * 将 libraryID/key 解析为可用于 Markdown Query 的目标 PDF 附件。
+ * Resolve a libraryID/key pair into a target PDF attachment usable for Markdown Query.
  */
 export async function resolveAttachment(input: {
   libraryID: number;
@@ -96,7 +96,7 @@ export async function resolveAttachment(input: {
 }
 
 /**
- * 为候选 PDF 附件计算启发式分数，并附带解析状态信息。
+ * Calculate heuristic scores for candidate PDF attachments along with parse status info.
  */
 async function scoreCandidates(
   parent: ZoteroItemLike,
@@ -157,14 +157,14 @@ async function scoreCandidates(
 }
 
 /**
- * 读取候选附件的稳定文件名，用于评分与诊断。
+ * Read a stable file name for candidate attachments for scoring and diagnostics.
  */
 function getAttachmentFileName(attachment: ZoteroItemLike): string {
   return attachment.attachmentFilename || attachment.getDisplayTitle();
 }
 
 /**
- * 基于标题与文件名的词项重叠计算简单相似度分数。
+ * Calculate a simple similarity score based on term overlap between title and file name.
  */
 function titleSimilarity(title: string, fileName: string): number {
   const titleTokens = tokenize(title);
@@ -180,7 +180,7 @@ function titleSimilarity(title: string, fileName: string): number {
 }
 
 /**
- * 将标题或文件名切分为用于相似度比较的稳定 token 集合。
+ * Split a title or file name into a stable set of tokens for similarity comparison.
  */
 function tokenize(value: string): string[] {
   return value

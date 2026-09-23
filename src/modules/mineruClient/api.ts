@@ -3,7 +3,7 @@ import { errorMessage, responseErrorDetail } from "./http";
 import type { FetchLike } from "./types";
 
 /**
- * 生成 MinerU V1 API 鉴权请求头。
+ * Generate MinerU V1 API authentication request headers.
  */
 export function authHeaders(apiKey: string): Record<string, string> {
   if (!apiKey.trim()) {
@@ -15,7 +15,7 @@ export function authHeaders(apiKey: string): Record<string, string> {
 }
 
 /**
- * 生成 MinerU V1 JSON API 请求头。
+ * Generate MinerU V1 JSON API request headers.
  */
 export function jsonHeaders(apiKey: string): Record<string, string> {
   return {
@@ -25,7 +25,7 @@ export function jsonHeaders(apiKey: string): Record<string, string> {
 }
 
 /**
- * 发送 HTTP 请求并把成功响应解析为指定 JSON 类型。
+ * Send an HTTP request and parse successful response as the specified JSON type.
  */
 export async function requestJson<T>(
   request: FetchLike,
@@ -38,7 +38,7 @@ export async function requestJson<T>(
 }
 
 /**
- * 执行 HTTP 请求，统一把网络异常和非 2xx 响应转换为 MinerURequestError。
+ * Execute an HTTP request, uniformly converting network errors and non-2xx responses into MinerURequestError.
  */
 export async function requestOk(
   request: FetchLike,
@@ -63,7 +63,7 @@ export async function requestOk(
 }
 
 /**
- * 将 V1 返回的 upload_url 解析为绝对地址。
+ * Resolve an upload_url returned by V1 to an absolute URL.
  */
 export function resolveUploadURL(baseURL: string, uploadURL: string): string {
   if (/^https?:\/\//i.test(uploadURL)) {
@@ -73,8 +73,8 @@ export function resolveUploadURL(baseURL: string, uploadURL: string): string {
 }
 
 /**
- * 合并上传头：仅当上传地址与 API 同源时才附加 Bearer Token，
- * 避免把密钥泄露给外部预签名地址。
+ * Merge upload headers: attach Bearer Token only when the upload URL is same-origin with the API,
+ * avoiding leaking secrets to external presigned destinations.
  */
 export function sameOriginUploadHeaders(
   baseURL: string,
@@ -90,7 +90,7 @@ export function sameOriginUploadHeaders(
 }
 
 /**
- * 判断两个 HTTP(S) 地址是否同源（scheme + host + effective port）。
+ * Determine whether two HTTP(S) URLs are same-origin (scheme + host + effective port).
  */
 export function isSameOrigin(left: string, right: string): boolean {
   const a = parseOrigin(left);

@@ -1,7 +1,7 @@
-/** toolbar 暴露的 Reader overlay 可见性模式。 */
+/** Reader overlay visibility modes exposed by the toolbar. */
 export type ReaderOverlayMode = "all" | "hover" | "off";
 
-/** 本地化的 reader toolbar 消息 id。 */
+/** Localized reader toolbar message id. */
 export type ReaderMessageId =
   | "reader-clear-selection"
   | "reader-copy-full-markdown"
@@ -13,7 +13,7 @@ export type ReaderMessageId =
   | "reader-show-hover-box"
   | "reader-toolbar-label";
 
-/** 跟踪 reader toolbar 菜单是否处于打开状态。 */
+/** Tracks whether the reader toolbar menu is open. */
 export interface ReaderToolbarMenuState {
   isOpen(): boolean;
   open(): void;
@@ -21,7 +21,7 @@ export interface ReaderToolbarMenuState {
   toggle(): void;
 }
 
-/** 按 reader 实例存储菜单状态。 */
+/** Stores menu state per reader instance. */
 export interface ReaderToolbarPanelStore {
   ensure(readerInstanceID: string): ReaderToolbarMenuState;
   isOpen(readerInstanceID: string): boolean;
@@ -31,18 +31,18 @@ export interface ReaderToolbarPanelStore {
   clear(): void;
 }
 
-/** 描述 toolbar button 应插入的位置。 */
+/** Describes the position where the toolbar button should be inserted. */
 export interface ReaderToolbarAnchor {
   parent: Element;
   after?: Element;
 }
 
-/** 保存一个 main-window toolbar 注册的清理句柄。 */
+/** Holds cleanup handles for a main-window toolbar registration. */
 export interface WindowToolbarRegistration {
   cleanup: () => void;
 }
 
-/** 保存一个 reader toolbar button 的 DOM 节点和清理句柄。 */
+/** Holds DOM nodes and cleanup handles for a reader toolbar button. */
 export interface ReaderToolbarButtonBinding {
   button: HTMLButtonElement;
   menu: HTMLDivElement;
@@ -51,7 +51,7 @@ export interface ReaderToolbarButtonBinding {
   cleanup: () => void;
 }
 
-/** 保存已注册窗口及其 toolbar 生命周期句柄。 */
+/** Holds registered windows and their toolbar lifecycle handles. */
 export interface ReaderToolbarRegistration {
   windows: WeakMap<Window, WindowToolbarRegistration>;
   registeredWindows: Set<Window>;

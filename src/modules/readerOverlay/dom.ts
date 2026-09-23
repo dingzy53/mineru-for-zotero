@@ -16,7 +16,7 @@ export interface ClassTargetCarrier extends ClassNameCarrier {
   parentElement?: unknown;
 }
 
-/** 兼容真实 DOM 与测试桩的 className / classList 判断。 */
+/** Checks className / classList compatibility across real DOM and test stubs. */
 export function hasClassName(
   element: ClassNameCarrier,
   className: string,
@@ -31,10 +31,10 @@ export function hasClassName(
 }
 
 /**
- * 判断事件目标是否落在指定选择器/类名的元素内。
+ * Determines whether the event target falls within an element matching a given selector/class name.
  *
- * 优先使用 `closest`，并用 `hasClassName` 向上遍历作为测试桩与跨窗口
- * 死对象场景的回退实现。
+ * Prefers `closest`, falling back to an upward traversal using `hasClassName`
+ * for test stubs and cross-window dead object scenarios.
  */
 export function isInsideClassTarget(
   target: EventTarget | null,

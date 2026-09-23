@@ -311,10 +311,10 @@ export async function registerPrefsScripts(_window: Window) {
 }
 
 /**
- * 创建并打开原生文件选择器，统一处理创建失败与取消。
+ * Create and display a native file picker, handling creation failure and cancellation.
  *
- * `mode` 返回选择器模式常量，`configure` 用于追加过滤器等设置，
- * `extract` 决定最终返回的路径（返回 null 视为用户取消）。
+ * `mode` returns picker mode constants, `configure` appends filters and settings,
+ * and `extract` determines the returned path (returning null indicates cancellation).
  */
 function openFilePicker(
   window: Window,
@@ -445,7 +445,7 @@ export function getMinerUStorageRoot(): string {
 }
 
 /**
- * 显式同步 preferences.xhtml 控件值，避免 Zotero 重启前读取到旧偏好。
+ * Explicitly synchronize preferences.xhtml control values to prevent stale preferences before Zotero restarts.
  */
 export function registerPreferenceValueSync(document: Document): void {
   registerTextPreferenceSync(
@@ -529,7 +529,7 @@ function registerExternalLink(
 }
 
 /**
- * 注册文本输入控件的 preference 写入逻辑。
+ * Register preference persistence logic for text input controls.
  */
 function registerTextPreferenceSync(
   document: Document,
@@ -543,7 +543,7 @@ function registerTextPreferenceSync(
 }
 
 /**
- * 注册数字输入控件的 preference 写入逻辑，并忽略无法解析的值。
+ * Register preference persistence logic for numeric input controls, ignoring unparseable values.
  */
 function registerNumberPreferenceSync(
   document: Document,
@@ -567,7 +567,7 @@ function registerNumberPreferenceSync(
 }
 
 /**
- * 注册枚举控件的 preference 同步逻辑，并忽略未知值。
+ * Register preference synchronization logic for choice/enum controls, ignoring unknown values.
  */
 function registerChoicePreferenceSync<T extends string>(
   document: Document,
@@ -603,7 +603,7 @@ function setChoiceValue(element: ChoicePreferenceElement, value: string): void {
 }
 
 /**
- * 注册 checkbox 控件的 preference 写入逻辑。
+ * Register preference persistence logic for checkbox controls.
  */
 function registerCheckboxPreferenceSync(
   document: Document,
@@ -663,7 +663,7 @@ async function updateParsedCount(
 }
 
 /**
- * 刷新 Markdown 查询 API token 的可见值与状态文案。
+ * Refresh the visible value and status text of the Markdown query API token.
  */
 async function updateMarkdownApiTokenStatus(_window: Window): Promise<void> {
   const token = getMarkdownApiToken();
@@ -714,7 +714,7 @@ function setText(document: Document, id: string, value: string): void {
 }
 
 /**
- * 同步只读输入框的当前值和 value 属性，便于偏好页立即显示 token。
+ * Synchronize the read-only input value and value attribute so the preference pane immediately displays the token.
  */
 function setInputValue(document: Document, id: string, value: string): void {
   const element = document.getElementById(id) as HTMLInputElement | null;

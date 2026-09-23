@@ -1,17 +1,17 @@
 /**
- * MinerU 官方 layout.pdf 的类型配色（docvortex.visualization._BLOCK_COLORS）。
+ * Type color palette from MinerU official layout.pdf (docvortex.visualization._BLOCK_COLORS).
  *
- * 这里同时收录归一化后的类型与官方原始类型，保证 Middle JSON 2.0 与 legacy
- * `pdf_info` 结果都能命中同一套颜色。颜色为 0-1 浮点 RGB，保持与官方一致便于校对。
+ * Includes both normalized types and official raw types, ensuring both Middle JSON 2.0 and legacy
+ * `pdf_info` results match the same color set. Colors are 0-1 float RGB, kept consistent with official values for proofreading.
  */
 export type BoxColorTuple = readonly [number, number, number];
 
-/** 官方未覆盖类型时的兜底色，对应 docvortex 的 (0.90, 0.10, 0.10)。 */
+/** Fallback color when official types are not covered, corresponding to docvortex's (0.90, 0.10, 0.10). */
 export const BOX_FALLBACK_COLOR: BoxColorTuple = [0.9, 0.1, 0.1];
 
-/** 框内半透明填充透明度，官方 layout.pdf 的视觉近似值。 */
+/** Semi-transparent fill opacity within boxes, visually approximating official layout.pdf. */
 export const BOX_FILL_ALPHA = 0.15;
-/** hover 时加深的填充透明度。 */
+/** Deepened fill opacity on hover. */
 export const BOX_HOVER_FILL_ALPHA = 0.3;
 
 const PAGE_AUXILIARY_GRAY: BoxColorTuple = [158 / 255, 158 / 255, 158 / 255];
@@ -68,35 +68,35 @@ export const BOX_TYPE_COLORS: Record<string, BoxColorTuple> = {
 
 export interface BoxTypeColorStyle {
   type: string;
-  /** 描边与标签使用的实色，如 `rgb(153, 13, 77)`。 */
+  /** Solid color used for borders and labels, e.g. `rgb(153, 13, 77)`. */
   color: string;
-  /** 框内半透明填充，如 `rgba(153, 13, 77, 0.15)`。 */
+  /** Semi-transparent fill inside boxes, e.g. `rgba(153, 13, 77, 0.15)`. */
   fill: string;
-  /** hover 高亮填充。 */
+  /** Highlight fill on hover. */
   hoverFill: string;
 }
 
-/** 解析类型对应的官方配色，未知类型回退到红色。 */
+/** Resolves the official color palette corresponding to the type, falling back to red for unknown types. */
 export function getBoxColorTuple(type: string): BoxColorTuple {
   const normalized = normalizeColorType(type);
   return BOX_TYPE_COLORS[normalized] ?? BOX_FALLBACK_COLOR;
 }
 
-/** 生成类型对应的描边实色。 */
+/** Generates solid border color corresponding to the type. */
 export function getBoxColor(type: string): string {
   const [red, green, blue] = toRgbChannels(getBoxColorTuple(type));
   return `rgb(${red}, ${green}, ${blue})`;
 }
 
-/** 生成类型对应的半透明填充色。 */
+/** Generates semi-transparent fill color corresponding to the type. */
 export function getBoxFillColor(type: string, alpha = BOX_FILL_ALPHA): string {
   const [red, green, blue] = toRgbChannels(getBoxColorTuple(type));
   return `rgba(${red}, ${green}, ${blue}, ${formatAlpha(alpha)})`;
 }
 
 /**
- * 展开成可直接写入 CSS 的 `data-mineru-box-type` 规则数据。
- * 使用 CSS 变量而非内联样式，避免给每个 box 写 style 属性。
+ * Expands into `data-mineru-box-type` rule data ready to be injected into CSS.
+ * Uses CSS variables rather than inline styles to avoid setting style attributes on every box.
  */
 export function getBoxTypeColorStyles(): BoxTypeColorStyle[] {
   return Object.keys(BOX_TYPE_COLORS).map((type) => ({
@@ -107,7 +107,7 @@ export function getBoxTypeColorStyles(): BoxTypeColorStyle[] {
   }));
 }
 
-/** 把 0-1 浮点 RGB 转成 0-255 整数通道。 */
+/** Converts 0-1 float RGB to 0-255 integer channels. */
 export function toRgbChannels(tuple: BoxColorTuple): [number, number, number] {
   return [
     channelToByte(tuple[0]),

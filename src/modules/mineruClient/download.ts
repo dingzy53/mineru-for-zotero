@@ -5,7 +5,7 @@ import type { ZipEntries } from "./types";
 import { readZipFile } from "./zip";
 
 /**
- * 使用 Zotero Promise 或标准 timer 等待指定毫秒数。
+ * Wait for specified milliseconds using Zotero Promise or standard timer.
  */
 export async function delay(ms: number): Promise<void> {
   if (ms <= 0) {
@@ -19,7 +19,7 @@ export async function delay(ms: number): Promise<void> {
 }
 
 /**
- * 下载普通文件到临时路径并读取字节，不尝试按 ZIP 解析。
+ * Download plain file to temporary path and read bytes without attempting ZIP parsing.
  */
 export async function downloadPlainFileBytes(url: string): Promise<Uint8Array> {
   const path = await createTemporaryPath("mineru-result-download");
@@ -39,7 +39,7 @@ export async function downloadPlainFileBytes(url: string): Promise<Uint8Array> {
 }
 
 /**
- * 下载 MinerU ZIP 到临时文件并读取字节或 ZIP 条目。
+ * Download MinerU ZIP to temporary file and read bytes or ZIP entries.
  */
 export async function zoteroDownloadFileBytes(
   url: string,
@@ -55,7 +55,7 @@ export async function zoteroDownloadFileBytes(
 }
 
 /**
- * 在 Windows Zotero 运行时优先使用 curl 下载结果文件。
+ * Prefer curl to download result files on Windows Zotero runtime.
  */
 export async function downloadWithCurl(
   url: string,
@@ -104,7 +104,7 @@ export async function downloadWithCurl(
 }
 
 /**
- * 从 Zotero/浏览器运行时推断当前平台。
+ * Infer current platform from Zotero/browser runtime.
  */
 export function getRuntimePlatform(): "win" | "mac" | "linux" | "unknown" {
   const runtime = globalThis as typeof globalThis & {
@@ -130,7 +130,7 @@ export function getRuntimePlatform(): "win" | "mac" | "linux" | "unknown" {
 }
 
 /**
- * 通过 nsIProcess 调用本机 curl.exe 下载文件。
+ * Download file by invoking native curl.exe via nsIProcess.
  */
 export async function downloadWithNsIProcess(
   url: string,
@@ -175,7 +175,7 @@ export async function downloadWithNsIProcess(
 }
 
 /**
- * 查找 Windows 系统目录中的 curl.exe。
+ * Search for curl.exe in Windows system directories.
  */
 export async function findCurlPath(): Promise<string | null> {
   const candidates = [
@@ -191,7 +191,7 @@ export async function findCurlPath(): Promise<string | null> {
 }
 
 /**
- * 判断 Zotero 运行时能否访问指定文件路径。
+ * Check whether the Zotero runtime can access the specified file path.
  */
 export async function fileExists(path: string): Promise<boolean> {
   try {
@@ -202,7 +202,7 @@ export async function fileExists(path: string): Promise<boolean> {
 }
 
 /**
- * 读取文件大小，失败时返回 0 供诊断使用。
+ * Read file size, returning 0 on failure for diagnostic purposes.
  */
 export async function fileSize(path: string): Promise<number> {
   try {
@@ -214,7 +214,7 @@ export async function fileSize(path: string): Promise<number> {
 }
 
 /**
- * 在系统临时目录下创建唯一临时文件路径。
+ * Create a unique temporary file path under system temporary directory.
  */
 export async function createTemporaryPath(fileName: string): Promise<string> {
   const baseDir = PathUtils.tempDir;
@@ -223,7 +223,7 @@ export async function createTemporaryPath(fileName: string): Promise<string> {
 }
 
 /**
- * 删除临时文件，忽略文件不存在或清理失败。
+ * Remove temporary file, ignoring absence or cleanup failures.
  */
 export async function removeFileIfExists(path: string): Promise<void> {
   try {
@@ -234,7 +234,7 @@ export async function removeFileIfExists(path: string): Promise<void> {
 }
 
 /**
- * 写入已下载的临时字节，用于 ZIP reader 回退解析。
+ * Write downloaded temporary bytes for ZIP reader fallback parsing.
  */
 export async function writeDownloadedBytes(
   path: string,

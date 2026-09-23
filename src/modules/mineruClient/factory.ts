@@ -6,13 +6,13 @@ const ONLINE_BASE_URL = "https://mineru.net/api";
 const LOCAL_BASE_URL = "http://127.0.0.1:8000";
 
 /**
- * 根据 parse source 选择 MinerU client。
+ * Select a MinerU client based on parse source.
  *
- * - `online`：官方文档化的 v4 精准解析 API（`/v4/file-urls/batch` 等）。
- * - `local`：自托管 MinerU 4.0 的 V1 API（`/v1/parse/jobs`）。
+ * - `online`: Official documented v4 precise parsing API (`/v4/file-urls/batch`, etc.).
+ * - `local`: Self-hosted MinerU 4.0 V1 API (`/v1/parse/jobs`).
  *
- * 官方云不宜用 V1：其输出格式转换可能返回 `file_conversion_failed`，而 v4
- * 稳定产出包含 markdown/layout.json/images 的标准 zip。
+ * The official cloud should not be routed through V1: its output format conversion may return
+ * `file_conversion_failed`, while v4 reliably produces standard zips containing markdown/layout.json/images.
  */
 export function createMinerUClientForSettings(
   options: MinerUClientFactoryOptions,

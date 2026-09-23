@@ -3,15 +3,16 @@ import { config } from "../../package.json";
 export { createZToolkit };
 
 /**
- * 本地 mini-toolkit，替代 `zotero-plugin-toolkit`。
+ * Local mini-toolkit replacing `zotero-plugin-toolkit`.
  *
- * 插件只用到 log / getGlobal / Clipboard / unregisterAll 四项能力，而整包
- * toolkit 会让 esbuild 打进 ~122 KB 且无法 tree-shake，并在构造时注册一整套
- * 未使用的全局监听（尤其 KeyboardManager）。这里保留同名同形的 `ztoolkit`
- * 全局对象，使所有调用点与测试缝无需改动。
+ * The plugin only uses four capabilities: log / getGlobal / Clipboard / unregisterAll.
+ * Bundling the full toolkit would add ~122 KB via esbuild with no tree-shaking and
+ * register unused global listeners on construction (especially KeyboardManager).
+ * This module preserves the `ztoolkit` global shape to keep call sites and test
+ * seams unchanged.
  */
 
-/** Zotero 调试输出前缀，便于过滤本插件日志。 */
+/** Prefix for Zotero debug logs to facilitate filtering plugin output. */
 const LOG_PREFIX = `[${config.addonName}]`;
 
 type TransferableLike = {
@@ -37,10 +38,10 @@ function xpcClasses(): XPCClasses {
 }
 
 /**
- * 把文本或 data URL 图片写入系统剪贴板。
+ * Write plain text or data URL images to the system clipboard.
  *
- * 逻辑与 toolkit 的 `ClipboardHelper` 保持一致：文本走 nsISupportsString，
- * 图片走 `imgITools.decodeImageFromArrayBuffer` + `application/x-moz-nativeimage`。
+ * Keeps behavior identical to the toolkit's `ClipboardHelper`: text uses nsISupportsString,
+ * and images use `imgITools.decodeImageFromArrayBuffer` + `application/x-moz-nativeimage`.
  */
 class Clipboard {
   private transferable: TransferableLike;
@@ -102,7 +103,7 @@ class Clipboard {
   }
 }
 
-/** 将任意日志参数转换为可读文本。 */
+/** Convert arbitrary log arguments to readable text. */
 function formatLogData(data: unknown): string {
   if (typeof data === "string") {
     return data;
@@ -120,7 +121,7 @@ function formatLogData(data: unknown): string {
   return String(data);
 }
 
-/** 统一写 Zotero 调试输出；任何失败都不应影响调用方。 */
+/** Write unified Zotero debug output; failures must not affect the caller. */
 function log(...data: unknown[]): void {
   if (data.length === 0) {
     return;
@@ -132,7 +133,7 @@ function log(...data: unknown[]): void {
   }
 }
 
-/** 先查全局作用域，再回退主窗口，行为与 toolkit 的 `getGlobal` 一致。 */
+/** Check the global scope first, then fall back to the main window, matching toolkit's `getGlobal`. */
 function getGlobal<T = unknown>(key: string): T {
   const value = (globalThis as Record<string, unknown>)[key];
   if (typeof value !== "undefined") {
@@ -153,7 +154,7 @@ function createZToolkit() {
     log,
     getGlobal,
     Clipboard,
-    // 本地 toolkit 不注册任何东西，保留该方法以兼容既有卸载调用。
+    // The local toolkit registers nothing; keep this method for backward compatibility with existing unload calls.
     unregisterAll: (): void => {},
   };
 }

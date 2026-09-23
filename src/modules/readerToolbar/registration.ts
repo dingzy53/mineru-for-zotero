@@ -20,7 +20,7 @@ import type {
 
 const panelStore = createReaderToolbarPanelStore();
 
-/** 为 Zotero main window 注册 MinerU toolbar button 集成。 */
+/** Registers MinerU toolbar button integration for a Zotero main window. */
 export async function registerReaderToolbar(
   win: _ZoteroTypes.MainWindow,
 ): Promise<void> {
@@ -44,7 +44,7 @@ export async function registerReaderToolbar(
   addon.data.readerToolbar.registeredWindows.add(win);
 }
 
-/** 取消一个窗口或所有已注册窗口的 toolbar 集成。 */
+/** Unregisters toolbar integration for a single window or all registered windows. */
 export function unregisterReaderToolbar(win?: Window): void {
   const registration = addon.data.readerToolbar;
   if (!registration) {
@@ -72,19 +72,19 @@ export function unregisterReaderToolbar(win?: Window): void {
   }
 }
 
-/** 为 Zotero main window 启动基于观察器和定时器的 toolbar 同步。 */
+/** Starts observer- and timer-based toolbar synchronization for a Zotero main window. */
 export function registerReaderToolbarWindow(
   win: _ZoteroTypes.MainWindow,
   store: ReaderToolbarPanelStore = panelStore,
 ): WindowToolbarRegistration {
   let timer = 0;
   let destroyed = false;
-  // 在 Zotero 改动 reader toolbar DOM 后重新同步 toolbar 绑定。
+  // Resynchronize toolbar bindings after Zotero modifies the reader toolbar DOM.
   const observer = new win.MutationObserver(() => {
     syncWindowToolbar(win, store);
   });
 
-  /** 开始观察 reader DOM 变化，以定位 toolbar 插入点。 */
+  /** Observes reader DOM mutations to identify toolbar insertion anchors. */
   const start = () => {
     if (destroyed) {
       return;
@@ -94,13 +94,13 @@ export function registerReaderToolbarWindow(
       subtree: true,
     });
     syncWindowToolbar(win, store);
-    // 周期性捕获不会通过 DOM mutation 暴露的 reader 生命周期变化。
+    // Periodically capture reader lifecycle changes not surfaced via DOM mutations.
     timer = win.setInterval(() => {
       syncWindowToolbar(win, store);
     }, 500);
   };
 
-  /** 停止该窗口持有的观察器、定时器和绑定。 */
+  /** Stops observers, timers, and bindings held for this window. */
   const stop = () => {
     destroyed = true;
     observer.disconnect();
@@ -115,7 +115,7 @@ export function registerReaderToolbarWindow(
   return { cleanup: stop };
 }
 
-/** 将 toolbar 绑定与窗口中当前打开的 PDF reader 同步。 */
+/** Synchronizes toolbar bindings with currently open PDF readers in the window. */
 export function syncWindowToolbar(
   win: _ZoteroTypes.MainWindow,
   store: ReaderToolbarPanelStore = panelStore,

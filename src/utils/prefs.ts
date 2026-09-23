@@ -112,35 +112,35 @@ export function setLocalApiTimeoutMinutes(value: number) {
 }
 
 /**
- * 读取 Markdown 查询 API 是否启用。
+ * Read whether the Markdown query API is enabled.
  */
 export function getMarkdownApiEnabled(): boolean {
   return getPref("apiEnabled") === true;
 }
 
 /**
- * 持久化 Markdown 查询 API 启用状态。
+ * Persist the enabled state of the Markdown query API.
  */
 export function setMarkdownApiEnabled(value: boolean) {
   return setPref("apiEnabled", value);
 }
 
 /**
- * 读取 Markdown 查询 API 是否要求 token，默认开启。
+ * Read whether the Markdown query API requires a token (enabled by default).
  */
 export function getMarkdownApiRequireToken(): boolean {
   return getPref("apiRequireToken") !== false;
 }
 
 /**
- * 持久化 Markdown 查询 API 的 token 校验开关。
+ * Persist the token validation switch for the Markdown query API.
  */
 export function setMarkdownApiRequireToken(value: boolean) {
   return setPref("apiRequireToken", value);
 }
 
 /**
- * 读取 Markdown 查询 API token。
+ * Read the Markdown query API token.
  */
 export function getMarkdownApiToken(): string {
   const value = getPref("apiToken");
@@ -154,14 +154,14 @@ export function getMarkdownApiToken(): string {
 }
 
 /**
- * 持久化 Markdown 查询 API token。
+ * Persist the Markdown query API token.
  */
 export function setMarkdownApiToken(value: string) {
   return setPref("apiToken", value);
 }
 
 /**
- * 生成适合 URL 传输的随机 token。
+ * Generate a random token suitable for URL transmission.
  */
 export function generateMarkdownApiToken(): string {
   const bytes = new Uint8Array(32);
@@ -199,7 +199,7 @@ export function setAutoParsePageLimit(value: number) {
 }
 
 /**
- * 将字节数组编码为 URL-safe token。
+ * Encode a byte array into a URL-safe token.
  */
 function bytesToUrlToken(bytes: Uint8Array): string {
   const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join(

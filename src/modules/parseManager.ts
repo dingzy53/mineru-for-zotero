@@ -967,10 +967,11 @@ async function parseAttachmentWithDependencies(
 }
 
 /**
- * Best-effort 解析附件的展示标题。
+ * Best-effort resolution of the display title for an attachment.
  *
- * 优先使用依赖注入的实现（便于单元测试），其次回退到 Zotero 父条目标题，
- * 最后尝试附件自身的标题字段。任何一步失败都不应中断解析流程。
+ * Prefers the dependency-injected implementation (for unit test convenience),
+ * then falls back to the Zotero parent item title, and finally tries the attachment's
+ * own title field. Failures at any step must not interrupt the parsing pipeline.
  */
 async function resolveAttachmentTitle(
   attachment: Zotero.Item,
@@ -989,7 +990,7 @@ async function resolveAttachmentTitle(
       return String(parentTitle);
     }
   } catch {
-    // Zotero 条目查询失败时回退到附件自身标题。
+    // Fall back to the attachment's own title if Zotero item query fails.
   }
 
   try {
@@ -998,14 +999,15 @@ async function resolveAttachmentTitle(
       return String(title);
     }
   } catch {
-    // 附件缺少标题信息时使用占位标题。
+    // Use placeholder when attachment lacks title information.
   }
 
   return "";
 }
 
 /**
- * Best-effort 同步解析列状态，避免辅助 UI 失败影响核心解析流程。
+ * Best-effort synchronization of the item tree parse column status,
+ * ensuring auxiliary UI failures do not affect the core parse flow.
  */
 async function updateParseColumnStatus(
   dependencies: ParseManagerDependencies,

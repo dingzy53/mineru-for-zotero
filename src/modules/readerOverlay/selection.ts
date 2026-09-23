@@ -5,7 +5,7 @@ import type {
 } from "./types";
 import { getReaderOverlayStateForReader } from "./state";
 
-/** 清空当前 reader 的 box 选择，并同步更新所有已渲染 root。 */
+/** Clears box selections for the current reader and synchronizes all rendered roots. */
 export function clearReaderOverlaySelectionForReader(
   reader: _ZoteroTypes.ReaderInstance,
 ): ReaderOverlayState | null {
@@ -20,7 +20,7 @@ export function clearReaderOverlaySelectionForReader(
   return state;
 }
 
-/** 把 state 中的 selectedRawIndexes 同步到所有已渲染 box class。 */
+/** Synchronizes selectedRawIndexes in state to classes on all rendered boxes. */
 export function syncSelectedBoxClasses(state: ReaderOverlayState): void {
   for (const root of state.rootsByWindow.values()) {
     safeReaderOverlayCleanup(() => {
@@ -35,7 +35,7 @@ export function syncSelectedBoxClasses(state: ReaderOverlayState): void {
   }
 }
 
-/** 仅切换单个 box 的 selected class。 */
+/** Toggles the selected class on a single box only. */
 export function setBoxSelectedClass(
   element: HTMLElement,
   selected: boolean,
@@ -43,7 +43,7 @@ export function setBoxSelectedClass(
   setElementClass(element, "mineru-copy-box-selected", selected);
 }
 
-/** 切换 overlay 是否处于 modifier-key 可交互状态。 */
+/** Toggles whether the overlay is in a modifier-key interactive state. */
 export function setOverlayModifierActive(
   element: HTMLElement,
   active: boolean,
@@ -51,7 +51,7 @@ export function setOverlayModifierActive(
   setElementClass(element, "mineru-copy-overlay-modifier-active", active);
 }
 
-/** 更新 hover 命中的 box，并保持其余 box 的 hover class 清理干净。 */
+/** Updates the hover-hit box while keeping hover classes cleared on all other boxes. */
 export function setHoveredBox(
   root: HTMLElement,
   hoveredBox: HTMLElement | null,
@@ -61,7 +61,7 @@ export function setHoveredBox(
   }
 }
 
-/** 根据坐标找到最上层可交互的 overlay box。 */
+/** Finds the topmost interactive overlay box according to coordinates. */
 export function findBoxAtPoint(
   root: HTMLElement,
   clientX: number,
@@ -262,7 +262,7 @@ function findBoxInActionsHoverArea(
   return null;
 }
 
-/** 兼容真实 DOM 与测试桩的 className / classList 判断。 */
+/** Checks className / classList compatibility across real DOM and test stubs. */
 function hasClassName(element: HTMLElement | null, className: string): boolean {
   if (element?.classList) {
     return element.classList.contains(className);
@@ -272,7 +272,7 @@ function hasClassName(element: HTMLElement | null, className: string): boolean {
     .includes(className);
 }
 
-/** 保持 box actions 下方 hover 区域可命中，避免鼠标轻微下移就丢失 hover。 */
+/** Maintains hit testing for the hover area beneath box actions, preventing slight downward mouse movements from losing hover. */
 export function isPointInBoxActionsHoverArea(
   box: HTMLElement,
   rect: DOMRect,
@@ -307,7 +307,7 @@ export function isPointInBoxActionsHoverArea(
   );
 }
 
-/** 返回 actions 本体和会伸出 box 的浮动子菜单矩形，用于保持 hover 命中。 */
+/** Returns rectangles for the actions body and floating submenus extending beyond the box to sustain hover hits. */
 export function getBoxActionsHoverRects(
   actions: HTMLElement | null,
 ): DOMRect[] {
@@ -335,7 +335,7 @@ export function getBoxActionsHoverRects(
   return rects;
 }
 
-/** 判断给定坐标是否落在指定矩形内。 */
+/** Determines whether given coordinates fall within the specified rectangle. */
 export function isPointInRect(
   clientX: number,
   clientY: number,
@@ -360,7 +360,7 @@ function isElementVisiblyRected(element: HTMLElement): boolean {
   );
 }
 
-/** 读取 box 上的 action 容器，兼容真实 DOM 与测试桩。 */
+/** Reads the action container on a box, compatible with real DOM and test stubs. */
 export function getBoxActionsElement(box: HTMLElement): HTMLElement | null {
   const querySelector = box.querySelector?.bind(box);
   if (querySelector) {
@@ -374,7 +374,7 @@ export function getBoxActionsElement(box: HTMLElement): HTMLElement | null {
   return firstAction ?? null;
 }
 
-/** 读取 root 下的全部 overlay box 元素。 */
+/** Reads all overlay box elements under root. */
 export function getBoxElements(root: HTMLElement): HTMLElement[] {
   if (typeof root.querySelectorAll !== "function") {
     return [];
@@ -382,7 +382,7 @@ export function getBoxElements(root: HTMLElement): HTMLElement[] {
   return Array.from(root.querySelectorAll(".mineru-copy-box")) as HTMLElement[];
 }
 
-/** 根据点击到的 box 元素更新选择集合，并刷新对应样式。 */
+/** Updates the selection set based on the clicked box element and refreshes corresponding styles. */
 export function applyReaderOverlayBoxSelectionFromElement(
   element: HTMLElement,
   rangeSelection: boolean,
@@ -410,7 +410,7 @@ export function applyReaderOverlayBoxSelectionFromElement(
   selectionOptions.onSelectionChange?.();
 }
 
-/** 判断对象是否支持 add/removeEventListener，以便作为 EventTarget 使用。 */
+/** Determines whether an object supports add/removeEventListener to be used as an EventTarget. */
 export function isEventTarget(value: unknown): value is EventTarget {
   return (
     !!value &&
@@ -420,7 +420,7 @@ export function isEventTarget(value: unknown): value is EventTarget {
   );
 }
 
-/** 安全切换 class，兼容真实 DOM 与测试桩对象。 */
+/** Safely toggles class names, compatible with real DOM and test stub objects. */
 export function setElementClass(
   element: HTMLElement,
   className: string,
@@ -448,7 +448,7 @@ export function setElementClass(
   element.className = [...classes].join(" ");
 }
 
-/** 按 selectableRawIndexes 范围补齐 Shift 多选。 */
+/** Fills out Shift multi-selection across the selectableRawIndexes range. */
 export function selectBoxRange(
   rawIndex: number,
   selectionOptions: ReaderOverlaySelectionOptions,
@@ -475,7 +475,7 @@ export function selectBoxRange(
   }
 }
 
-/** 优先使用过滤后的范围候选；端点不在候选内时回退到完整可选集合。 */
+/** Prefers filtered range candidates; falls back to the full selectable set when endpoints are outside candidates. */
 function getRangeSelectableRawIndexes(
   selectionOptions: ReaderOverlaySelectionOptions,
   anchorRawIndex: number,
@@ -492,7 +492,7 @@ function getRangeSelectableRawIndexes(
   return selectionOptions.selectableRawIndexes ?? [];
 }
 
-/** 在 selectableRawIndexes 中计算两个 rawIndex 之间的闭区间。 */
+/** Computes the closed interval between two rawIndex values within selectableRawIndexes. */
 export function getRawIndexRange(
   selectableRawIndexes: number[],
   startRawIndex: number,

@@ -8,7 +8,7 @@ import { getReaderAttachmentKey } from "./windows";
 
 export const fallbackStates = new Map<ReaderOverlayKey, ReaderOverlayState>();
 
-/** 根据 reader 实例和 attachment 生成唯一 overlay key。 */
+/** Generates a unique overlay key from reader instance and attachment. */
 export function getReaderOverlayKey(
   readerInstanceID: string,
   attachmentKey: string,
@@ -16,7 +16,7 @@ export function getReaderOverlayKey(
   return `${readerInstanceID}:${attachmentKey}`;
 }
 
-/** 读取或创建指定 attachment 的 overlay state。 */
+/** Retrieves or creates overlay state for the specified attachment. */
 export function getReaderOverlayState(
   readerInstanceID: string,
   attachmentKey: string,
@@ -49,7 +49,7 @@ export function getReaderOverlayState(
   return state;
 }
 
-/** 根据 reader 当前 attachment 返回对应 overlay state。 */
+/** Returns the corresponding overlay state for the reader's current attachment. */
 export function getReaderOverlayStateForReader(
   reader: _ZoteroTypes.ReaderInstance,
 ): ReaderOverlayState | null {
@@ -60,7 +60,7 @@ export function getReaderOverlayStateForReader(
   return getReaderOverlayState(reader._instanceID, attachmentKey);
 }
 
-/** 更新 reader 的 overlay mode，但不触发渲染。 */
+/** Updates the reader's overlay mode without triggering a re-render. */
 export function setReaderOverlayModeForReader(
   reader: _ZoteroTypes.ReaderInstance,
   mode: OverlayMode,
@@ -73,7 +73,7 @@ export function setReaderOverlayModeForReader(
   return state;
 }
 
-/** 为当前 reader 记录最新 root，并同步到按窗口索引的 root 映射。 */
+/** Records the latest root for the current reader and synchronizes it to the window-indexed root map. */
 export function setReaderOverlayRootForReader(
   reader: _ZoteroTypes.ReaderInstance,
   root: HTMLElement | null,
@@ -92,14 +92,14 @@ export function setReaderOverlayRootForReader(
   return state;
 }
 
-/** 返回当前 reader 已选中的 box 数量。 */
+/** Returns the count of selected boxes for the current reader. */
 export function getReaderSelectedBoxCount(
   reader: _ZoteroTypes.ReaderInstance,
 ): number {
   return getReaderOverlayStateForReader(reader)?.selectedRawIndexes.size ?? 0;
 }
 
-/** 销毁指定 key 的 overlay state 及其关联 root。 */
+/** Destroys overlay state and associated roots for the specified key. */
 export function destroyReaderOverlay(key: ReaderOverlayKey): void {
   const state = getOverlayStates().get(key);
   if (!state) {
@@ -110,14 +110,14 @@ export function destroyReaderOverlay(key: ReaderOverlayKey): void {
   getOverlayStates().delete(key);
 }
 
-/** 销毁某个 reader 实例下的全部 overlay state。 */
+/** Destroys all overlay states under a reader instance. */
 export function destroyReaderOverlaysForReader(
   reader: _ZoteroTypes.ReaderInstance,
 ): void {
   destroyReaderOverlaysByReaderID(reader._instanceID);
 }
 
-/** 通过 reader instance ID 销毁对应的全部 overlay state。 */
+/** Destroys all corresponding overlay states by reader instance ID. */
 export function destroyReaderOverlaysByReaderID(
   readerInstanceID: string,
 ): void {
@@ -131,7 +131,7 @@ export function destroyReaderOverlaysByReaderID(
   }
 }
 
-/** 销毁当前插件进程内的全部 overlay state。 */
+/** Destroys all overlay states within the current plugin process. */
 export function destroyAllReaderOverlays(): void {
   for (const state of getOverlayStates().values()) {
     state.renderRevision += 1;
@@ -140,7 +140,7 @@ export function destroyAllReaderOverlays(): void {
   getOverlayStates().clear();
 }
 
-/** 清理 state 中持有的 root 与 positioning cleanup 引用。 */
+/** Cleans up roots and positioning cleanup references held in state. */
 export function cleanupReaderOverlayRoot(state: ReaderOverlayState): void {
   ensureReaderOverlayStateMaps(state);
   state.selectPanelActive = false;
@@ -165,7 +165,7 @@ export function cleanupReaderOverlayRoot(state: ReaderOverlayState): void {
   state.root = null;
 }
 
-/** 确保老 state 总是带有新拆分后的窗口映射字段。 */
+/** Ensures legacy state always contains newly split window map fields. */
 export function ensureReaderOverlayStateMaps(
   state: ReaderOverlayState,
 ): ReaderOverlayState {
@@ -176,7 +176,7 @@ export function ensureReaderOverlayStateMaps(
   return state;
 }
 
-/** 校验当前 state 仍然对应同一轮 render 请求。 */
+/** Validates that the current state still corresponds to the same render request round. */
 export function isCurrentRenderState(
   state: ReaderOverlayState,
   revision: number,
@@ -190,7 +190,7 @@ export function isCurrentRenderState(
   );
 }
 
-/** 返回插件运行时持有的 overlay state 容器。 */
+/** Returns the overlay state container held by the plugin runtime. */
 export function getOverlayStates(): Map<ReaderOverlayKey, ReaderOverlayState> {
   if (typeof addon === "undefined") {
     return fallbackStates;
