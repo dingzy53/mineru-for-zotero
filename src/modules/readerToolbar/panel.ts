@@ -30,8 +30,7 @@ export function createReaderToolbarPanel(doc: Document): HTMLDivElement {
   menu.style.background = "var(--material-toolbar)";
   menu.style.boxShadow =
     "0 0 3px 0 rgba(0,0,0,.55),0 8px 40px 0 rgba(0,0,0,.25),0 0 3px 0 rgba(255,255,255,.1) inset";
-  menu.style.fontFamily =
-    'var(--font-family, "Microsoft YaHei UI", "Microsoft YaHei", sans-serif)';
+  menu.style.fontFamily = "var(--font-family, inherit)";
   menu.style.fontSize = "13px";
   return menu;
 }
@@ -360,8 +359,7 @@ export function createReaderToolbarCommandButton(
   button.style.border = "0";
   button.style.borderRadius = "4px";
   button.style.background = "transparent";
-  button.style.fontFamily =
-    'var(--font-family, "Microsoft YaHei UI", "Microsoft YaHei", sans-serif)';
+  button.style.fontFamily = "var(--font-family, inherit)";
   button.style.fontSize = "13px";
   button.style.fontWeight = "400";
   button.style.lineHeight = "1.35";

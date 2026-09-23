@@ -181,7 +181,7 @@ describe("readerToolbar", function () {
       "0 0 3px 0 rgba(0,0,0,.55),0 8px 40px 0 rgba(0,0,0,.25),0 0 3px 0 rgba(255,255,255,.1) inset",
     );
     assert.equal(panel.style.fontSize, "13px");
-    assert.include(panel.style.fontFamily, "Microsoft YaHei");
+    assert.include(panel.style.fontFamily, "var(--font-family, inherit)");
   });
 
   it("uses compact Zotero-style typography for menu commands", function () {
@@ -205,7 +205,7 @@ describe("readerToolbar", function () {
     assert.equal(button.style.borderRadius, "4px");
     assert.equal(button.style.fontSize, "13px");
     assert.equal(button.style.lineHeight, "1.35");
-    assert.include(button.style.fontFamily, "Microsoft YaHei");
+    assert.include(button.style.fontFamily, "var(--font-family, inherit)");
   });
 
   it("keeps selection status as a label and places copy before clear actions", function () {
