@@ -75,6 +75,16 @@ Parsing jobs survive Zotero restarts. If Zotero closes while a job is running, t
 
 The result folder contains the parsed Markdown, box data used by the reader, and optional images. External tools may read these files, but editing them is not recommended.
 
+### Migrating Results to Another Computer
+
+All MinerU parse results are saved using portable `[libraryID]-[attachmentKey]` directory names (such as `1-ABCD1234/`), which match the persistent attachment keys synced across devices via Zotero Cloud Sync.
+
+To migrate your parsed results without re-running parsing or consuming API quota:
+
+1. **On the source computer:** Open `Edit` -> `Settings` -> `MinerU for Zotero` and click `Open Data Folder`. Copy the entire `mineru-copy` folder to an external drive or cloud storage.
+2. **On the target computer:** Ensure Zotero has finished syncing your library items. Open `Edit` -> `Settings` -> `MinerU for Zotero`, click `Open Data Folder`, and paste the `mineru-copy` folder into that location.
+3. Open the **MinerU Task Manager** (from Settings or reader menu), switch to the **Parsed Results** tab, and click `Refresh`. All parsed results and reader overlay boxes will be immediately available.
+
 ### Agent-friendly Sync Folder
 
 For AI workflows, you can configure an **Agent-friendly Sync Folder** in the settings. When enabled, MinerU for Zotero will automatically copy parsed results (Markdown + images) into a clean, flat directory structure named after the citation key and title (`[CitationKey] - Title/`).
