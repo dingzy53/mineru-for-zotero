@@ -230,14 +230,6 @@ export async function registerPrefsScripts(_window: Window) {
     });
 
   document
-    .getElementById(`${config.addonRef}-open-results-manager`)
-    ?.addEventListener("click", () => {
-      const addonObj = (Zotero as any).MinerUForZotero;
-      if (addonObj?.api?.openResultsManagerWindow) {
-        addonObj.api.openResultsManagerWindow();
-      }
-    });
-  document
     .getElementById(`${config.addonRef}-api-regenerate-token`)
     ?.addEventListener("click", () => {
       setMarkdownApiToken(generateMarkdownApiToken());
@@ -301,7 +293,7 @@ export async function registerPrefsScripts(_window: Window) {
   registerExternalLink(
     document,
     `${config.addonRef}-github-link`,
-    "https://github.com/Asianfleet/mineru-for-zotero",
+    "https://github.com/dingzy53/mineru-for-zotero",
   );
   registerExternalLink(
     document,

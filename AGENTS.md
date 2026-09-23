@@ -9,7 +9,7 @@ Core feature modules currently include:
 - `mineruClient/` — the MinerU clients: `v4.ts` for the official cloud (`https://mineru.net/api/v4/*`) and `v1.ts` for self-hosted/local (`…/v1/*`), plus `createMinerUClientForSettings()` selection from `parseSource`.
 - `parseManager.ts` — item/attachment parsing orchestration (dependency-injected); chunking, merging, resume, and the user-facing failure notices all live here. There is **no** `parseNotice.ts`.
 - `parseMerge.ts`, `parseNetwork.ts`, `parseProgress.ts`, `parseResume.ts`, `pdfPageCount.ts` — chunk merging, reconnecting fetch/backoff, progress reporting, resume caches, and Zotero bundled pdf.js page counting.
-- `taskStore.ts`, `resultsManager.ts`, `storage.ts`, `storageFs.ts`, `domain.ts` — task persistence and its window, the parsed-results manager UI, per-attachment result storage, the `IOUtils`/`OS.File` filesystem adapter, and shared parse/storage/overlay domain types.
+- `taskStore.ts`, `resultsManager.ts`, `storage.ts`, `storageFs.ts`, `domain.ts` — task persistence and the unified two-tab Task Manager window (task queue & parsed results), per-attachment result storage, the `IOUtils`/`OS.File` filesystem adapter, and shared parse/storage/overlay domain types.
 - `boxNormalizer.ts`, `copyFormatter.ts` — MinerU schema normalization into stable boxes and copy output.
 - `readerToolbar/`, `readerOverlay/` — PDF Reader toolbar UI and box rendering/selection behavior.
 - `markdownQuery/` — the local HTTP Markdown query API (endpoint, attachment resolver, Markdown parser, query service).

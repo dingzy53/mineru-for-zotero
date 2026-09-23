@@ -289,7 +289,7 @@ describe("Results Manager", function () {
           },
         }),
         getMostRecentWindow: (type: string) => {
-          if (type === "mineruResultsManager") {
+          if (type === "mineruResultsManager" || type === "mineruTaskManager") {
             return {
               focus: () => {
                 focused = true;
@@ -327,10 +327,11 @@ describe("Results Manager", function () {
 
       assert.strictEqual(
         openedUrl,
-        "chrome://mineruForZotero/content/resultsManager.html",
+        "chrome://mineruForZotero/content/taskManager.html",
       );
       assert.ok(openedArgs);
       assert.ok(openedArgs.service);
+      assert.strictEqual(openedArgs.initialTab, "results");
     });
   });
 });

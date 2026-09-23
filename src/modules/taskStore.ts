@@ -165,7 +165,14 @@ class TaskManagerStore {
 
 export const taskStore = new TaskManagerStore();
 
-export function openTaskManagerWindow(_callerWindow?: Window) {
+export interface TaskManagerWindowOptions {
+  initialTab?: "tasks" | "results";
+}
+
+export function openTaskManagerWindow(
+  _callerWindow?: Window,
+  options?: TaskManagerWindowOptions,
+) {
   try {
     // Try to find an existing Task Manager window to avoid duplicates
     const mainWin = Zotero.getMainWindow();
@@ -183,6 +190,12 @@ export function openTaskManagerWindow(_callerWindow?: Window) {
         const existing = wm.getMostRecentWindow("mineruTaskManager");
         if (existing) {
           existing.focus();
+          if (
+            options?.initialTab &&
+            typeof (existing as any).switchTab === "function"
+          ) {
+            (existing as any).switchTab(options.initialTab);
+          }
           return;
         }
       }
@@ -190,14 +203,22 @@ export function openTaskManagerWindow(_callerWindow?: Window) {
       // Window mediator not available, proceed to open
     }
 
+    const addonInstance = (Zotero as any)?.MinerUForZotero;
+    const service = addonInstance?.api?.createResultsManagerService?.();
+
     // Use openDialog from main window — this is the most reliable method
     // in Zotero 7. It passes Zotero as window.arguments[0] so the child
     // window can always find the taskStore even in Flatpak/Wayland.
     mainWin.openDialog(
       `chrome://${addon.data.config.addonRef}/content/taskManager.html`,
       "MinerUTaskManager",
-      "chrome,dialog=no,centerscreen,dependent=yes,alwaysRaised=yes,width=600,height=500,resizable",
-      { Zotero, taskStore },
+      "chrome,dialog=no,centerscreen,dependent=yes,alwaysRaised=yes,width=920,height=650,resizable",
+      {
+        Zotero,
+        taskStore,
+        service,
+        initialTab: options?.initialTab ?? "tasks",
+      },
     );
   } catch (e) {
     ztoolkit.log("Failed to open Task Manager window", e);

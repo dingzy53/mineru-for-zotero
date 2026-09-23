@@ -1,5 +1,8 @@
 import { config } from "../../package.json";
 import { createStorage, type StorageAdapter } from "./storage";
+import { syncResultToAgentFolder } from "./agentSync";
+import { getSyncFolder } from "../utils/prefs";
+import { taskStore } from "./taskStore";
 
 const DEFAULT_STORAGE_ROOT = "ProfD/mineru-copy";
 
@@ -59,6 +62,8 @@ export interface ResultsManagerService {
   openDataFolder(libraryID: number, key: string): Promise<void>;
   revealFolder(path: string): Promise<void>;
   readMarkdown(ref: { libraryID: number; key: string }): Promise<string>;
+  syncResult?(entry: ParsedResultEntry): Promise<boolean>;
+  syncSelected?(entries: ParsedResultEntry[]): Promise<number>;
 }
 
 const MINERU_TAGS = [
@@ -114,10 +119,14 @@ export async function scanAllResults(
     const pdfMtime = preciseManifest?.pdfMtime || liteManifest?.pdfMtime;
 
     let title = fileName;
-    const parentID =
-      item?.parentItemID || item?.parentID || item?.parentItem?.id;
+    const parentID = item?.parentItemID || item?.parentID;
     if (parentID) {
-      const parent = item.parentItem || (await deps.getItemAsync(parentID));
+      let parent: any;
+      try {
+        parent = await deps.getItemAsync(parentID);
+      } catch {
+        // Ignore load error
+      }
       if (parent) {
         title = parent.getField?.("title") || fileName;
       }
@@ -210,10 +219,14 @@ export async function deleteResultEntry(
     if (options.removeLayoutAttachment && deps.eraseItem) {
       try {
         const item = await deps.getItemAsync(entry.attachmentID);
-        const parentID =
-          item?.parentItemID || item?.parentID || item?.parentItem?.id;
+        const parentID = item?.parentItemID || item?.parentID;
         if (parentID) {
-          const parent = item.parentItem || (await deps.getItemAsync(parentID));
+          let parent: any;
+          try {
+            parent = await deps.getItemAsync(parentID);
+          } catch {
+            // Ignore load error
+          }
           const attIDs = (
             typeof parent?.getAttachments === "function"
               ? await parent.getAttachments()
@@ -253,14 +266,21 @@ export function createResultsManagerService(
   const deps: ResultsManagerDependencies = {
     storage,
     async getItemByLibraryAndKey(libraryID, key) {
-      const item = (globalThis as any).Zotero?.Items?.getByLibraryAndKey(
-        libraryID,
-        key,
-      );
+      const Zotero = (globalThis as any).Zotero;
+      if (!Zotero?.Items) return undefined;
+      const item = Zotero.Items.getByLibraryAndKeyAsync
+        ? await Zotero.Items.getByLibraryAndKeyAsync(libraryID, key)
+        : Zotero.Items.getByLibraryAndKey(libraryID, key);
       return item || undefined;
     },
     async getItemAsync(id) {
-      return (globalThis as any).Zotero?.Items?.getAsync(id);
+      const Zotero = (globalThis as any).Zotero;
+      if (!Zotero?.Items) return undefined;
+      return (
+        (await Zotero.Items.getAsync?.(id)) ??
+        Zotero.Items.get?.(id) ??
+        undefined
+      );
     },
     async selectItemInLibrary(id) {
       const Zotero = (globalThis as any).Zotero;
@@ -325,6 +345,39 @@ export function createResultsManagerService(
     readMarkdown: async (ref) => {
       return storage.readPreferredMarkdown(ref);
     },
+    syncResult: async (entry) => {
+      const syncFolder = getSyncFolder().trim();
+      if (!syncFolder) return false;
+      const item = await deps.getItemAsync(entry.attachmentID ?? 0);
+      if (!item) return false;
+      const sourceDir = storage.getAttachmentDir({
+        libraryID: entry.libraryID,
+        key: entry.key || entry.attachmentKey!,
+      });
+      await syncResultToAgentFolder(item, sourceDir);
+      return true;
+    },
+    syncSelected: async (entries) => {
+      const syncFolder = getSyncFolder().trim();
+      if (!syncFolder) {
+        throw new Error("No agent sync folder configured in preferences.");
+      }
+      let count = 0;
+      for (const entry of entries) {
+        if (!entry.isOrphan && entry.attachmentID) {
+          const item = await deps.getItemAsync(entry.attachmentID);
+          if (item) {
+            const sourceDir = storage.getAttachmentDir({
+              libraryID: entry.libraryID,
+              key: entry.key || entry.attachmentKey!,
+            });
+            await syncResultToAgentFolder(item, sourceDir);
+            count++;
+          }
+        }
+      }
+      return count;
+    },
   };
 }
 
@@ -350,9 +403,14 @@ export function openResultsManagerWindow(
       const getMostRecentWindow =
         windowDependencies.getMostRecentWindow ??
         getMostRecentResultsManagerWindow;
-      const existing = getMostRecentWindow("mineruResultsManager");
+      const existing =
+        getMostRecentWindow("mineruTaskManager") ||
+        getMostRecentWindow("mineruResultsManager");
       if (existing) {
         existing.focus();
+        if (typeof existing.switchTab === "function") {
+          existing.switchTab("results");
+        }
         return;
       }
     } catch (_e) {
@@ -365,10 +423,10 @@ export function openResultsManagerWindow(
     }
 
     mainWin.openDialog(
-      `chrome://${config.addonRef}/content/resultsManager.html`,
-      "MinerUResultsManager",
-      "chrome,dialog=no,centerscreen,dependent=yes,alwaysRaised=yes,width=1000,height=700,resizable",
-      { Zotero, service },
+      `chrome://${config.addonRef}/content/taskManager.html`,
+      "MinerUTaskManager",
+      "chrome,dialog=no,centerscreen,dependent=yes,alwaysRaised=yes,width=920,height=650,resizable",
+      { Zotero, taskStore, service, initialTab: "results" },
     );
   } catch (e) {
     (globalThis as any).Zotero?.debug?.(

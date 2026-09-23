@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" windowtype="mineruTaskManager">
   <head>
     <meta charset="UTF-8" />
     <title>MinerU Task Manager</title>
@@ -16,10 +16,56 @@
       }
       h1 {
         font-size: 1.2rem;
-        margin-top: 0;
-        margin-bottom: 16px;
+        margin: 0;
         color: #333;
       }
+
+      /* Tabs Navigation */
+      .tabs-nav {
+        display: flex;
+        gap: 6px;
+        border-bottom: 2px solid #e0e0e0;
+        margin-bottom: 16px;
+      }
+      .tab-btn {
+        background: transparent;
+        border: none;
+        border-bottom: 3px solid transparent;
+        padding: 8px 18px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #666;
+        cursor: pointer;
+        margin-bottom: -2px;
+        border-radius: 4px 4px 0 0;
+        transition:
+          color 0.15s,
+          border-color 0.15s,
+          background-color 0.15s;
+      }
+      .tab-btn:hover {
+        color: #2a6099;
+        background: rgba(42, 96, 153, 0.05);
+      }
+      .tab-btn.active {
+        color: #2a6099;
+        border-bottom-color: #2a6099;
+      }
+      .tab-pane {
+        display: none;
+      }
+      .tab-pane.active {
+        display: block;
+      }
+
+      .top-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+
+      /* Task Queue styles */
       .task-list {
         display: flex;
         flex-direction: column;
@@ -115,17 +161,8 @@
         font-size: 0.9rem;
       }
 
-      .top-bar {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 16px;
-      }
-      .top-bar h1 {
-        margin: 0;
-      }
-
-      .clear-btn {
+      .clear-btn,
+      .btn {
         background: transparent;
         border: 1px solid #ccc;
         border-radius: 4px;
@@ -134,8 +171,25 @@
         font-size: 0.85rem;
         color: #555;
       }
-      .clear-btn:hover {
+      .clear-btn:hover,
+      .btn:hover {
         background: #eee;
+      }
+      .btn-primary {
+        background: #2a6099;
+        color: #fff;
+        border-color: #2a6099;
+      }
+      .btn-primary:hover {
+        background: #1f4a76;
+      }
+      .btn-danger {
+        background: #d32f2f;
+        color: #fff;
+        border-color: #d32f2f;
+      }
+      .btn-danger:hover {
+        background: #b71c1c;
       }
 
       .group-header {
@@ -161,6 +215,280 @@
         display: none;
       }
 
+      /* Parsed Results styles */
+      .summary-cards {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+      }
+      .summary-card {
+        flex: 1;
+        min-width: 120px;
+        background: #fff;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        padding: 12px;
+        text-align: center;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      }
+      .summary-card .value {
+        font-size: 1.4rem;
+        font-weight: bold;
+        color: #2a6099;
+      }
+      .summary-card .label {
+        font-size: 0.85rem;
+        color: #555;
+        margin-top: 4px;
+      }
+
+      .filter-bar {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 14px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .filter-bar input[type="text"] {
+        padding: 6px 10px;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        background: #fff;
+        color: #15141a;
+        box-sizing: border-box;
+      }
+
+      /* Custom Dropdowns */
+      .custom-dropdown {
+        position: relative;
+        display: inline-block;
+      }
+      .dropdown-btn {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 6px 10px;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        background: #fff;
+        color: #15141a;
+        cursor: pointer;
+        user-select: none;
+        white-space: nowrap;
+        box-sizing: border-box;
+        font-family: inherit;
+      }
+      .dropdown-btn:hover {
+        background: #f5f5f5;
+        border-color: #ccc;
+      }
+      .dropdown-arrow {
+        font-size: 0.65rem;
+        color: #777;
+        transition: transform 0.2s;
+        pointer-events: none;
+      }
+      .custom-dropdown.open .dropdown-arrow {
+        transform: rotate(180deg);
+      }
+      .dropdown-menu {
+        display: none;
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        min-width: 100%;
+        background: #fff;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+        z-index: 50;
+        padding: 4px 0;
+        max-height: 250px;
+        overflow-y: auto;
+      }
+      .custom-dropdown.open .dropdown-menu {
+        display: block;
+      }
+      .dropdown-item {
+        padding: 7px 12px;
+        font-size: 0.88rem;
+        color: #333;
+        cursor: pointer;
+        white-space: nowrap;
+        user-select: none;
+      }
+      .dropdown-item:hover {
+        background: #f0f4f8;
+        color: #2a6099;
+      }
+      .dropdown-item.selected {
+        font-weight: 600;
+        color: #2a6099;
+        background: #eef4fb;
+      }
+
+      .list-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+        font-size: 0.9rem;
+        color: #555;
+      }
+
+      .result-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 60px;
+      }
+
+      .result-card {
+        background: #fff;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        padding: 12px;
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      }
+      .result-card-main {
+        flex: 1;
+        min-width: 0;
+      }
+      .result-title {
+        font-weight: 600;
+        font-size: 0.95rem;
+        margin-bottom: 4px;
+        word-break: break-all;
+      }
+      .result-filename {
+        font-size: 0.82rem;
+        color: #666;
+        margin-bottom: 6px;
+        word-break: break-all;
+      }
+      .result-badges {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-bottom: 6px;
+      }
+      .badge {
+        font-size: 0.72rem;
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: #e0e0e0;
+        color: #333;
+        font-weight: 500;
+      }
+      .badge.precise {
+        background: #e8f5e9;
+        color: #2e7d32;
+      }
+      .badge.lite {
+        background: #fff3e0;
+        color: #e65100;
+      }
+      .badge.orphan {
+        background: #ffebee;
+        color: #c62828;
+      }
+      .result-meta {
+        font-size: 0.8rem;
+        color: #777;
+      }
+
+      .action-buttons {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .bottom-bar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: #fff;
+        border-top: 1px solid #e0e0e0;
+        padding: 10px 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+        z-index: 10;
+      }
+
+      /* Modals */
+      .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 100;
+        padding: 20px;
+      }
+      .modal {
+        background: #fff;
+        border-radius: 8px;
+        width: 100%;
+        max-width: 600px;
+        max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      }
+      .modal-header {
+        padding: 14px 16px;
+        border-bottom: 1px solid #e0e0e0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .modal-header h2 {
+        margin: 0;
+        font-size: 1.05rem;
+      }
+      .modal-body {
+        padding: 16px;
+        overflow-y: auto;
+        flex: 1;
+      }
+      .modal-footer {
+        padding: 12px 16px;
+        border-top: 1px solid #e0e0e0;
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+      }
+
+      .markdown-preview {
+        white-space: pre-wrap;
+        font-family: monospace;
+        font-size: 0.85rem;
+        max-height: 55vh;
+        overflow-y: auto;
+      }
+
+      .checkbox-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+
+      /* Dark mode */
       @media (prefers-color-scheme: dark) {
         body {
           background-color: #1e1e1e;
@@ -169,10 +497,67 @@
         h1 {
           color: #ffffff;
         }
-        .task-item {
+        .tabs-nav {
+          border-bottom-color: #404040;
+        }
+        .tab-btn {
+          color: #aaa;
+        }
+        .tab-btn:hover {
+          color: #90caf9;
+          background: rgba(144, 202, 249, 0.08);
+        }
+        .tab-btn.active {
+          color: #90caf9;
+          border-bottom-color: #90caf9;
+        }
+        .task-item,
+        .summary-card,
+        .result-card,
+        .bottom-bar,
+        .modal {
           background: #2d2d2d;
           border-color: #404040;
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        }
+        .summary-card .value {
+          color: #90caf9;
+        }
+        .summary-card .label {
+          color: #aaa;
+        }
+        .filter-bar input[type="text"] {
+          background: #2d2d2d;
+          color: #e0e0e0;
+          border-color: #555;
+        }
+        .dropdown-btn {
+          background: #2d2d2d;
+          color: #e0e0e0;
+          border-color: #555;
+        }
+        .dropdown-btn:hover {
+          background: #383838;
+          border-color: #777;
+        }
+        .dropdown-arrow {
+          color: #aaa;
+        }
+        .dropdown-menu {
+          background: #2d2d2d;
+          border-color: #555;
+          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+        }
+        .dropdown-item {
+          color: #ddd;
+        }
+        .dropdown-item:hover {
+          background: #3d4a58;
+          color: #90caf9;
+        }
+        .dropdown-item.selected {
+          color: #90caf9;
+          background: #253342;
         }
         .status-pending {
           background: #404040;
@@ -209,26 +594,256 @@
         .error-state {
           color: #ef9a9a;
         }
-        .clear-btn {
+        .clear-btn,
+        .btn {
           border-color: #555;
           color: #ccc;
         }
-        .clear-btn:hover {
+        .clear-btn:hover,
+        .btn:hover {
           background: #333;
         }
         .group-header {
           color: #ccc;
         }
+        .result-filename {
+          color: #aaa;
+        }
+        .result-meta {
+          color: #999;
+        }
+        .badge {
+          background: #404040;
+          color: #ccc;
+        }
+        .badge.precise {
+          background: #1b5e20;
+          color: #a5d6a7;
+        }
+        .badge.lite {
+          background: #e65100;
+          color: #ffcc80;
+        }
+        .badge.orphan {
+          background: #b71c1c;
+          color: #ef9a9a;
+        }
+        .modal-header,
+        .modal-footer {
+          border-color: #404040;
+        }
       }
     </style>
   </head>
   <body>
-    <div class="top-bar">
-      <h1 id="title">MinerU Task Manager</h1>
-      <button class="clear-btn" id="clearBtn">Clear History</button>
+    <!-- Tabs Header -->
+    <div class="tabs-nav">
+      <button class="tab-btn active" id="tabTasksBtn">Task Queue</button>
+      <button class="tab-btn" id="tabResultsBtn">Parsed Results</button>
     </div>
-    <div class="task-list" id="taskList">
-      <div class="empty-state">Loading...</div>
+
+    <!-- Tab 1: Task Queue -->
+    <div class="tab-pane active" id="tabTasks">
+      <div class="top-bar">
+        <h1 id="title">MinerU Task Manager</h1>
+        <button class="clear-btn" id="clearBtn">Clear History</button>
+      </div>
+      <div class="task-list" id="taskList">
+        <div class="empty-state">Loading...</div>
+      </div>
+    </div>
+
+    <!-- Tab 2: Parsed Results -->
+    <div class="tab-pane" id="tabResults">
+      <div class="top-bar">
+        <h1 id="resultsTitle">MinerU Parsed Results</h1>
+        <div style="display: flex; gap: 8px">
+          <button class="btn" id="btnRefreshResults">Refresh</button>
+          <button class="btn btn-primary" id="btnScanOrphans">
+            Scan & Clean Orphans
+          </button>
+        </div>
+      </div>
+
+      <div class="summary-cards">
+        <div class="summary-card">
+          <div class="value" id="valTotal">0</div>
+          <div class="label" id="lblTotal">Total</div>
+        </div>
+        <div class="summary-card">
+          <div class="value" id="valPrecise">0</div>
+          <div class="label" id="lblPrecise">Precise</div>
+        </div>
+        <div class="summary-card">
+          <div class="value" id="valLite">0</div>
+          <div class="label" id="lblLite">Lite</div>
+        </div>
+        <div class="summary-card">
+          <div class="value" id="valSize">0 B</div>
+          <div class="label" id="lblSize">Total Disk Usage</div>
+        </div>
+      </div>
+
+      <div class="filter-bar">
+        <input
+          type="text"
+          id="searchInput"
+          placeholder="Search title or filename..."
+          style="flex: 1"
+        />
+
+        <div class="custom-dropdown" id="dropdownMode">
+          <input type="hidden" id="modeFilter" value="all" />
+          <button
+            type="button"
+            class="dropdown-btn"
+            aria-haspopup="listbox"
+            aria-expanded="false"
+          >
+            <span class="dropdown-selected-text">All Modes</span>
+            <span class="dropdown-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu" role="listbox">
+            <div class="dropdown-item selected" role="option" data-value="all">
+              All Modes
+            </div>
+            <div class="dropdown-item" role="option" data-value="precise">
+              Precise Only
+            </div>
+            <div class="dropdown-item" role="option" data-value="lite">
+              Lite Only
+            </div>
+          </div>
+        </div>
+
+        <div class="custom-dropdown" id="dropdownContent">
+          <input type="hidden" id="contentFilter" value="all" />
+          <button
+            type="button"
+            class="dropdown-btn"
+            aria-haspopup="listbox"
+            aria-expanded="false"
+          >
+            <span class="dropdown-selected-text">All Content</span>
+            <span class="dropdown-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu" role="listbox">
+            <div class="dropdown-item selected" role="option" data-value="all">
+              All Content
+            </div>
+            <div class="dropdown-item" role="option" data-value="images">
+              Has Images
+            </div>
+            <div class="dropdown-item" role="option" data-value="orphans">
+              Orphans Only
+            </div>
+          </div>
+        </div>
+
+        <div class="custom-dropdown" id="dropdownSort">
+          <input type="hidden" id="sortOrder" value="dateDesc" />
+          <button
+            type="button"
+            class="dropdown-btn"
+            aria-haspopup="listbox"
+            aria-expanded="false"
+          >
+            <span class="dropdown-selected-text">Date (Newest)</span>
+            <span class="dropdown-arrow">▼</span>
+          </button>
+          <div class="dropdown-menu" role="listbox">
+            <div
+              class="dropdown-item selected"
+              role="option"
+              data-value="dateDesc"
+            >
+              Date (Newest)
+            </div>
+            <div class="dropdown-item" role="option" data-value="dateAsc">
+              Date (Oldest)
+            </div>
+            <div class="dropdown-item" role="option" data-value="sizeDesc">
+              Size (Largest)
+            </div>
+            <div class="dropdown-item" role="option" data-value="sizeAsc">
+              Size (Smallest)
+            </div>
+            <div class="dropdown-item" role="option" data-value="titleAsc">
+              Title (A-Z)
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="list-controls">
+        <label class="checkbox-row" style="margin: 0">
+          <input type="checkbox" id="selectAllCb" />
+          <span id="lblSelectAll"
+            >Select All (<span id="selectCount">0</span> selected)</span
+          >
+        </label>
+        <span id="lblResultCount">0 results</span>
+      </div>
+
+      <div class="result-list" id="resultList">
+        <div class="empty-state">Loading results...</div>
+      </div>
+
+      <div class="bottom-bar" id="resultsBottomBar" style="display: none">
+        <div id="lblBottomSelected">0 selected</div>
+        <div style="display: flex; gap: 10px">
+          <button class="btn" id="btnBatchSync">Batch Sync</button>
+          <button class="btn btn-danger" id="btnBatchDelete">
+            Batch Delete
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Markdown Preview Modal -->
+    <div class="modal-overlay" id="mdModal">
+      <div class="modal">
+        <div class="modal-header">
+          <h2 id="mdTitle">Markdown Preview</h2>
+          <button class="btn" id="mdCloseBtn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="markdown-preview" id="mdContent">Loading...</div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary" id="mdCopyBtn">Copy</button>
+          <button class="btn" id="mdCloseFootBtn">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal-overlay" id="delModal">
+      <div class="modal" style="max-width: 420px">
+        <div class="modal-header">
+          <h2 id="delTitle">Delete Result</h2>
+        </div>
+        <div class="modal-body">
+          <p id="delMessage">
+            Are you sure you want to delete this parsed result?
+          </p>
+          <p><strong id="delItemTitle"></strong></p>
+          <div id="delOptions">
+            <label class="checkbox-row">
+              <input type="checkbox" id="cbDelTags" checked />
+              <span id="lblDelTags">Also remove MinerU tags</span>
+            </label>
+            <label class="checkbox-row">
+              <input type="checkbox" id="cbDelLayout" />
+              <span id="lblDelLayout">Also remove layout PDF attachment</span>
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" id="delCancelBtn">Cancel</button>
+          <button class="btn btn-danger" id="delConfirmBtn">Delete</button>
+        </div>
+      </div>
     </div>
 
     <script>
@@ -236,90 +851,69 @@
         "use strict";
 
         var taskStore = null;
-        var listEl = document.getElementById("taskList");
+        var resultsService = null;
+        var taskListEl = document.getElementById("taskList");
+        var resultListEl = document.getElementById("resultList");
 
-        // === Strategy 1: window.arguments from openDialog() ===
-        // openDialog passes { Zotero, taskStore } as the first argument
-        try {
-          if (window.arguments && window.arguments[0]) {
-            var args = window.arguments[0];
-            if (args.taskStore) {
-              taskStore = args.taskStore;
-            } else if (args.Zotero && args.Zotero.MinerUForZotero) {
-              taskStore = args.Zotero.MinerUForZotero.api.taskStore;
-            }
-          }
-        } catch (e) {
-          /* ignore */
-        }
-
-        // === Strategy 2: globalThis.Zotero (same chrome sandbox) ===
-        if (!taskStore) {
+        function getZotero() {
           try {
-            var z = globalThis.Zotero;
-            if (z && z.MinerUForZotero && z.MinerUForZotero.api) {
-              taskStore = z.MinerUForZotero.api.taskStore;
-            }
-          } catch (e) {
-            /* ignore */
-          }
-        }
-
-        // === Strategy 3: opener.Zotero ===
-        if (!taskStore) {
-          try {
-            if (globalThis.opener && globalThis.opener.Zotero) {
-              var oz = globalThis.opener.Zotero;
-              if (oz.MinerUForZotero && oz.MinerUForZotero.api) {
-                taskStore = oz.MinerUForZotero.api.taskStore;
-              }
-            }
-          } catch (e) {
-            /* ignore — cross-origin on Wayland */
-          }
-        }
-
-        // === Strategy 4: ChromeUtils.importESModule (Zotero 7) ===
-        if (!taskStore) {
-          try {
+            if (window.arguments && window.arguments[0]?.Zotero)
+              return window.arguments[0].Zotero;
+            if (globalThis.Zotero) return globalThis.Zotero;
+            if (globalThis.opener?.Zotero) return globalThis.opener.Zotero;
             if (
               typeof ChromeUtils !== "undefined" &&
               ChromeUtils.importESModule
             ) {
-              var mod = ChromeUtils.importESModule(
+              return ChromeUtils.importESModule(
                 "chrome://zotero/content/zotero.mjs",
-              );
-              var z2 = mod.Zotero;
-              if (z2 && z2.MinerUForZotero && z2.MinerUForZotero.api) {
-                taskStore = z2.MinerUForZotero.api.taskStore;
-              }
+              ).Zotero;
             }
-          } catch (e) {
-            /* ignore */
-          }
+          } catch (_) {}
+          return null;
         }
 
-        // Localized text: the dialog cannot register Fluent resources itself,
-        // so the addon API exposes getString(). Fall back to built-in English
-        // literals when the API is unreachable.
+        var zotero = getZotero();
+
+        // Retrieve dependencies from window.arguments[0] or globals
+        try {
+          var args = window.arguments && window.arguments[0];
+          if (args) {
+            if (args.taskStore) {
+              taskStore = args.taskStore;
+            } else if (args.Zotero?.MinerUForZotero?.api?.taskStore) {
+              taskStore = args.Zotero.MinerUForZotero.api.taskStore;
+            }
+            if (args.service) {
+              resultsService = args.service;
+            }
+          }
+        } catch (_) {}
+
+        if (!taskStore && zotero?.MinerUForZotero?.api?.taskStore) {
+          taskStore = zotero.MinerUForZotero.api.taskStore;
+        }
+
+        if (
+          !resultsService &&
+          zotero?.MinerUForZotero?.api?.createResultsManagerService
+        ) {
+          resultsService =
+            zotero.MinerUForZotero.api.createResultsManagerService();
+        }
+
         function getAddonApi() {
           try {
             if (
               window.arguments &&
-              window.arguments[0] &&
-              window.arguments[0].Zotero
+              window.arguments[0]?.Zotero?.MinerUForZotero?.api
             ) {
-              return window.arguments[0].Zotero.MinerUForZotero.api || null;
+              return window.arguments[0].Zotero.MinerUForZotero.api;
             }
-            if (globalThis.Zotero && globalThis.Zotero.MinerUForZotero) {
-              return globalThis.Zotero.MinerUForZotero.api || null;
+            if (zotero?.MinerUForZotero?.api) {
+              return zotero.MinerUForZotero.api;
             }
-            if (globalThis.opener && globalThis.opener.Zotero) {
-              return globalThis.opener.Zotero.MinerUForZotero.api || null;
-            }
-          } catch (e) {
-            /* ignore — cross-origin on Wayland */
-          }
+          } catch (_) {}
           return null;
         }
 
@@ -331,37 +925,110 @@
               var localized = addonApi.getString(id, args);
               if (localized) return localized;
             }
-          } catch (e) {
-            /* fall through to fallback */
-          }
-          if (args && args.message) {
-            return fallback.replace(/\{\s*\$message\s*\}/g, args.message);
+          } catch (e) {}
+          if (args) {
+            return fallback.replace(/\{\s*\$(\w+)\s*\}/g, function (_, k) {
+              return args[k] ?? _;
+            });
           }
           return fallback;
         }
 
-        // Apply static chrome labels.
-        var titleEl = document.getElementById("title");
-        if (titleEl) {
-          titleEl.textContent = tmText(
-            "task-manager-title",
-            "MinerU Task Manager",
-          );
-        }
-        var clearBtnEl = document.getElementById("clearBtn");
-        if (clearBtnEl) {
-          clearBtnEl.textContent = tmText(
-            "task-manager-clear-history",
-            "Clear History",
-          );
+        function formatSize(bytes) {
+          if (!bytes || isNaN(bytes)) return "0 B";
+          if (bytes < 1024) return bytes + " B";
+          if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+          if (bytes < 1024 * 1024 * 1024)
+            return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+          return (bytes / (1024 * 1024 * 1024)).toFixed(2) + " GB";
         }
 
+        function copyToClipboard(text) {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            return navigator.clipboard.writeText(text).catch(function () {
+              return fallbackCopy(text);
+            });
+          }
+          return fallbackCopy(text);
+        }
+
+        function fallbackCopy(text) {
+          return new Promise(function (resolve, reject) {
+            try {
+              if (zotero?.Utilities?.Internal?.copyTextToClipboard) {
+                zotero.Utilities.Internal.copyTextToClipboard(text);
+                resolve();
+                return;
+              }
+              var ta = document.createElement("textarea");
+              ta.value = text;
+              ta.style.position = "fixed";
+              ta.style.opacity = "0";
+              document.body.appendChild(ta);
+              ta.select();
+              document.execCommand("copy");
+              document.body.removeChild(ta);
+              resolve();
+            } catch (err) {
+              reject(err);
+            }
+          });
+        }
+
+        // ==========================================
+        // Tab Navigation
+        // ==========================================
+        var currentTab = "tasks";
+        var resultsLoaded = false;
+
+        function switchTab(tabName) {
+          currentTab = tabName;
+          var tabTasksBtn = document.getElementById("tabTasksBtn");
+          var tabResultsBtn = document.getElementById("tabResultsBtn");
+          var tabTasks = document.getElementById("tabTasks");
+          var tabResults = document.getElementById("tabResults");
+          var resultsBottomBar = document.getElementById("resultsBottomBar");
+
+          if (tabName === "results") {
+            tabTasksBtn.classList.remove("active");
+            tabResultsBtn.classList.add("active");
+            tabTasks.classList.remove("active");
+            tabResults.classList.add("active");
+            resultsBottomBar.style.display = "flex";
+
+            if (!resultsLoaded) {
+              loadResultsData();
+            }
+          } else {
+            tabResultsBtn.classList.remove("active");
+            tabTasksBtn.classList.add("active");
+            tabResults.classList.remove("active");
+            tabTasks.classList.add("active");
+            resultsBottomBar.style.display = "none";
+          }
+        }
+        window.switchTab = switchTab;
+
+        document
+          .getElementById("tabTasksBtn")
+          .addEventListener("click", function () {
+            switchTab("tasks");
+          });
+        document
+          .getElementById("tabResultsBtn")
+          .addEventListener("click", function () {
+            switchTab("results");
+          });
+
+        // ==========================================
+        // Tab 1: Task Queue Management
+        // ==========================================
         function renderTasks() {
-          if (!listEl) return;
-          listEl.innerHTML = "";
+          if (!taskListEl) return;
+          taskListEl.innerHTML = "";
 
           if (!taskStore) {
-            listEl.innerHTML =
+            taskListEl.innerHTML =
               '<div class="error-state">' +
               tmText(
                 "task-manager-store-missing",
@@ -375,14 +1042,12 @@
           try {
             tasks = taskStore.getTasks();
           } catch (e) {
-            listEl.innerHTML =
+            taskListEl.innerHTML =
               '<div class="error-state">' +
               tmText(
                 "task-manager-read-error",
                 "Error reading tasks: { $message }",
-                {
-                  message: e.message,
-                },
+                { message: e.message },
               ) +
               "</div>";
             return;
@@ -402,8 +1067,7 @@
               "Parse a PDF and tasks will appear here.",
             );
             emptyState.appendChild(hint);
-            listEl.innerHTML = "";
-            listEl.appendChild(emptyState);
+            taskListEl.appendChild(emptyState);
             return;
           }
 
@@ -476,7 +1140,7 @@
                 retryBtn.textContent = task.resume
                   ? tmText("task-manager-resume", "Resume")
                   : tmText("task-manager-retry", "Retry");
-                retryBtn.className = "clear-btn"; // reuse styling
+                retryBtn.className = "clear-btn";
                 retryBtn.style.padding = "2px 8px";
                 retryBtn.style.fontSize = "0.75rem";
                 (function (taskId) {
@@ -484,7 +1148,6 @@
                     e.stopPropagation();
                     if (taskStore && taskStore.getTask) {
                       try {
-                        var addonApi = getAddonApi();
                         var currentTask = taskStore.getTask(taskId);
                         if (addonApi) {
                           if (
@@ -508,7 +1171,7 @@
               ) {
                 var cancelBtn = document.createElement("button");
                 cancelBtn.textContent = tmText("task-manager-stop", "Stop");
-                cancelBtn.className = "clear-btn"; // reuse styling
+                cancelBtn.className = "clear-btn";
                 cancelBtn.style.padding = "2px 8px";
                 cancelBtn.style.fontSize = "0.75rem";
                 (function (taskId) {
@@ -516,7 +1179,6 @@
                     e.stopPropagation();
                     if (taskStore && taskStore.getTask) {
                       try {
-                        var addonApi = getAddonApi();
                         if (
                           addonApi &&
                           typeof addonApi.cancelTask === "function"
@@ -541,7 +1203,6 @@
                       ? groupLabels.Failed
                       : groupLabels.Succeeded;
               status.textContent = statusLabel.toUpperCase();
-
               statusContainer.appendChild(status);
 
               header.appendChild(title);
@@ -587,13 +1248,10 @@
               groupContent.appendChild(item);
             }
 
-            listEl.appendChild(groupHeader);
-            listEl.appendChild(groupContent);
+            taskListEl.appendChild(groupHeader);
+            taskListEl.appendChild(groupContent);
           }
         }
-
-        // Initial render
-        renderTasks();
 
         var clearBtn = document.getElementById("clearBtn");
         if (clearBtn) {
@@ -605,9 +1263,545 @@
           });
         }
 
-        // Subscribe to updates
         if (taskStore && typeof taskStore.subscribe === "function") {
-          taskStore.subscribe(renderTasks);
+          taskStore.subscribe(function () {
+            renderTasks();
+            if (resultsLoaded && currentTab === "results") {
+              loadResultsData();
+            }
+          });
+        }
+
+        // ==========================================
+        // Tab 2: Parsed Results Management
+        // ==========================================
+        var allEntries = [];
+        var filteredEntries = [];
+        var selectedIds = new Set();
+
+        async function loadResultsData() {
+          if (!resultsService) {
+            resultsService =
+              zotero?.MinerUForZotero?.api?.createResultsManagerService?.();
+          }
+          if (!resultsService) {
+            resultListEl.innerHTML =
+              "<div style='padding:20px;color:#d32f2f'>Results service unavailable.</div>";
+            return;
+          }
+          resultListEl.innerHTML =
+            "<div style='padding:20px;text-align:center;color:#666'>Loading parsed results...</div>";
+          try {
+            allEntries = await resultsService.scan();
+            resultsLoaded = true;
+            applyFilters();
+          } catch (e) {
+            resultListEl.innerHTML =
+              "<div style='padding:20px;color:#d32f2f'>Error scanning results: " +
+              (e.message || e) +
+              "</div>";
+          }
+        }
+
+        function applyFilters() {
+          var search = (
+            document.getElementById("searchInput").value || ""
+          ).toLowerCase();
+          var mode = document.getElementById("modeFilter").value;
+          var content = document.getElementById("contentFilter").value;
+          var sort = document.getElementById("sortOrder").value;
+
+          filteredEntries = allEntries.filter(function (e) {
+            var matchSearch =
+              (e.parentTitle && e.parentTitle.toLowerCase().includes(search)) ||
+              (e.attachmentName &&
+                e.attachmentName.toLowerCase().includes(search));
+            if (!matchSearch && search) return false;
+
+            if (mode === "precise" && !e.hasPrecise) return false;
+            if (mode === "lite" && !e.hasLite) return false;
+
+            if (content === "images" && !e.hasImages) return false;
+            if (content === "orphans" && !e.isOrphan) return false;
+
+            return true;
+          });
+
+          filteredEntries.sort(function (a, b) {
+            if (sort === "dateDesc")
+              return (b.parsedAtMs || 0) - (a.parsedAtMs || 0);
+            if (sort === "dateAsc")
+              return (a.parsedAtMs || 0) - (b.parsedAtMs || 0);
+            if (sort === "sizeDesc")
+              return (
+                (b.totalSizeBytes || b.sizeBytes || 0) -
+                (a.totalSizeBytes || a.sizeBytes || 0)
+              );
+            if (sort === "sizeAsc")
+              return (
+                (a.totalSizeBytes || a.sizeBytes || 0) -
+                (b.totalSizeBytes || b.sizeBytes || 0)
+              );
+            if (sort === "titleAsc")
+              return (a.parentTitle || "").localeCompare(b.parentTitle || "");
+            return 0;
+          });
+
+          var newSelected = new Set();
+          for (var i = 0; i < filteredEntries.length; i++) {
+            var e = filteredEntries[i];
+            var id = String(e.attachmentKey || e.key || e.attachmentID);
+            if (selectedIds.has(id)) newSelected.add(id);
+          }
+          selectedIds = newSelected;
+
+          renderResults();
+        }
+
+        function renderResults() {
+          var totalPrecise = allEntries.filter(function (e) {
+            return e.hasPrecise;
+          }).length;
+          var totalLite = allEntries.filter(function (e) {
+            return e.hasLite;
+          }).length;
+          var totalSize = allEntries.reduce(function (sum, e) {
+            return sum + (e.totalSizeBytes || e.sizeBytes || 0);
+          }, 0);
+
+          document.getElementById("valTotal").textContent = allEntries.length;
+          document.getElementById("valPrecise").textContent = totalPrecise;
+          document.getElementById("valLite").textContent = totalLite;
+          document.getElementById("valSize").textContent =
+            formatSize(totalSize);
+
+          resultListEl.innerHTML = "";
+
+          if (filteredEntries.length === 0) {
+            resultListEl.innerHTML =
+              "<div class='empty-state'>No parsed results found.</div>";
+          } else {
+            for (var i = 0; i < filteredEntries.length; i++) {
+              var entry = filteredEntries[i];
+              var card = document.createElement("div");
+              card.className = "result-card";
+
+              var cbWrapper = document.createElement("div");
+              var cb = document.createElement("input");
+              cb.type = "checkbox";
+              var entryId = String(
+                entry.attachmentKey || entry.key || entry.attachmentID,
+              );
+              cb.checked = selectedIds.has(entryId);
+              cb.dataset.id = entryId;
+              cb.addEventListener("change", function (e) {
+                if (e.target.checked) selectedIds.add(e.target.dataset.id);
+                else selectedIds.delete(e.target.dataset.id);
+                updateSelectionUI();
+              });
+              cbWrapper.appendChild(cb);
+
+              var main = document.createElement("div");
+              main.className = "result-card-main";
+
+              var title = document.createElement("div");
+              title.className = "result-title";
+              if (entry.isOrphan) {
+                title.textContent =
+                  "⚠️ ORPHAN - " + (entry.parentTitle || "Unknown");
+                title.style.color = "#d32f2f";
+              } else {
+                title.textContent = entry.parentTitle || "Unknown Title";
+              }
+
+              var filename = document.createElement("div");
+              filename.className = "result-filename";
+              filename.textContent = entry.attachmentName || entry.fileName;
+
+              var badges = document.createElement("div");
+              badges.className = "result-badges";
+              if (entry.hasPrecise) {
+                var b = document.createElement("span");
+                b.className = "badge precise";
+                b.textContent = "Precise";
+                badges.appendChild(b);
+              }
+              if (entry.hasLite) {
+                var b = document.createElement("span");
+                b.className = "badge lite";
+                b.textContent = "Lite";
+                badges.appendChild(b);
+              }
+              if (entry.hasImages) {
+                var b = document.createElement("span");
+                b.className = "badge";
+                b.textContent = "Images";
+                badges.appendChild(b);
+              }
+              if (entry.hasBoxes) {
+                var b = document.createElement("span");
+                b.className = "badge";
+                b.textContent = "Boxes";
+                badges.appendChild(b);
+              }
+              if (entry.isOrphan) {
+                var b = document.createElement("span");
+                b.className = "badge orphan";
+                b.textContent = "Orphan";
+                badges.appendChild(b);
+              }
+
+              var meta = document.createElement("div");
+              meta.className = "result-meta";
+              var dateStr = entry.parsedAtMs
+                ? new Date(entry.parsedAtMs).toLocaleString()
+                : "Unknown date";
+              meta.textContent =
+                formatSize(entry.totalSizeBytes || entry.sizeBytes) +
+                " • " +
+                dateStr;
+
+              var actions = document.createElement("div");
+              actions.className = "action-buttons";
+              actions.style.marginTop = "8px";
+
+              var btnFolder = document.createElement("button");
+              btnFolder.className = "btn";
+              btnFolder.textContent = "📂 Open Folder";
+              btnFolder.onclick = (function (ent) {
+                return function () {
+                  if (resultsService && ent.attachmentDir) {
+                    resultsService.revealFolder(ent.attachmentDir);
+                  }
+                };
+              })(entry);
+              actions.appendChild(btnFolder);
+
+              if (!entry.isOrphan && entry.attachmentID) {
+                var btnLocate = document.createElement("button");
+                btnLocate.className = "btn";
+                btnLocate.textContent = "🔍 Locate";
+                btnLocate.onclick = (function (ent) {
+                  return function () {
+                    if (resultsService && ent.attachmentID) {
+                      resultsService.locateItem(ent.attachmentID);
+                    }
+                  };
+                })(entry);
+                actions.appendChild(btnLocate);
+              }
+
+              var btnPreview = document.createElement("button");
+              btnPreview.className = "btn";
+              btnPreview.textContent = "👁 Preview";
+              btnPreview.onclick = (function (ent) {
+                return function () {
+                  openPreview(ent);
+                };
+              })(entry);
+              actions.appendChild(btnPreview);
+
+              var btnDel = document.createElement("button");
+              btnDel.className = "btn btn-danger";
+              btnDel.textContent = "🗑 Delete";
+              btnDel.onclick = (function (ent) {
+                return function () {
+                  confirmDelete([ent]);
+                };
+              })(entry);
+              actions.appendChild(btnDel);
+
+              main.appendChild(title);
+              main.appendChild(filename);
+              main.appendChild(badges);
+              main.appendChild(meta);
+              main.appendChild(actions);
+
+              card.appendChild(cbWrapper);
+              card.appendChild(main);
+              resultListEl.appendChild(card);
+            }
+          }
+
+          document.getElementById("lblResultCount").textContent =
+            filteredEntries.length + " results";
+          updateSelectionUI();
+        }
+
+        function updateSelectionUI() {
+          var selCount = selectedIds.size;
+          document.getElementById("selectCount").textContent = selCount;
+          document.getElementById("lblBottomSelected").textContent =
+            selCount + " selected";
+
+          var selectAllCb = document.getElementById("selectAllCb");
+          if (
+            filteredEntries.length > 0 &&
+            selCount === filteredEntries.length
+          ) {
+            selectAllCb.checked = true;
+            selectAllCb.indeterminate = false;
+          } else if (selCount > 0) {
+            selectAllCb.checked = false;
+            selectAllCb.indeterminate = true;
+          } else {
+            selectAllCb.checked = false;
+            selectAllCb.indeterminate = false;
+          }
+
+          document.getElementById("btnBatchSync").disabled = selCount === 0;
+          document.getElementById("btnBatchDelete").disabled = selCount === 0;
+        }
+
+        document
+          .getElementById("searchInput")
+          .addEventListener("input", applyFilters);
+        document
+          .getElementById("modeFilter")
+          .addEventListener("change", applyFilters);
+        document
+          .getElementById("contentFilter")
+          .addEventListener("change", applyFilters);
+        document
+          .getElementById("sortOrder")
+          .addEventListener("change", applyFilters);
+
+        function initCustomDropdown(dropdownEl) {
+          if (!dropdownEl) return;
+          var btn = dropdownEl.querySelector(".dropdown-btn");
+          var hiddenInput = dropdownEl.querySelector("input[type='hidden']");
+          var label = dropdownEl.querySelector(".dropdown-selected-text");
+          var items = dropdownEl.querySelectorAll(".dropdown-item");
+
+          btn.addEventListener("click", function (e) {
+            e.stopPropagation();
+            var isOpen = dropdownEl.classList.contains("open");
+            document
+              .querySelectorAll(".custom-dropdown.open")
+              .forEach(function (d) {
+                d.classList.remove("open");
+                var b = d.querySelector(".dropdown-btn");
+                if (b) b.setAttribute("aria-expanded", "false");
+              });
+            if (!isOpen) {
+              dropdownEl.classList.add("open");
+              btn.setAttribute("aria-expanded", "true");
+            }
+          });
+
+          items.forEach(function (item) {
+            item.addEventListener("click", function (e) {
+              e.stopPropagation();
+              var val = item.dataset.value;
+              var text = item.textContent.trim();
+              hiddenInput.value = val;
+              label.textContent = text;
+              items.forEach(function (it) {
+                it.classList.toggle("selected", it === item);
+              });
+              dropdownEl.classList.remove("open");
+              btn.setAttribute("aria-expanded", "false");
+              hiddenInput.dispatchEvent(new Event("change"));
+            });
+          });
+        }
+
+        initCustomDropdown(document.getElementById("dropdownMode"));
+        initCustomDropdown(document.getElementById("dropdownContent"));
+        initCustomDropdown(document.getElementById("dropdownSort"));
+
+        document.addEventListener("click", function () {
+          document
+            .querySelectorAll(".custom-dropdown.open")
+            .forEach(function (d) {
+              d.classList.remove("open");
+              var b = d.querySelector(".dropdown-btn");
+              if (b) b.setAttribute("aria-expanded", "false");
+            });
+        });
+
+        document.addEventListener("keydown", function (e) {
+          if (e.key === "Escape") {
+            document
+              .querySelectorAll(".custom-dropdown.open")
+              .forEach(function (d) {
+                d.classList.remove("open");
+                var b = d.querySelector(".dropdown-btn");
+                if (b) b.setAttribute("aria-expanded", "false");
+              });
+          }
+        });
+
+        document
+          .getElementById("btnRefreshResults")
+          .addEventListener("click", loadResultsData);
+
+        document
+          .getElementById("selectAllCb")
+          .addEventListener("change", function (e) {
+            var checked = e.target.checked;
+            if (checked) {
+              filteredEntries.forEach(function (ent) {
+                selectedIds.add(
+                  String(ent.attachmentKey || ent.key || ent.attachmentID),
+                );
+              });
+            } else {
+              selectedIds.clear();
+            }
+            var cbs = resultListEl.querySelectorAll("input[type='checkbox']");
+            for (var i = 0; i < cbs.length; i++) cbs[i].checked = checked;
+            updateSelectionUI();
+          });
+
+        document
+          .getElementById("btnScanOrphans")
+          .addEventListener("click", async function () {
+            if (!resultsService) return;
+            try {
+              var res = await resultsService.cleanOrphans(allEntries);
+              var count = typeof res === "object" ? res.count : res;
+              var freed =
+                typeof res === "object"
+                  ? formatSize(res.freedBytes)
+                  : "disk space";
+              alert(
+                "Cleaned " + count + " orphaned results (freed " + freed + ").",
+              );
+              loadResultsData();
+            } catch (e) {
+              alert("Error cleaning orphans: " + (e.message || e));
+            }
+          });
+
+        var currentMarkdown = "";
+        async function openPreview(entry) {
+          document.getElementById("mdModal").style.display = "flex";
+          document.getElementById("mdContent").textContent = "Loading...";
+          try {
+            currentMarkdown = await resultsService.readMarkdown({
+              libraryID: entry.libraryID,
+              key: entry.attachmentKey || entry.key,
+            });
+            document.getElementById("mdContent").textContent = currentMarkdown;
+          } catch (e) {
+            document.getElementById("mdContent").textContent =
+              "Error loading markdown: " + (e.message || e);
+          }
+        }
+
+        document.getElementById("mdCloseBtn").onclick = document.getElementById(
+          "mdCloseFootBtn",
+        ).onclick = function () {
+          document.getElementById("mdModal").style.display = "none";
+        };
+
+        document.getElementById("mdCopyBtn").onclick = function () {
+          copyToClipboard(currentMarkdown).then(function () {
+            var btn = document.getElementById("mdCopyBtn");
+            var oldText = btn.textContent;
+            btn.textContent = "Copied!";
+            setTimeout(function () {
+              btn.textContent = oldText;
+            }, 2000);
+          });
+        };
+
+        var deleteTargets = [];
+        function confirmDelete(entries) {
+          deleteTargets = entries;
+          var titleText =
+            entries.length === 1
+              ? entries[0].parentTitle ||
+                entries[0].attachmentName ||
+                entries[0].fileName
+              : entries.length + " items";
+          document.getElementById("delItemTitle").textContent = titleText;
+
+          var hasTagsOrLayout = entries.some(function (e) {
+            return !e.isOrphan;
+          });
+          document.getElementById("delOptions").style.display =
+            entries.length === 1 && entries[0].isOrphan ? "none" : "block";
+
+          document.getElementById("delModal").style.display = "flex";
+        }
+
+        document.getElementById("delCancelBtn").onclick = function () {
+          document.getElementById("delModal").style.display = "none";
+        };
+
+        document.getElementById("delConfirmBtn").onclick = async function () {
+          document.getElementById("delModal").style.display = "none";
+          var opts = {
+            removeTags: document.getElementById("cbDelTags").checked,
+            removeLayoutAttachment:
+              document.getElementById("cbDelLayout").checked,
+          };
+          try {
+            for (var i = 0; i < deleteTargets.length; i++) {
+              await resultsService.deleteResult(deleteTargets[i], opts);
+            }
+            loadResultsData();
+          } catch (e) {
+            alert("Error deleting results: " + (e.message || e));
+          }
+        };
+
+        document.getElementById("btnBatchDelete").onclick = function () {
+          var targets = allEntries.filter(function (e) {
+            return selectedIds.has(
+              String(e.attachmentKey || e.key || e.attachmentID),
+            );
+          });
+          if (targets.length > 0) confirmDelete(targets);
+        };
+
+        document.getElementById("btnBatchSync").onclick = async function () {
+          var targets = allEntries.filter(function (e) {
+            return selectedIds.has(
+              String(e.attachmentKey || e.key || e.attachmentID),
+            );
+          });
+          if (targets.length === 0) return;
+          var btn = document.getElementById("btnBatchSync");
+          btn.disabled = true;
+          var oldText = btn.textContent;
+          btn.textContent = "Syncing...";
+          try {
+            if (
+              resultsService &&
+              typeof resultsService.syncSelected === "function"
+            ) {
+              var count = await resultsService.syncSelected(targets);
+              btn.textContent = "Synced (" + count + ")";
+            } else {
+              alert("Sync service unavailable or no sync folder configured.");
+            }
+          } catch (err) {
+            alert("Error syncing: " + (err.message || err));
+          }
+          setTimeout(function () {
+            btn.textContent = oldText;
+            btn.disabled = selectedIds.size === 0;
+          }, 2500);
+        };
+
+        // ==========================================
+        // Initialization
+        // ==========================================
+        renderTasks();
+
+        var initTab = "tasks";
+        try {
+          var initArgs = window.arguments && window.arguments[0];
+          if (initArgs && initArgs.initialTab === "results") {
+            initTab = "results";
+          }
+        } catch (_) {}
+
+        if (initTab === "results") {
+          switchTab("results");
         }
       })();
     </script>
