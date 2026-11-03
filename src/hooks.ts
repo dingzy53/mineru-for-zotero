@@ -1,5 +1,5 @@
 import { getString, initLocale } from "./utils/locale";
-import { registerItemMenu } from "./modules/itemMenu";
+import { registerItemMenu, registerToolsMenu } from "./modules/itemMenu";
 import {
   registerMarkdownQueryApiEndpoint,
   unregisterMarkdownQueryApiEndpoint,
@@ -124,6 +124,7 @@ async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {
   insertMainWindowStylesheet(win);
 
   registerItemMenu();
+  registerToolsMenu();
   await registerItemTreeColumn();
   await registerReaderToolbar(win);
 }

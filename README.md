@@ -69,7 +69,7 @@ For multi-box copying, hold `Shift` or `Ctrl` while clicking boxes. Then use the
 
 Open `Edit` -> `Settings` -> `MinerU for Zotero` and click `Open Data Folder` to view local parse results. The settings page also shows how many PDFs currently have usable results.
 
-You can also open the **MinerU Task Manager** from the settings page to view the real-time status of your parsing jobs, view error messages, and clear your history. Each running job shows a live progress bar. Stopping a job marks it `Cancelled` instead of failed: it keeps its resume data, adds no `MinerU: Failed ❌` tag, and can be resumed or retried later. PDF files larger than 200 MB are rejected on every parse path.
+You can also open the **MinerU Task Manager** from **Tools → MinerU Task Manager** to view the real-time status of your parsing jobs, view error messages, and clear your history. Each running job shows a live progress bar. Stopping a job marks it `Cancelled` instead of failed: it keeps its resume data, adds no `MinerU: Failed ❌` tag, and can be resumed or retried later. PDF files larger than 200 MB are rejected on every parse path.
 
 Parsing jobs survive Zotero restarts. If Zotero closes while a job is running, the job is marked as failed on the next start and shows a `Resume` button in the Task Manager. Resuming keeps every finished page-range part and only re-submits the missing parts, so a long parse does not have to start over. Transient network drops during polling and downloading reconnect automatically with backoff instead of failing the job.
 
@@ -85,7 +85,7 @@ To migrate only your parsed results without re-running parsing or consuming API 
 
 1. **On the source computer:** Open `Edit` -> `Settings` -> `MinerU for Zotero` and click `Open Data Folder`. Copy the entire `mineru-copy` folder to an external drive or cloud storage.
 2. **On the target computer:** Ensure Zotero has finished syncing your library items. Open `Edit` -> `Settings` -> `MinerU for Zotero`, click `Open Data Folder`, and paste the `mineru-copy` folder into that location.
-3. Open the **MinerU Task Manager** (from Settings or reader menu), switch to the **Parsed Results** tab, and click `Refresh`. All parsed results and reader overlay boxes will be immediately available.
+3. Open the **MinerU Task Manager** (from **Tools → MinerU Task Manager** or the reader menu), switch to the **Parsed Results** tab, and click `Refresh`. All parsed results and reader overlay boxes will be immediately available.
 
 ### Agent-friendly Sync Folder
 
@@ -297,7 +297,7 @@ The MinerU result download may be temporarily unavailable. Parsing automatically
 
 ### A Parse Was Interrupted (Zotero Closed or Crashed)
 
-Open the Task Manager from the settings page. Jobs that were running when Zotero closed are marked as failed and show a `Resume` button. Resume continues from the finished parts instead of re-submitting the whole PDF. This is especially useful for local parsing, where the MinerU service keeps the submitted parts between sessions.
+Open the Task Manager from **Tools → MinerU Task Manager**. Jobs that were running when Zotero closed are marked as failed and show a `Resume` button. Resume continues from the finished parts instead of re-submitting the whole PDF. This is especially useful for local parsing, where the MinerU service keeps the submitted parts between sessions.
 
 ## Development
 

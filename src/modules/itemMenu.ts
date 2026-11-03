@@ -1,8 +1,11 @@
 import { config } from "../../package.json";
 import { getLocaleID } from "../utils/locale";
 import { isMinerUGeneratedAttachment, parseAttachments } from "./parseManager";
+import { openTaskManagerWindow } from "./taskStore";
 
 const PARSE_PDF_MENU_ID = `${config.addonRef}-parse-pdf`;
+const TASK_MANAGER_MENU_ID = `${config.addonRef}-open-task-manager`;
+const MENU_ICON = `chrome://${config.addonRef}/content/mineru.svg`;
 
 type ItemMenuContext = {
   items?: Zotero.Item[];
@@ -14,34 +17,80 @@ type MenuCommandContext = {
   items?: Zotero.Item[];
 };
 
-type MenuRegistration = {
-  menuID: string;
-  pluginID: string;
-  target: "main/library/item";
-  menus: Array<{
-    menuType: "menuitem";
-    l10nID: string;
-    icon: string;
-    onCommand: (event: Event, context: MenuCommandContext) => void;
-    onShowing: (event: Event, context: ItemMenuContext) => void;
-  }>;
+type MenuItemRegistration = {
+  menuType: "menuitem";
+  l10nID: string;
+  icon: string;
+  onCommand: (event: Event, context: MenuCommandContext) => void;
 };
 
+type MenuRegistration<TTarget extends string, TItem> = {
+  menuID: string;
+  pluginID: string;
+  target: TTarget;
+  menus: TItem[];
+};
+
+type ParsePdfMenuRegistration = MenuRegistration<
+  "main/library/item",
+  MenuItemRegistration & {
+    onShowing: (event: Event, context: ItemMenuContext) => void;
+  }
+>;
+
+type TaskManagerMenuRegistration = MenuRegistration<
+  "main/menubar/tools",
+  MenuItemRegistration
+>;
+
 type MenuManager = {
-  registerMenu: (options: MenuRegistration) => string | false;
+  registerMenu: (
+    options: ParsePdfMenuRegistration | TaskManagerMenuRegistration,
+  ) => string | false;
 };
 
 type ParsePdfMenuDependencies = {
   parseAttachments: (attachments: Zotero.Item[]) => Promise<void>;
 };
 
+type TaskManagerMenuDependencies = {
+  openTaskManagerWindow: () => void;
+};
+
 export function registerItemMenu(menuManager = getMenuManager()): void {
   menuManager.registerMenu(createParsePdfMenuRegistration());
 }
 
+/** Adds "MinerU Task Manager" to the main window Tools menu. */
+export function registerToolsMenu(menuManager = getMenuManager()): void {
+  menuManager.registerMenu(createTaskManagerMenuRegistration());
+}
+
+export function createTaskManagerMenuRegistration(
+  dependencies: TaskManagerMenuDependencies = {
+    openTaskManagerWindow: () => openTaskManagerWindow(),
+  },
+): TaskManagerMenuRegistration {
+  return {
+    menuID: TASK_MANAGER_MENU_ID,
+    pluginID: config.addonID,
+    target: "main/menubar/tools",
+    menus: [
+      {
+        menuType: "menuitem",
+        l10nID: getLocaleID("tools-open-task-manager-menuitem"),
+        icon: MENU_ICON,
+        onCommand: () => {
+          dependencies.openTaskManagerWindow();
+        },
+      },
+    ],
+  };
+}
+
 export function createParsePdfMenuRegistration(
   dependencies: ParsePdfMenuDependencies = { parseAttachments },
-): MenuRegistration {
+): ParsePdfMenuRegistration {
   return {
     menuID: PARSE_PDF_MENU_ID,
     pluginID: config.addonID,
@@ -50,7 +99,7 @@ export function createParsePdfMenuRegistration(
       {
         menuType: "menuitem",
         l10nID: getLocaleID("parse-pdf-menuitem"),
-        icon: `chrome://${config.addonRef}/content/mineru.svg`,
+        icon: MENU_ICON,
         onCommand: (_event, context) => {
           const attachments = (context.items ?? []).filter(isPdfAttachment);
           void dependencies.parseAttachments(attachments);

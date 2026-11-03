@@ -56,7 +56,6 @@ export type FluentMessageId =
   | 'pref-local-api-timeout-minutes'
   | 'pref-online-api-timeout-minutes'
   | 'pref-open-data-folder'
-  | 'pref-open-task-manager'
   | 'pref-parse-tier-advanced'
   | 'pref-parse-tier-basic'
   | 'pref-parse-tier-flash'
@@ -202,4 +201,5 @@ export type FluentMessageId =
   | 'task-manager-title'
   | 'task-manager-unknown-date'
   | 'task-manager-unknown-parent-title'
-  | 'task-manager-unknown-title';
+  | 'task-manager-unknown-title'
+  | 'tools-open-task-manager-menuitem';
