@@ -40,7 +40,6 @@ pref-sync-all-done = Done ({ $count })
 pref-sync-all-error = Sync failed
 pref-auto-parse-page-limit = Auto-parse if pages <= (0 = disable)
 pref-data-folder-title = Data Folder
-pref-open-task-manager = Open Task Manager
 pref-open-data-folder = Open Data Folder
 pref-parsed-count = Parsed PDFs: { $count }
 pref-parsed-count-error = Parsed PDFs: failed to read

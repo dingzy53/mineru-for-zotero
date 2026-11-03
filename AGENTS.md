@@ -13,7 +13,7 @@ Core feature modules currently include:
 - `boxNormalizer.ts`, `copyFormatter.ts` — MinerU schema normalization into stable boxes and copy output.
 - `readerToolbar/`, `readerOverlay/` — PDF Reader toolbar UI and box rendering/selection behavior.
 - `markdownQuery/` — the local HTTP Markdown query API (endpoint, attachment resolver, Markdown parser, query service). It has no token: the only switch is the `apiEnabled` preference, and safety relies on Zotero's server binding to `127.0.0.1` plus its non-local `Host` rejection. `POST /mineru-for-zotero/parse` is non-interactive (it forces a reparse and never opens a dialog), while `GET /mineru-for-zotero/tasks` returns sanitized task summaries without absolute PDF paths.
-- `agentSync.ts`, `itemTreeColumn.ts`, `itemMenu.ts`, `preferenceScript.ts` — sync-folder export, item-tree status column, attachment-only context menu, and settings-page UI.
+- `agentSync.ts`, `itemTreeColumn.ts`, `itemMenu.ts`, `preferenceScript.ts` — sync-folder export, item-tree status column, `Zotero.MenuManager` menus (attachment-only context menu and the Tools → MinerU Task Manager entry), and settings-page UI.
 
 ## Build, Test, and Development Commands
 
@@ -195,9 +195,11 @@ New preferences must be registered in `addon/prefs.js` with **unprefixed** keys,
 
 The build prefixes every Fluent message id with the addon ref (`mineruForZotero-…`), so code that calls `document.l10n.formatValue` must prefix the id (`preferenceScript.ts` `formatL10n` does this). The Task Manager page (`addon/content/taskManager.html`) has no Fluent DOM bindings: tag static markup with `data-tm-l10n` / `data-tm-l10n-placeholder` and route dynamic text through `tmText(id, englishFallback, args)`.
 
-## Item Context Menu
+## Item Context Menu & Tools Menu
 
 All MinerU status tag writes in `parseManager` go through `updateStatusTags()`, which does nothing when the `statusTags` preference is off. Reparse prompts must default non-destructively to `use-existing`. The context menu targets PDF attachments only. Task submission and completion do not show notifications to the user; only failures do. When registering commands, ensure lifecycle alignment with Zotero's localization resources to prevent broken right-click menus on unload.
+
+The Task Manager is opened from **Tools → MinerU Task Manager** (`registerToolsMenu()` in `itemMenu.ts`, target `main/menubar/tools`); the Settings pane no longer has an Open Task Manager button. `Zotero.MenuManager` removes both menus automatically when the plugin is disabled (matched by `pluginID`).
 
 ## Reader Toolbar & Overlay
 
@@ -239,3 +241,11 @@ Auto-detects the server port, outputting agent-readable text by default.
 ## Commit & Pull Request Guidelines
 
 Follow Conventional Commits. PRs should describe changes, list test results, link issues, and include UI screenshots. Confirm `npm run lint:check` passes before committing.
+
+### Remote & Push Policy
+
+This repository is a fork. Push **only** to `origin` = `git@github.com:dingzy53/mineru-for-zotero.git`, and open PRs only within that fork (`gh pr create --repo dingzy53/mineru-for-zotero --base main`).
+
+- Never push to, open issues/PRs against, or comment on the original author's upstream repository (Asianfleet's `mineru-for-zotero`), and never pass it to `gh --repo`.
+- Never add the upstream as a push remote. If it is needed for fetching, add it fetch-only (`git remote set-url --push upstream no-push`).
+- Before any `git push` or `gh pr create`, check `git remote get-url --push origin` matches the fork URL above; stop and ask the user if it does not.

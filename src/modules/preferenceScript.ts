@@ -59,15 +59,6 @@ export async function registerPrefsScripts(_window: Window) {
       void storage.openDataFolder();
     });
 
-  document
-    .getElementById(`${config.addonRef}-open-task-manager`)
-    ?.addEventListener("click", () => {
-      const addonObj = (Zotero as any).MinerUForZotero;
-      if (addonObj?.api?.openTaskManagerWindow) {
-        addonObj.api.openTaskManagerWindow();
-      }
-    });
-
   const syncAllButton = document.getElementById(`${config.addonRef}-sync-all`);
   if (syncAllButton) {
     // Labels are formatted asynchronously; only the latest request may land,

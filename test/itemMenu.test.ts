@@ -2,7 +2,11 @@ import { assert } from "chai";
 import * as itemMenu from "../src/modules/itemMenu";
 import { config } from "../package.json";
 
-const { createParsePdfMenuRegistration, shouldShowParsePdfMenu } = itemMenu;
+const {
+  createParsePdfMenuRegistration,
+  createTaskManagerMenuRegistration,
+  shouldShowParsePdfMenu,
+} = itemMenu;
 
 describe("itemMenu", function () {
   it("shows the parse command only when every selected item is a PDF attachment", function () {
@@ -26,6 +30,34 @@ describe("itemMenu", function () {
     assert.equal(menu.menuType, "menuitem");
     assert.equal(menu.l10nID, `${config.addonRef}-parse-pdf-menuitem`);
     assert.equal(menu.icon, `chrome://${config.addonRef}/content/mineru.svg`);
+  });
+
+  it("registers the Task Manager command in the Tools menubar", function () {
+    const registration = createTaskManagerMenuRegistration();
+    const menu = registration.menus[0];
+
+    assert.equal(registration.menuID, `${config.addonRef}-open-task-manager`);
+    assert.equal(registration.pluginID, config.addonID);
+    assert.equal(registration.target, "main/menubar/tools");
+    assert.equal(menu.menuType, "menuitem");
+    assert.equal(
+      menu.l10nID,
+      `${config.addonRef}-tools-open-task-manager-menuitem`,
+    );
+    assert.equal(menu.icon, `chrome://${config.addonRef}/content/mineru.svg`);
+  });
+
+  it("opens the Task Manager from the Tools menu command", function () {
+    let opened = 0;
+    const menu = createTaskManagerMenuRegistration({
+      openTaskManagerWindow: () => {
+        opened += 1;
+      },
+    }).menus[0];
+
+    menu.onCommand(new Event("command"), {});
+
+    assert.equal(opened, 1);
   });
 
   it("submits selected PDF attachments through the batch parse entry", function () {
