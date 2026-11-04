@@ -92,7 +92,7 @@ describe("itemTreeColumn", function () {
     assert.equal(registration.label, "item-tree-column-mineru-parse");
     assert.equal(
       registration.pluginID,
-      "mineru-for-zotero@asianfleet.github.io",
+      "mineru-for-zotero@dingzy53.github.io",
     );
     assert.deepEqual(registration.enabledTreeIDs, ["main"]);
     assert.equal(registration.width, "140");
@@ -655,7 +655,7 @@ function ensureAddonRuntime(): void {
   ).addon = {
     data: {
       config: {
-        addonID: "mineru-for-zotero@asianfleet.github.io",
+        addonID: "mineru-for-zotero@dingzy53.github.io",
       },
     },
   };

@@ -5,7 +5,7 @@
   "description": "MinerU for Zotero: AI-powered PDF Parsing and Formula Extraction",
   "config": {
     "addonName": "MinerU for Zotero",
-    "addonID": "mineru-for-zotero@asianfleet.github.io",
+    "addonID": "mineru-for-zotero@dingzy53.github.io",
     "addonRef": "mineruForZotero",
     "addonInstance": "MinerUForZotero",
     "prefsPrefix": "extensions.zotero.mineruForZotero"
@@ -14,8 +14,8 @@
     "type": "git",
     "url": "git+https://github.com/dingzy53/mineru-for-zotero.git"
   },
-  "author": "Asianfleet",
-  "contributors": ["Ding Zheng Yuan"],
+  "author": "Ding Zheng Yuan",
+  "contributors": ["Asianfleet (original author)"],
   "bugs": {
     "url": "https://github.com/dingzy53/mineru-for-zotero/issues"
   },
