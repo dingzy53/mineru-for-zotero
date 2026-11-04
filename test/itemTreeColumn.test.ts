@@ -90,10 +90,7 @@ describe("itemTreeColumn", function () {
 
     assert.equal(registration.dataKey, "mineruParseStatus");
     assert.equal(registration.label, "item-tree-column-mineru-parse");
-    assert.equal(
-      registration.pluginID,
-      "mineru-for-zotero@dingzy53.github.io",
-    );
+    assert.equal(registration.pluginID, "mineru-for-zotero@dingzy53.github.io");
     assert.deepEqual(registration.enabledTreeIDs, ["main"]);
     assert.equal(registration.width, "140");
     assert.deepEqual(registration.zoteroPersist, ["width", "hidden"]);
