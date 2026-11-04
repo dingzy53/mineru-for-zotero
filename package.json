@@ -15,6 +15,7 @@
     "url": "git+https://github.com/dingzy53/mineru-for-zotero.git"
   },
   "author": "Asianfleet",
+  "contributors": ["Ding Zheng Yuan"],
   "bugs": {
     "url": "https://github.com/dingzy53/mineru-for-zotero/issues"
   },

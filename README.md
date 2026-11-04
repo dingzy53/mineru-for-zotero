@@ -323,4 +323,9 @@ npm run build
 
 ## License
 
-AGPL-3.0-or-later
+[AGPL-3.0-or-later](LICENSE).
+
+- Copyright (C) Asianfleet: the original [MinerU for Zotero](https://github.com/Asianfleet/mineru-for-zotero).
+- Copyright (C) 2026 Ding Zheng Yuan: modifications in this fork (see the git history for details).
+
+This is a modified version of the original project, released under the same license. It is built on [zotero-plugin-template](https://github.com/windingwind/zotero-plugin-template) (AGPL-3.0). It is not affiliated with or endorsed by MinerU, OpenDataLab, Zotero, or the Corporation for Digital Scholarship.
