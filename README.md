@@ -1,9 +1,17 @@
 # MinerU for Zotero
 
-[![zotero target version](https://img.shields.io/badge/Zotero-9%2F10-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org)
-[![Using Zotero Plugin Template](https://img.shields.io/badge/Using-Zotero%20Plugin%20Template-blue?style=flat-square&logo=github)](https://github.com/windingwind/zotero-plugin-template)
+[![Release](https://img.shields.io/github/v/release/dingzy53/mineru-for-zotero)](https://github.com/dingzy53/mineru-for-zotero/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/dingzy53/mineru-for-zotero/total)](https://github.com/dingzy53/mineru-for-zotero/releases)
+[![Zotero 9 and 10](https://img.shields.io/badge/Zotero-9%20%7C%2010-cc2936)](https://www.zotero.org)
+[![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)](LICENSE)
 
-## What You Can Do
+Parse PDFs in Zotero with [MinerU](https://mineru.net), copy text, tables and formulas straight from the PDF reader, and give AI agents clean Markdown.
+
+A personal fork of [Asianfleet/mineru-for-zotero](https://github.com/Asianfleet/mineru-for-zotero) with its own plugin ID. See [License](#license).
+
+<!-- Screenshot: docs/images/hero.png -->
+
+## Features
 
 - Parse one or more selected PDF attachments from the Zotero item list.
 - Parse through the official online MinerU API or a self-hosted MinerU 4 server, and choose a parse tier (`flash`, `basic`, `standard`, `advanced`).
@@ -26,15 +34,25 @@
 - Optional for local parsing: a running MinerU 4 server, for example `mineru-kit api-server --host 127.0.0.1 --port 8000 --tier standard`.
 - PDF attachments that are available on this computer.
 
+## Installation
+
+**Upgrading from 0.10.x or earlier:** those versions used the original plugin's ID. Remove the old plugin in **Tools → Plugins** first, then install this one. Your settings and parsed results are kept. Don't install this fork next to the original plugin.
+
+1. Download `mineru-for-zotero.xpi` from the [latest release](https://github.com/dingzy53/mineru-for-zotero/releases/latest). In Firefox, right-click the link and choose **Save Link As…**, or Firefox tries to install it as a browser add-on.
+2. In Zotero, open **Tools → Plugins**.
+3. Click the gear icon, choose **Install Plugin From File…** and select the downloaded file.
+4. Restart Zotero if it asks you to.
+
+**Update or remove:** Zotero updates the plugin on its own. To check now, or to remove the plugin, use **Tools → Plugins**.
+
 ## Setup
 
-1. Install the plugin in Zotero.
-2. Open `Edit` -> `Settings` -> `MinerU for Zotero`.
-3. Get your API Key from [MinerU API Token Management](https://mineru.net/apiManage/token) and enter it.
-4. Choose the `API Type`:
+1. Open **Edit → Settings → MinerU for Zotero** (**Zotero → Settings** on macOS).
+2. Get your API Key from [MinerU API Token Management](https://mineru.net/apiManage/token) and enter it.
+3. Choose the `API Type`:
    - `Online API` uses the official MinerU cloud and always parses at the `standard` tier.
    - `Local API` points at a self-hosted MinerU 4 server (default `http://127.0.0.1:8000`); enter its address and pick a `Parse Tier` (`flash`, `basic`, `standard`, or `advanced`).
-5. Optional: enable `Save parsed result images` if you want images from MinerU results to be saved locally.
+4. Optional: enable `Save parsed result images` if you want images from MinerU results to be saved locally.
 
 The API Key is stored only in local Zotero preferences.
 
@@ -52,7 +70,7 @@ If a selected PDF already has a parse result, choose one of these options:
 
 If parsing fails during replacement, the existing usable result is kept.
 
-## Copy in the Reader
+## Copy in the reader
 
 1. Open a parsed PDF.
 2. Click the `MinerU boxes` button in the PDF Reader toolbar.
@@ -65,9 +83,9 @@ If parsing fails during replacement, the existing usable result is kept.
 
 For multi-box copying, hold `Shift` or `Ctrl` while clicking boxes. Then use the toolbar menu to copy the selected content or clear the selection. If no boxes are selected, the same copy button copies the full parsed Markdown.
 
-## Local Results & Task Manager
+## Local results and Task Manager
 
-Open `Edit` -> `Settings` -> `MinerU for Zotero` and click `Open Data Folder` to view local parse results. The settings page also shows how many PDFs currently have usable results.
+Open **Edit → Settings → MinerU for Zotero** and click `Open Data Folder` to view local parse results. The settings page also shows how many PDFs currently have usable results.
 
 You can also open the **MinerU Task Manager** from **Tools → MinerU Task Manager** to view the real-time status of your parsing jobs, view error messages, and clear your history. Each running job shows a live progress bar. Stopping a job marks it `Cancelled` instead of failed: it keeps its resume data, adds no `MinerU: Failed ❌` tag, and can be resumed or retried later. PDF files larger than 200 MB are rejected on every parse path.
 
@@ -75,7 +93,7 @@ Parsing jobs survive Zotero restarts. If Zotero closes while a job is running, t
 
 The result folder contains the parsed Markdown, box data used by the reader, and optional images. External tools may read these files, but editing them is not recommended.
 
-### Migrating Results to Another Computer
+### Migrating results to another computer
 
 All MinerU parse results are saved using portable `[libraryID]-[attachmentKey]` directory names (such as `1-ABCD1234/`), which match the persistent attachment keys synced across devices via Zotero Cloud Sync.
 
@@ -83,18 +101,18 @@ Parse results are stored in a `mineru-copy` folder inside your [Zotero data dire
 
 To migrate only your parsed results without re-running parsing or consuming API quota:
 
-1. **On the source computer:** Open `Edit` -> `Settings` -> `MinerU for Zotero` and click `Open Data Folder`. Copy the entire `mineru-copy` folder to an external drive or cloud storage.
-2. **On the target computer:** Ensure Zotero has finished syncing your library items. Open `Edit` -> `Settings` -> `MinerU for Zotero`, click `Open Data Folder`, and paste the `mineru-copy` folder into that location.
+1. **On the source computer:** Open **Edit → Settings → MinerU for Zotero** and click `Open Data Folder`. Copy the entire `mineru-copy` folder to an external drive or cloud storage.
+2. **On the target computer:** Ensure Zotero has finished syncing your library items. Open **Edit → Settings → MinerU for Zotero**, click `Open Data Folder`, and paste the `mineru-copy` folder into that location.
 3. Open the **MinerU Task Manager** (from **Tools → MinerU Task Manager** or the reader menu), switch to the **Parsed Results** tab, and click `Refresh`. All parsed results and reader overlay boxes will be immediately available.
 
-### Agent-friendly Sync Folder
+### Agent-friendly sync folder
 
 For AI workflows, you can configure an **Agent-friendly Sync Folder** in the settings. When enabled, MinerU for Zotero will automatically copy parsed results (Markdown + images) into a clean, flat directory structure named after the citation key and title (`[CitationKey] - Title/`). When two PDFs would share a folder name (for example a paper and its supplement), the attachment key is appended to keep them apart (`[CitationKey] - Title [ATTACHMENTKEY]/`).
 It will also automatically generate a `metadata.bib` file containing the BibTeX metadata for each item. You can click `Sync All Results Now` in the settings to bulk-export all existing historical results to this folder.
 
 This enables you to use AI Agents (like Cursor, Claude Desktop, etc.) to read the high-quality Markdown output directly. You can even equip your agent with the included CLI script (see below) to dynamically search and read files directly from the Zotero database!
 
-## Local Markdown Query API
+## Local Markdown query API
 
 The local Markdown query API lets local external tools read Markdown parse results that MinerU for Zotero has already saved through Zotero's built-in local HTTP server. It reads existing local results, can submit a reparse for an existing PDF attachment, and never opens a dialog or directly exposes the plugin data folder.
 
@@ -110,14 +128,14 @@ Main capabilities:
 ### Configuration
 
 1. Start Zotero and make sure MinerU for Zotero is enabled.
-2. Open `Edit` -> `Settings` -> `MinerU for Zotero`.
+2. Open **Edit → Settings → MinerU for Zotero**.
 3. In `Local Query API`, enable `Enable local Markdown query API`.
 
 The API has no token or other authentication of its own. It relies on Zotero's local HTTP server, which binds to `127.0.0.1` and rejects requests whose `Host` header is not local, so it is reachable only from this computer. Leave the API disabled unless you need it.
 
 Zotero's local port is usually `23119`. If you changed Zotero's local server port, replace the port in the examples below with your actual port.
 
-### HTTP Examples
+### HTTP examples
 
 List libraries:
 
@@ -235,7 +253,7 @@ Common error codes:
 - `section-not-found`: the section path does not match; run `granularity=headings` first to inspect exact paths.
 - `missing-query`: `granularity=search` was used without `q`.
 
-### AI Agent Integration (Companion Skill)
+### AI agent integration (companion skill)
 
 The repository includes a companion Skill in the `mineru-for-zotero-cli/` folder, which is designed to teach AI Agents (like Cursor, Claude Desktop, or local LLMs) how to query your local Zotero database directly.
 
@@ -246,7 +264,7 @@ To equip your Agent with this skill:
 
 This integration abstracts away HTTP parameters, port detection, and error handling, providing the Agent with a clean, text-optimized interface for traversing complex academic documents without overflowing its context window.
 
-### Example Agent Workflow
+### Example agent workflow
 
 Because the CLI output is heavily optimized for LLM consumption, external agents can autonomously traverse complex academic documents.
 
@@ -273,29 +291,38 @@ The agent fetches the full Markdown and flawlessly lists all 8 authors and their
 
 </details>
 
+## Privacy and security
+
+- **Online API:** the PDF is sent to MinerU for parsing. The plugin gets an upload link from `mineru.net`, uploads the file to MinerU's cloud storage, and downloads the result from MinerU's download server. MinerU's own terms and privacy policy apply.
+- **Local API:** the PDF goes only to the server address you set.
+- **API key:** stored in your local Zotero preferences and sent only to `mineru.net`.
+- **Files:** results go to the `mineru-copy` folder in your Zotero data directory, and to the sync folder if you set one.
+- **Local Markdown query API:** off by default. When on, it answers only on this computer (`127.0.0.1`) and has no token of its own.
+- No telemetry. The plugin contacts nothing else.
+
 ## Troubleshooting
 
-### API Key Not Configured
+### API key not configured
 
 Open the plugin settings page, enter your MinerU API Key, and try again.
 
-### File Access Failed
+### File access failed
 
 Make sure the PDF is available locally. If the attachment is cloud-only or still syncing, open or download it in Zotero first.
 
-### The Reader Says No Parse Result Is Available
+### The reader says no parse result is available
 
 Parse the PDF first. If you already parsed it, open the data folder from the settings page and confirm that the parsed result still exists.
 
-### Boxes Are Not Visible
+### Boxes are not visible
 
 Confirm that the toolbar mode is not set to `Disable plugin features`. If the PDF was parsed but still has no boxes, reparse it.
 
-### Result Download Failed
+### Result download failed
 
 The MinerU result download may be temporarily unavailable. Parsing automatically reconnects through short network drops; if the failure persists, try again later or reparse the PDF.
 
-### A Parse Was Interrupted (Zotero Closed or Crashed)
+### A parse was interrupted (Zotero closed or crashed)
 
 Open the Task Manager from **Tools → MinerU Task Manager**. Jobs that were running when Zotero closed are marked as failed and show a `Resume` button. Resume continues from the finished parts instead of re-submitting the whole PDF. This is especially useful for local parsing, where the MinerU service keeps the submitted parts between sessions.
 
