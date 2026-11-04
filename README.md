@@ -9,7 +9,7 @@ Parse PDFs in Zotero with [MinerU](https://mineru.net), copy text, tables and fo
 
 A personal fork of [Asianfleet/mineru-for-zotero](https://github.com/Asianfleet/mineru-for-zotero) with its own plugin ID. See [License](#license).
 
-<!-- Screenshot: docs/images/hero.png -->
+<img src="docs/images/hero.png" alt="MinerU boxes in the Zotero PDF reader" width="1280">
 
 ## Features
 
@@ -88,6 +88,8 @@ For multi-box copying, hold `Shift` or `Ctrl` while clicking boxes. Then use the
 Open **Edit → Settings → MinerU for Zotero** and click `Open Data Folder` to view local parse results. The settings page also shows how many PDFs currently have usable results.
 
 You can also open the **MinerU Task Manager** from **Tools → MinerU Task Manager** to view the real-time status of your parsing jobs, view error messages, and clear your history. Each running job shows a live progress bar. Stopping a job marks it `Cancelled` instead of failed: it keeps its resume data, adds no `MinerU: Failed ❌` tag, and can be resumed or retried later. PDF files larger than 200 MB are rejected on every parse path.
+
+<img src="docs/images/task-manager.png" alt="The MinerU Task Manager" width="920">
 
 Parsing jobs survive Zotero restarts. If Zotero closes while a job is running, the job is marked as failed on the next start and shows a `Resume` button in the Task Manager. Resuming keeps every finished page-range part and only re-submits the missing parts, so a long parse does not have to start over. Transient network drops during polling and downloading reconnect automatically with backoff instead of failing the job.
 
