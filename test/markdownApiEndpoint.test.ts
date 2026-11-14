@@ -1,8 +1,10 @@
 import { assert } from "chai";
+import { version } from "../package.json";
 import {
   createMarkdownQueryEndpoint,
   createMarkdownQueryEndpointClass,
   itemMatchesYear,
+  MARKDOWN_API_VERSION,
   MARKDOWN_ENDPOINT_PATHS,
   resolveSearchCollection,
 } from "../src/modules/markdownQuery/apiEndpoint";
@@ -28,8 +30,26 @@ describe("markdownApiEndpoint", function () {
       JSON.stringify({
         error: "api-disabled",
         message: "Markdown query API is disabled",
+        pluginVersion: version,
+        apiVersion: MARKDOWN_API_VERSION,
       }),
     ]);
+  });
+
+  it("reports the plugin and API versions in successful responses", async function () {
+    setMarkdownApiEnabled(true);
+    const endpoint = createMarkdownQueryEndpoint(fakeService());
+
+    const response = await endpoint.init(
+      request("/mineru-for-zotero/libraries"),
+    );
+
+    assert.equal(response[0], 200);
+    assert.deepEqual(JSON.parse(String(response[2])), {
+      libraries: [],
+      pluginVersion: version,
+      apiVersion: MARKDOWN_API_VERSION,
+    });
   });
 
   it("forwards creator, year, tag, and limit search parameters", async function () {

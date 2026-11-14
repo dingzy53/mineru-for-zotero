@@ -1,3 +1,4 @@
+import { version as pluginVersion } from "../../../package.json";
 import { getMarkdownApiEnabled } from "../../utils/prefs";
 import { getMinerUStorageRoot } from "../preferenceScript";
 import { createStorage } from "../storage";
@@ -17,6 +18,14 @@ interface MarkdownEndpointRequest {
   headers: Record<string, string>;
   data: unknown;
 }
+
+/**
+ * Version of the HTTP API contract, reported in every response next to
+ * `pluginVersion`. Bump it on a breaking change and bump `API_VERSION` in
+ * `mineru-for-zotero-cli/scripts/query-markdown.mjs` with it: the CLI warns
+ * when the two differ, because the installed skill is a copy that goes stale.
+ */
+export const MARKDOWN_API_VERSION = 1;
 
 export const MARKDOWN_ENDPOINT_PATHS = [
   "/mineru-for-zotero/search",
@@ -544,10 +553,19 @@ function parseSectionPath(
 }
 
 /**
- * Generate a standard JSON HTTP response tuple.
+ * Generate a standard JSON HTTP response tuple. Every body, success or error,
+ * carries the plugin and API versions.
  */
 function json(code: number, payload: unknown) {
-  return [code, "application/json", JSON.stringify(payload)] as const;
+  return [
+    code,
+    "application/json",
+    JSON.stringify({
+      ...(payload as Record<string, unknown>),
+      pluginVersion,
+      apiVersion: MARKDOWN_API_VERSION,
+    }),
+  ] as const;
 }
 
 /**

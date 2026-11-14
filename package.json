@@ -32,7 +32,8 @@
     "pretest": "node scripts/fix-test-profile.mjs && node scripts/ensure-test-libraries.mjs",
     "test": "zotero-plugin test",
     "preserve": "node scripts/fix-test-profile.mjs && node scripts/ensure-test-libraries.mjs",
-    "update-deps": "npm update --save"
+    "update-deps": "npm update --save",
+    "skill:install": "node scripts/install-skill.mjs"
   },
   "devDependencies": {
     "@types/chai": "^5.2.3",

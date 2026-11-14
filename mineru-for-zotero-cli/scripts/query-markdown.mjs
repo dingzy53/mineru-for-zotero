@@ -24,6 +24,12 @@ const EXIT_API_ERROR = 1;
 const EXIT_USAGE_ERROR = 2;
 const EXIT_TRANSPORT_ERROR = 3;
 
+/**
+ * API contract this CLI was written for. Matches `MARKDOWN_API_VERSION` in the
+ * plugin (`src/modules/markdownQuery/apiEndpoint.ts`).
+ */
+const API_VERSION = 1;
+
 const DEFAULT_LISTEN_PORT = 23119;
 const DEFAULT_FORMAT = "text";
 const DEFAULT_TIMEOUT_MS = 30000;
@@ -371,6 +377,7 @@ async function requestMarkdownApi(options) {
       signal: controller.signal,
     });
     const payload = await parseJsonResponse(response);
+    warnOnVersionMismatch(payload);
     if (!response.ok) {
       throw new ApiError(response.status, payload);
     }
@@ -383,6 +390,31 @@ async function requestMarkdownApi(options) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+/**
+ * Prints a one-line stderr warning when the plugin and this CLI were built for
+ * different API versions. The installed skill is a copy, so either side can be
+ * the stale one.
+ */
+function warnOnVersionMismatch(payload) {
+  const pluginApi = payload?.apiVersion;
+  if (pluginApi === API_VERSION) {
+    return;
+  }
+  const plugin = payload?.pluginVersion ? ` ${payload.pluginVersion}` : "";
+  if (!Number.isInteger(pluginApi) || pluginApi < API_VERSION) {
+    const reported = Number.isInteger(pluginApi)
+      ? `API v${pluginApi}`
+      : "no API version reported";
+    console.error(
+      `Warning: the MinerU for Zotero plugin${plugin} (${reported}) is older than this CLI (API v${API_VERSION}); update the plugin, some commands may fail.`,
+    );
+    return;
+  }
+  console.error(
+    `Warning: this CLI (API v${API_VERSION}) is older than the plugin${plugin} (API v${pluginApi}); run "npm run skill:install" in the plugin repository to update the skill.`,
+  );
 }
 
 /**
@@ -417,6 +449,9 @@ function createSuccessEnvelope(options, data) {
 function createErrorEnvelope(options, error) {
   if (error instanceof ApiError) {
     const { error: code, message, ...details } = error.payload;
+    // The version fields describe the plugin, not this error.
+    delete details.pluginVersion;
+    delete details.apiVersion;
     return {
       ok: false,
       request: createRequestSummary(options),

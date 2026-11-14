@@ -259,10 +259,16 @@ Common error codes:
 
 The repository includes a companion Skill in the `mineru-for-zotero-cli/` folder, which is designed to teach AI Agents (like Cursor, Claude Desktop, or local LLMs) how to query your local Zotero database directly.
 
-To equip your Agent with this skill:
+Install the skill into your agent's skill folder from a checkout of this repository:
 
-1. Direct your Agent to read the `mineru-for-zotero-cli/SKILL.md` file. This file contains the complete system prompt, context, and command workflows the Agent needs to interact with the local API.
-2. The Agent can then use the bundled Node.js script (`query-markdown.mjs`) to autonomously execute commands (e.g., `search`, `headings`, `section`) directly against your running Zotero client.
+```bash
+npm run skill:install            # copy into ~/.claude/skills, ~/.pi/agent/skills and ~/.agents/skills (those that exist)
+npm run skill:install -- --link  # or symlink, so the skill follows the checkout
+```
+
+The command prints what it changed. A `disable-model-invocation` line you added to an installed `SKILL.md` is kept. For an agent without a skill folder, point it at `mineru-for-zotero-cli/SKILL.md` instead.
+
+Run the command again after each plugin update: an installed copy does not update itself. Every API response carries `pluginVersion` and `apiVersion`, and the CLI prints a one-line warning on stderr when it and the plugin were built for different API versions.
 
 This integration abstracts away HTTP parameters, port detection, and error handling, providing the Agent with a clean, text-optimized interface for traversing complex academic documents without overflowing its context window.
 

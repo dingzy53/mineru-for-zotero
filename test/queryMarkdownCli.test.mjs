@@ -638,6 +638,41 @@ test("treats non-JSON responses as transport errors with exit code 3", async () 
   }
 });
 
+test("warns on stderr when the plugin is newer than the CLI", async () => {
+  await withServer(
+    { status: 200, body: { libraries: [], apiVersion: 99 } },
+    async ({ port }) => {
+      const result = await runCli(["libraries", "--port", String(port)]);
+
+      assert.equal(result.code, 0);
+      assert.match(result.stdout, /Zotero Libraries/);
+      assert.match(result.stderr, /^Warning: this CLI \(API v1\) is older/);
+      assert.match(result.stderr, /plugin 0\.11\.0 \(API v99\)/);
+      assert.match(result.stderr, /npm run skill:install/);
+      assert.equal(result.stderr.trim().split("\n").length, 1);
+    },
+  );
+});
+
+test("warns on stderr when the plugin reports no API version", async () => {
+  await withServer(
+    {
+      status: 200,
+      body: { libraries: [], apiVersion: undefined, pluginVersion: undefined },
+    },
+    async ({ port }) => {
+      const result = await runCli(["libraries", "--port", String(port)]);
+
+      assert.equal(result.code, 0);
+      assert.match(
+        result.stderr,
+        /plugin \(no API version reported\) is older/,
+      );
+      assert.match(result.stderr, /update the plugin/);
+    },
+  );
+});
+
 /**
  * Runs a temporary JSON HTTP server while a CLI test executes.
  */
@@ -653,7 +688,14 @@ async function withServer(response, run) {
     res.writeHead(response.status, {
       "content-type": "application/json",
     });
-    res.end(JSON.stringify(response.body));
+    // Stubs answer as a current plugin unless a test sets the versions.
+    res.end(
+      JSON.stringify({
+        pluginVersion: "0.11.0",
+        apiVersion: 1,
+        ...response.body,
+      }),
+    );
   });
 
   await new Promise((resolve) => {
