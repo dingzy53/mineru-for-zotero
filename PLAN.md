@@ -1,6 +1,10 @@
 # PLAN: fix what agents ran into when reading parsed papers
 
-> Branch `fix/agent-usage-findings`. Written 2026-11-14. Nothing here is implemented yet.
+> Branch `fix/agent-usage-findings`. Written 2026-11-14. Steps 1 to 6 are implemented, one commit each (`dd6b016`, `691888d`, `95325fd`, `236a6b6`, `c450848`, `53bf371`).
+>
+> Still open, all by hand in the owner's Zotero: step 1.1 (replace the installed 0.10.2 plugin), `npm run skill:install` (add `--allow-model-invocation` for the step 2 decision), deleting the two `mineru-part-53-*.json` files, and the checks under Verification. The scaffold suite (`zotero-plugin test`) was not run for these commits because no Zotero binary was available; the changed test files were run with standalone Mocha and `node --test`.
+>
+> One deviation: `parse --wait` is bounded by its own `--wait-timeout-ms` (default 15 minutes) instead of `--timeout-ms`, which stays the per-request timeout.
 >
 > This replaces the "Open Task Manager from the Tools menu" plan, which shipped in `65c9a80` (see git history for its text).
 
