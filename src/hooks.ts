@@ -26,6 +26,7 @@ import {
   registerMcpEndpoint,
   unregisterMcpEndpoint,
 } from "./modules/mcp/endpoint";
+import { installBridge } from "./modules/mcp/bridge";
 import { taskStore } from "./modules/taskStore";
 import { removeOrphanResumeDirectories } from "./modules/taskResumeDirectory";
 import { migrateResultStorage } from "./modules/storageLocation";
@@ -71,6 +72,10 @@ async function onStartup() {
   registerMarkdownQueryApiEndpoint();
   ensureMcpToken();
   registerMcpEndpoint();
+  // Only the stdio setup needs the file; the plugin works without it.
+  installBridge().catch((error) =>
+    ztoolkit.log("MinerU MCP bridge install failed", error),
+  );
 
   await Promise.all(
     Zotero.getMainWindows().map((win) => onMainWindowLoad(win)),
