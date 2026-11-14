@@ -116,7 +116,7 @@ This enables you to use AI Agents (like Cursor, Claude Desktop, etc.) to read th
 
 ## Local Markdown query API
 
-The local Markdown query API lets local external tools read Markdown parse results that MinerU for Zotero has already saved through Zotero's built-in local HTTP server. It reads existing local results, can submit a reparse for an existing PDF attachment, and never opens a dialog or directly exposes the plugin data folder.
+The local Markdown query API lets local external tools read Markdown parse results that MinerU for Zotero has already saved through Zotero's built-in local HTTP server. It reads existing local results, can submit a parse for an existing PDF attachment, and never opens a dialog or directly exposes the plugin data folder.
 
 Main capabilities:
 
@@ -125,7 +125,7 @@ Main capabilities:
 - Query at `full`, `headings`, `section`, or `search` granularity, so external agents can inspect structure before reading a section or keyword context.
 - Pass `attachmentKey` to select a specific PDF when a regular item has multiple PDF attachments.
 - Return precise Markdown first; if precise output is unavailable but lite output exists, return lite Markdown and mark it in `result.mode`.
-- Reparse an attachment without any interactive prompt, and list current parse tasks with their status, progress, and error text.
+- Parse an attachment without any interactive prompt (skipping PDFs that already have a current result unless `force=true`), and list current parse tasks with their status, progress, and error text.
 
 ### Configuration
 
@@ -211,13 +211,17 @@ curl --get "http://127.0.0.1:23119/mineru-for-zotero/markdown" \
   --data-urlencode "contextParagraphs=2"
 ```
 
-Reparse a PDF attachment (`POST` only; returns immediately and never opens a dialog):
+Parse a PDF attachment (`POST` only; returns immediately and never opens a dialog):
 
 ```shell
 curl -X POST "http://127.0.0.1:23119/mineru-for-zotero/parse?libraryID=1&key=ABCD1234"
 ```
 
-The response is `{"status":"submitted","itemID":123,"key":"ABCD1234"}`. Pass `attachmentKey` to pick one PDF when `key` is a regular item. This endpoint always reparses and replaces any existing result, without the `Use existing result` prompt, and a request for an attachment that is already parsing in this session is ignored.
+The response is `{"status":"submitted","itemID":123,"key":"ABCD1234","submittedAt":1763100000000}`. Pass `attachmentKey` to pick one PDF when `key` is a regular item. `status` is one of:
+
+- `submitted`: the parse was started; follow it through `/tasks`. A task whose `updatedAt` is older than `submittedAt` is the record of an earlier parse.
+- `already-parsed`: a precise result made from the PDF as it is now already exists, so nothing was submitted and no MinerU quota was spent. Add `force=true` to parse again and replace the result.
+- `already-running`: the attachment is being parsed; nothing was submitted.
 
 List parse tasks:
 
@@ -251,6 +255,7 @@ Common parameters:
 | `limit`                 | `tags`, `search`                                               | Maximum number of records to return.                                       |
 | `key`                   | `markdown`, `parse`                                            | Zotero regular item key or PDF attachment key.                             |
 | `attachmentKey`         | `markdown`, `parse`                                            | Selects the target PDF attachment when a regular item contains PDFs.       |
+| `force`                 | `parse`                                                        | Parse again even when a current result exists (`true`).                    |
 | `granularity`           | `markdown`                                                     | `full`, `headings`, `section`, `search`, or `locate`. Defaults to `full`.  |
 | `sectionPath`           | `markdown`                                                     | Heading path for `section` queries, for example `Introduction/Background`. |
 | `includeSubsections`    | `markdown`                                                     | Extend section scope to same-level numbered subsections (`true`).          |
@@ -263,7 +268,7 @@ Common error codes:
 - `invalid-request`: a required parameter is missing or invalid; `/parse` also returns it for non-`POST` requests.
 - `ambiguous-attachment`: the regular item has multiple PDFs; pass `attachmentKey`.
 - `collection-not-found`: the `collection` search filter matches no collection key or name in the library; list them with `/collections`.
-- `parse-result-not-found`: the target PDF has no usable parse result yet; parse it in Zotero first.
+- `parse-result-not-found`: the target PDF has no usable parse result yet; parse it in Zotero or through `/parse` first.
 - `section-not-found`: the section path does not match; run `granularity=headings` first to inspect exact paths.
 - `missing-query`: `granularity=search` was used without `q`.
 

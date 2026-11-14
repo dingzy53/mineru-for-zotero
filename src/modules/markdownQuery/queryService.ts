@@ -76,6 +76,37 @@ async function exportZoteroItemBibTeX(item: ZoteroItemLike): Promise<string> {
   return zoteroItem ? exportBibTeX(zoteroItem) : "";
 }
 
+/** Modification time of the PDF behind an attachment, as Zotero reports it. */
+async function readZoteroAttachmentMtime(
+  attachment: ZoteroItemLike,
+): Promise<number | undefined> {
+  const item = Zotero.Items.getByLibraryAndKey(
+    attachment.libraryID,
+    attachment.key,
+  );
+  return item
+    ? ((await item.attachmentModificationTime) ?? undefined)
+    : undefined;
+}
+
+/**
+ * Start a precise parse in Zotero without waiting for it: waiting would block
+ * the HTTP response. `force` only keeps the parse non-interactive, because an
+ * HTTP caller must never be able to open a modal reparse prompt in the Zotero
+ * window; whether to parse at all is decided before this is called.
+ */
+function startZoteroParse(attachment: ZoteroItemLike): void {
+  const item = Zotero.Items.getByLibraryAndKey(
+    attachment.libraryID,
+    attachment.key,
+  );
+  if (item) {
+    parseAttachment(item, { force: true }).catch((e) =>
+      ztoolkit.log("API Trigger Parse Error", e),
+    );
+  }
+}
+
 /** One search hit: the item and the parse status of its PDF attachments. */
 interface SearchCandidate {
   item: ItemSummary;
@@ -91,6 +122,11 @@ export interface PreferredMarkdownReader extends ParseStatusReader {
     key: string;
   }): Promise<string>;
   readBoxes(ref: { libraryID: number; key: string }): Promise<NormalizedBox[]>;
+  /** Manifest of the precise result, used to compare its PDF mtime. */
+  readManifestSafe?(ref: {
+    libraryID: number;
+    key: string;
+  }): Promise<{ pdfMtime?: number } | null>;
 }
 
 /**
@@ -117,7 +153,15 @@ export interface MarkdownQueryService {
     libraryID: number;
     key: string;
     attachmentKey?: string;
-  }): Promise<unknown>;
+    /** Parse again even when a result for the current PDF exists. */
+    force?: boolean;
+  }): Promise<{
+    status: "submitted" | "already-parsed" | "already-running";
+    itemID: number;
+    key: string;
+    /** Time the parse was handed to Zotero; only for `submitted`. */
+    submittedAt?: number;
+  }>;
   getTasks(): Promise<unknown>;
   getCollectionStatus(input: {
     libraryID: number;
@@ -154,8 +198,30 @@ export function createMarkdownQueryService(deps: {
   exportBibTeX?(item: ZoteroItemLike): Promise<string>;
   /** Parse task records; defaults to the task store. */
   getTasks?(): TaskRecord[];
+  /** Modification time of an attachment's PDF; defaults to Zotero's. */
+  getAttachmentMtime?(attachment: ZoteroItemLike): Promise<number | undefined>;
+  /** Start a precise parse without waiting for it; defaults to Zotero's. */
+  startParse?(attachment: ZoteroItemLike): void;
 }): MarkdownQueryService {
   const getTaskRecords = () => deps.getTasks?.() ?? taskStore.getTasks();
+
+  /**
+   * Whether a ready precise result was made from the PDF as it is now. When
+   * either modification time is unknown, the stored result counts as current.
+   */
+  const hasCurrentPreciseResult = async (
+    attachment: ZoteroItemLike,
+  ): Promise<boolean> => {
+    const ref = { libraryID: attachment.libraryID, key: attachment.key };
+    if (!(await deps.storage.readParseStatus(ref)).preciseReady) {
+      return false;
+    }
+    const parsedMtime = (await deps.storage.readManifestSafe?.(ref))?.pdfMtime;
+    const currentMtime = await (
+      deps.getAttachmentMtime ?? readZoteroAttachmentMtime
+    )(attachment);
+    return !parsedMtime || !currentMtime || parsedMtime === currentMtime;
+  };
 
   return {
     async getLibraries() {
@@ -347,24 +413,29 @@ export function createMarkdownQueryService(deps: {
         items: deps.items,
         storage: deps.storage,
       });
-      // Try to parse using Zotero backend. This won't wait for it to finish.
-      // We don't await because it blocks the HTTP response. `force` keeps the
-      // request non-interactive: an HTTP caller must never be able to open a
-      // modal reparse prompt in the Zotero window.
-      const item = Zotero.Items.getByLibraryAndKey(
-        input.libraryID,
-        resolved.attachment.key,
+      const attachment = resolved.attachment;
+      const target = { itemID: attachment.id, key: attachment.key };
+
+      const activeTask = getTaskRecords().find(
+        (task) =>
+          task.attachment.libraryID === attachment.libraryID &&
+          task.attachment.key === attachment.key &&
+          (task.status === "running" || task.status === "pending"),
       );
-      if (item) {
-        parseAttachment(item, { force: true }).catch((e) =>
-          ztoolkit.log("API Trigger Parse Error", e),
-        );
+      if (activeTask) {
+        // The parse manager ignores a second parse of a running attachment.
+        return { status: "already-running", ...target };
       }
-      return {
-        status: "submitted",
-        itemID: resolved.attachment.id,
-        key: resolved.attachment.key,
-      };
+
+      // Any local process can call this endpoint, so it must not spend MinerU
+      // quota on a PDF that is already parsed unless the caller says so.
+      if (input.force !== true && (await hasCurrentPreciseResult(attachment))) {
+        return { status: "already-parsed", ...target };
+      }
+
+      const submittedAt = Date.now();
+      (deps.startParse ?? startZoteroParse)(attachment);
+      return { status: "submitted", ...target, submittedAt };
     },
     async searchByTitle(input) {
       const hasFilter = Boolean(

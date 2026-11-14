@@ -12,7 +12,7 @@ Core feature modules currently include:
 - `taskStore.ts`, `resultsManager.ts`, `storage.ts`, `storageFs.ts`, `domain.ts` — task persistence and the unified two-tab Task Manager window (task queue & parsed results), per-attachment result storage, the `IOUtils`/`OS.File` filesystem adapter, and shared parse/storage/overlay domain types.
 - `boxNormalizer.ts`, `copyFormatter.ts` — MinerU schema normalization into stable boxes and copy output.
 - `readerToolbar/`, `readerOverlay/` — PDF Reader toolbar UI and box rendering/selection behavior.
-- `markdownQuery/` — the local HTTP Markdown query API (endpoint, attachment resolver, Markdown parser, query service). It has no token: the only switch is the `apiEnabled` preference, and safety relies on Zotero's server binding to `127.0.0.1` plus its non-local `Host` rejection. `POST /mineru-for-zotero/parse` is non-interactive (it forces a reparse and never opens a dialog), while `GET /mineru-for-zotero/tasks` returns sanitized task summaries without absolute PDF paths.
+- `markdownQuery/` — the local HTTP Markdown query API (endpoint, attachment resolver, Markdown parser, query service). It has no token: the only switch is the `apiEnabled` preference, and safety relies on Zotero's server binding to `127.0.0.1` plus its non-local `Host` rejection. `POST /mineru-for-zotero/parse` is non-interactive and never opens a dialog: `triggerParse()` answers `already-parsed` when a precise result for the current PDF mtime exists (unless `force=true`) and `already-running` for an active task, and only otherwise calls `parseAttachment(item, { force: true })`, where `force` merely skips the reparse prompt. Keep that order: any local process can call the endpoint, so it must not spend MinerU quota by default. `GET /mineru-for-zotero/tasks` returns sanitized task summaries without absolute PDF paths.
 - `agentSync.ts`, `itemTreeColumn.ts`, `itemMenu.ts`, `preferenceScript.ts` — sync-folder export, item-tree status column, `Zotero.MenuManager` menus (attachment-only context menu and the Tools → MinerU Task Manager entry), and settings-page UI.
 
 ## Build, Test, and Development Commands
@@ -234,7 +234,7 @@ Do not reuse the icon-only toolbar button base class for text menu items.
 ## CLI Tool
 
 The companion CLI (`mineru-for-zotero-cli/scripts/query-markdown.mjs`) provides agent-readable access via the local HTTP query API.
-Commands: `libraries`, `collections`, `tags`, `search`, `status`, `markdown`.
+Commands: `libraries`, `collections`, `tags`, `search`, `status`, `markdown`, `parse` (`--force`, `--wait`), `tasks`.
 Granularity modes for `markdown`: `full`, `headings`, `section`, `search`, `locate`.
 Auto-detects the server port, outputting agent-readable text by default.
 

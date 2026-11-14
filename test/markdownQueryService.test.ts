@@ -589,6 +589,129 @@ describe("markdownQueryService", function () {
     );
   });
 
+  describe("triggerParse", function () {
+    function parseService(input: {
+      preciseReady: boolean;
+      parsedMtime?: number;
+      currentMtime?: number;
+      taskStatus?: string;
+    }) {
+      const started: string[] = [];
+      const deps = fakeDeps({
+        markdown: "# X",
+        parseStatus: { preciseReady: input.preciseReady, liteReady: true },
+      });
+      const service = createMarkdownQueryService({
+        ...deps,
+        storage: {
+          ...deps.storage,
+          async readManifestSafe() {
+            return input.parsedMtime === undefined
+              ? null
+              : { pdfMtime: input.parsedMtime };
+          },
+        },
+        getTasks: () =>
+          (input.taskStatus
+            ? [
+                {
+                  attachment: { libraryID: 1, key: "PDF1" },
+                  status: input.taskStatus,
+                },
+              ]
+            : []) as never,
+        getAttachmentMtime: async () => input.currentMtime,
+        startParse: (attachment) => {
+          started.push(attachment.key);
+        },
+      });
+      return { service, started };
+    }
+
+    it("answers already-parsed without starting a parse", async function () {
+      const { service, started } = parseService({
+        preciseReady: true,
+        parsedMtime: 100,
+        currentMtime: 100,
+      });
+
+      const response = await service.triggerParse({
+        libraryID: 1,
+        key: "PDF1",
+      });
+
+      assert.deepEqual(response, {
+        status: "already-parsed",
+        itemID: 1,
+        key: "PDF1",
+      });
+      assert.deepEqual(started, []);
+    });
+
+    it("parses again when forced", async function () {
+      const { service, started } = parseService({
+        preciseReady: true,
+        parsedMtime: 100,
+        currentMtime: 100,
+      });
+      const before = Date.now();
+
+      const response = await service.triggerParse({
+        libraryID: 1,
+        key: "PDF1",
+        force: true,
+      });
+
+      assert.equal(response.status, "submitted");
+      assert.isAtLeast(response.submittedAt ?? 0, before);
+      assert.deepEqual(started, ["PDF1"]);
+    });
+
+    it("parses when the PDF changed after the stored result", async function () {
+      const { service, started } = parseService({
+        preciseReady: true,
+        parsedMtime: 100,
+        currentMtime: 200,
+      });
+
+      const response = await service.triggerParse({
+        libraryID: 1,
+        key: "PDF1",
+      });
+
+      assert.equal(response.status, "submitted");
+      assert.deepEqual(started, ["PDF1"]);
+    });
+
+    it("parses when only a lite result exists", async function () {
+      const { service, started } = parseService({ preciseReady: false });
+
+      const response = await service.triggerParse({
+        libraryID: 1,
+        key: "PDF1",
+      });
+
+      assert.equal(response.status, "submitted");
+      assert.deepEqual(started, ["PDF1"]);
+    });
+
+    it("answers already-running for an active task, even when forced", async function () {
+      const { service, started } = parseService({
+        preciseReady: false,
+        taskStatus: "running",
+      });
+
+      const response = await service.triggerParse({
+        libraryID: 1,
+        key: "PDF1",
+        force: true,
+      });
+
+      assert.equal(response.status, "already-running");
+      assert.deepEqual(started, []);
+    });
+  });
+
   it("exports BibTeX once per item revision across requests", async function () {
     const pdf = fakeItem({ id: 41, key: "BIBPDF", pdf: true });
     pdf.dateModified = "2026-01-01 00:00:00";

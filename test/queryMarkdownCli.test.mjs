@@ -784,6 +784,208 @@ test("rejects --output for granularities other than full", async () => {
   assert.match(result.stderr, /--output requires --granularity full/);
 });
 
+test("posts a parse request and explains already-parsed", async () => {
+  await withServer(
+    {
+      status: 200,
+      body: { status: "already-parsed", itemID: 9, key: "PDFKEY01" },
+    },
+    async ({ port, requests }) => {
+      const result = await runCli([
+        "parse",
+        "--port",
+        String(port),
+        "--library-id",
+        "1",
+        "--key",
+        "ABCD1234",
+        "--attachment-key",
+        "PDFKEY01",
+        "--wait",
+      ]);
+
+      assert.equal(result.code, 0);
+      assert.equal(requests.length, 1);
+      assert.equal(requests[0].method, "POST");
+      assert.equal(requests[0].pathname, "/mineru-for-zotero/parse");
+      assert.deepEqual(requests[0].searchParams, {
+        libraryID: "1",
+        key: "ABCD1234",
+        attachmentKey: "PDFKEY01",
+      });
+      assert.match(result.stdout, /Status: already-parsed/);
+      assert.match(result.stdout, /pass --force only to parse it again/);
+    },
+  );
+});
+
+test("sends force and reports a submitted parse", async () => {
+  await withServer(
+    {
+      status: 200,
+      body: { status: "submitted", itemID: 9, key: "PDFKEY01", submittedAt: 5 },
+    },
+    async ({ port, requests }) => {
+      const result = await runCli([
+        "parse",
+        "--port",
+        String(port),
+        "--library-id",
+        "1",
+        "--key",
+        "PDFKEY01",
+        "--force",
+      ]);
+
+      assert.equal(result.code, 0);
+      assert.equal(requests.length, 1);
+      assert.equal(requests[0].searchParams.force, "true");
+      assert.match(result.stdout, /Attachment: PDFKEY01\nStatus: submitted/);
+      assert.match(result.stdout, /run parse with --wait/);
+    },
+  );
+});
+
+/** Answers a parse request, then one task list per poll. */
+function parseThenTasks(taskLists) {
+  return (request, count) =>
+    request.pathname === "/mineru-for-zotero/parse"
+      ? {
+          status: 200,
+          body: {
+            status: "submitted",
+            itemID: 9,
+            key: "PDFKEY01",
+            submittedAt: 1000,
+          },
+        }
+      : {
+          status: 200,
+          body: { tasks: taskLists[Math.min(count - 2, taskLists.length - 1)] },
+        };
+}
+
+const waitArgs = (port) => [
+  "parse",
+  "--port",
+  String(port),
+  "--library-id",
+  "1",
+  "--key",
+  "PDFKEY01",
+  "--wait",
+  "--poll-interval-ms",
+  "20",
+];
+
+test("waits for a parse to succeed, ignoring the previous record", async () => {
+  const task = { id: "9", libraryID: 1, key: "PDFKEY01", title: "Paper" };
+  await withServer(
+    parseThenTasks([
+      // The record of an earlier parse, not yet reset by Zotero.
+      [{ ...task, status: "succeeded", progress: 100, updatedAt: 500 }],
+      [
+        {
+          id: "8",
+          libraryID: 1,
+          key: "OTHER",
+          status: "failed",
+          updatedAt: 2000,
+        },
+        { ...task, status: "running", progress: 40, updatedAt: 1500 },
+      ],
+      [{ ...task, status: "succeeded", progress: 100, updatedAt: 2500 }],
+    ]),
+    async ({ port, requests }) => {
+      const result = await runCli(waitArgs(port));
+
+      assert.equal(result.code, 0);
+      assert.deepEqual(
+        requests.map((request) => `${request.method} ${request.pathname}`),
+        [
+          "POST /mineru-for-zotero/parse",
+          "GET /mineru-for-zotero/tasks",
+          "GET /mineru-for-zotero/tasks",
+          "GET /mineru-for-zotero/tasks",
+        ],
+      );
+      assert.match(result.stdout, /Status: succeeded\nprogress: 100%/);
+      assert.match(result.stdout, /Read it with the markdown command/);
+    },
+  );
+});
+
+test("exits with code 1 when an awaited parse fails", async () => {
+  await withServer(
+    parseThenTasks([
+      [
+        {
+          id: "9",
+          libraryID: 1,
+          key: "PDFKEY01",
+          status: "failed",
+          progress: 0,
+          error: "daily limit reached (code -60018)",
+          updatedAt: 3000,
+        },
+      ],
+    ]),
+    async ({ port }) => {
+      const result = await runCli([...waitArgs(port), "--format", "json"]);
+
+      assert.equal(result.code, 1);
+      const output = JSON.parse(result.stdout);
+      assert.equal(output.data.status, "failed");
+      assert.equal(output.data.task.error, "daily limit reached (code -60018)");
+    },
+  );
+});
+
+test("exits with code 1 when the wait times out", async () => {
+  await withServer(parseThenTasks([[]]), async ({ port }) => {
+    const result = await runCli([...waitArgs(port), "--wait-timeout-ms", "70"]);
+
+    assert.equal(result.code, 1);
+    assert.match(result.stdout, /Status: wait-timeout/);
+    assert.match(result.stdout, /keeps running in Zotero/);
+  });
+});
+
+test("formats the task list as text", async () => {
+  await withServer(
+    {
+      status: 200,
+      body: {
+        tasks: [
+          {
+            id: "9",
+            libraryID: 1,
+            key: "PDFKEY01",
+            title: "Example Paper",
+            status: "running",
+            progress: 40,
+            detail: "Chunk 2 of 5",
+          },
+        ],
+      },
+    },
+    async ({ port, requests }) => {
+      const result = await runCli(["tasks", "--port", String(port)]);
+
+      assert.equal(result.code, 0);
+      assert.equal(requests[0].method, "GET");
+      assert.equal(requests[0].pathname, "/mineru-for-zotero/tasks");
+      assert.match(result.stdout, /Tasks: 1/);
+      assert.match(result.stdout, /1\. Example Paper\n {3}id: 9\n/);
+      assert.match(result.stdout, /key: PDFKEY01 \(library 1\)/);
+      assert.match(
+        result.stdout,
+        /status: running\n {3}progress: 40%\n {3}detail: Chunk 2 of 5/,
+      );
+    },
+  );
+});
+
 test("warns on stderr when the plugin is newer than the CLI", async () => {
   await withServer(
     { status: 200, body: { libraries: [], apiVersion: 99 } },
@@ -822,15 +1024,21 @@ test("warns on stderr when the plugin reports no API version", async () => {
 /**
  * Runs a temporary JSON HTTP server while a CLI test executes.
  */
-async function withServer(response, run) {
+async function withServer(responseOrHandler, run) {
   const requests = [];
   const server = createServer((request, res) => {
     const url = new URL(request.url, "http://127.0.0.1");
     requests.push({
+      method: request.method,
       pathname: url.pathname,
       searchParams: Object.fromEntries(url.searchParams.entries()),
       headers: request.headers,
     });
+    // A function picks the response per request (used by polling tests).
+    const response =
+      typeof responseOrHandler === "function"
+        ? responseOrHandler(requests[requests.length - 1], requests.length)
+        : responseOrHandler;
     res.writeHead(response.status, {
       "content-type": "application/json",
     });

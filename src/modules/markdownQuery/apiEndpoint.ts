@@ -129,6 +129,7 @@ export function createMarkdownQueryEndpoint(service: MarkdownQueryService) {
             libraryID: requireInteger(query.libraryID, "libraryID"),
             key: requireString(query.key, "key"),
             attachmentKey: optionalString(query.attachmentKey),
+            force: parseOptionalBoolean(query.force),
           });
         } else if (options.pathname === "/mineru-for-zotero/tasks") {
           payload = await service.getTasks();

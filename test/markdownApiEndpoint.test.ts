@@ -128,7 +128,7 @@ describe("markdownApiEndpoint", function () {
         return { granularity: "full", content: "# Body" };
       },
       async triggerParse() {
-        return { status: "submitted" };
+        return { status: "submitted" as const, itemID: 1, key: "PDF1" };
       },
       async getTasks() {
         return { tasks: [] };
@@ -449,7 +449,7 @@ describe("markdownApiEndpoint", function () {
       ...fakeService(),
       async triggerParse(input) {
         submitted = input;
-        return { status: "submitted", itemID: 1, key: "PDF1" };
+        return { status: "submitted" as const, itemID: 1, key: "PDF1" };
       },
     });
 
@@ -462,9 +462,20 @@ describe("markdownApiEndpoint", function () {
 
     assert.equal(response[0], 200);
     assert.include(String(response[2]), '"submitted"');
-    const trigger = submitted as { libraryID: number; key: string };
-    assert.equal(trigger.libraryID, 1);
-    assert.equal(trigger.key, "ABC1");
+    assert.deepEqual(submitted, {
+      libraryID: 1,
+      key: "ABC1",
+      attachmentKey: undefined,
+      force: undefined,
+    });
+
+    await endpoint.init(
+      request("/mineru-for-zotero/parse", {
+        method: "POST",
+        query: { libraryID: "1", key: "ABC1", force: "true" },
+      }),
+    );
+    assert.propertyVal(submitted, "force", true);
   });
 
   describe("collection filter", function () {
@@ -543,7 +554,7 @@ function fakeService() {
       return { granularity: "full", content: "# Body" };
     },
     async triggerParse() {
-      return { status: "submitted" };
+      return { status: "submitted" as const, itemID: 1, key: "PDF1" };
     },
     async getTasks() {
       return { tasks: [] };

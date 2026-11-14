@@ -9,7 +9,8 @@
  *
  * Exit codes (also printed by --help):
  *   0  success
- *   1  API error: the API answered with an HTTP 4xx/5xx error envelope
+ *   1  API error: the API answered with an HTTP 4xx/5xx error envelope, or a
+ *      parse awaited with --wait did not succeed
  *   2  argument or usage error: the usage text is printed to stderr
  *   3  transport error: Zotero is unreachable (connection refused, timeout, or
  *      a non-JSON response)
@@ -39,6 +40,11 @@ const LIBRARIES_ENDPOINT = "/mineru-for-zotero/libraries";
 const COLLECTIONS_ENDPOINT = "/mineru-for-zotero/collections";
 const TAGS_ENDPOINT = "/mineru-for-zotero/tags";
 const STATUS_ENDPOINT = "/mineru-for-zotero/status";
+const PARSE_ENDPOINT = "/mineru-for-zotero/parse";
+const TASKS_ENDPOINT = "/mineru-for-zotero/tasks";
+const DEFAULT_WAIT_TIMEOUT_MS = 900000;
+const DEFAULT_POLL_INTERVAL_MS = 3000;
+const FINISHED_TASK_STATUSES = new Set(["succeeded", "failed", "cancelled"]);
 const VALID_FORMATS = new Set(["text", "json"]);
 const VALID_GRANULARITIES = new Set([
   "full",
@@ -59,6 +65,8 @@ const BOOLEAN_FLAGS = new Set([
   "--include-subcollections",
   "--has-pdf",
   "--parsed-only",
+  "--force",
+  "--wait",
 ]);
 
 /**
@@ -81,7 +89,10 @@ async function main(argv) {
   }
 
   try {
-    const response = await requestMarkdownApi(options);
+    let response = await requestMarkdownApi(options);
+    if (options.wait && response.status !== "already-parsed") {
+      response = await waitForParse(options, response);
+    }
     if (options.outputPath) {
       writeContentFile(options, response);
     }
@@ -91,7 +102,10 @@ async function main(argv) {
     } else {
       console.log(formatTextSuccess(options, response));
     }
-    return EXIT_SUCCESS;
+    // An awaited parse that failed, was stopped or timed out is not a success.
+    return response.waited && response.status !== "succeeded"
+      ? EXIT_API_ERROR
+      : EXIT_SUCCESS;
   } catch (error) {
     const envelope = createErrorEnvelope(options, error);
     if (options.format === "json") {
@@ -123,6 +137,8 @@ function parseCommand(argv) {
     "collections",
     "tags",
     "status",
+    "parse",
+    "tasks",
   ]);
   if (!validCommands.has(command)) {
     throw new CliArgumentError(`Unknown command: ${command}`);
@@ -141,10 +157,10 @@ function parseCommand(argv) {
     "--timeout-ms",
   );
 
-  if (command === "libraries") {
+  if (command === "libraries" || command === "tasks") {
     return {
       command,
-      endpoint: LIBRARIES_ENDPOINT,
+      endpoint: command === "tasks" ? TASKS_ENDPOINT : LIBRARIES_ENDPOINT,
       listenPort,
       baseUrl,
       format,
@@ -220,6 +236,37 @@ function parseCommand(argv) {
   }
 
   const key = getRequiredFlag(flags, "--key");
+  if (command === "parse") {
+    const params = { libraryID, key };
+    addOptionalParam(
+      params,
+      "attachmentKey",
+      getFlag(flags, "--attachment-key"),
+    );
+    if (flags.has("--force")) {
+      params.force = "true";
+    }
+    return {
+      command,
+      method: "POST",
+      endpoint: PARSE_ENDPOINT,
+      listenPort,
+      baseUrl,
+      format,
+      timeoutMs,
+      params,
+      wait: flags.has("--wait"),
+      waitTimeoutMs: parsePositiveInteger(
+        getFlag(flags, "--wait-timeout-ms", String(DEFAULT_WAIT_TIMEOUT_MS)),
+        "--wait-timeout-ms",
+      ),
+      pollIntervalMs: parsePositiveInteger(
+        getFlag(flags, "--poll-interval-ms", String(DEFAULT_POLL_INTERVAL_MS)),
+        "--poll-interval-ms",
+      ),
+    };
+  }
+
   const granularity = getFlag(flags, "--granularity", "full");
   if (!VALID_GRANULARITIES.has(granularity)) {
     throw new CliArgumentError(
@@ -423,6 +470,7 @@ async function requestMarkdownApi(options) {
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
   try {
     const response = await fetch(url, {
+      method: options.method ?? "GET",
       signal: controller.signal,
     });
     const payload = await parseJsonResponse(response);
@@ -438,6 +486,46 @@ async function requestMarkdownApi(options) {
     throw error;
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+/**
+ * Polls the task list until the parse of `parse --wait` ends or the wait
+ * times out. Returns the parse response with the final `status` (a task
+ * status, or `wait-timeout`), the last task summary and `waited: true`.
+ */
+async function waitForParse(options, submitted) {
+  const tasksOptions = {
+    ...options,
+    method: "GET",
+    endpoint: TASKS_ENDPOINT,
+    params: {},
+  };
+  const deadline = Date.now() + options.waitTimeoutMs;
+  let task;
+  for (;;) {
+    const tasks = (await requestMarkdownApi(tasksOptions)).tasks;
+    task = (Array.isArray(tasks) ? tasks : []).find(
+      (candidate) =>
+        candidate.key === submitted.key &&
+        String(candidate.libraryID) === String(options.params.libraryID),
+    );
+    // A record last touched before this request is the previous parse of the
+    // same PDF, seen before Zotero has reset it.
+    const isCurrent =
+      task && (task.updatedAt ?? Infinity) >= (submitted.submittedAt ?? 0);
+    if (isCurrent && FINISHED_TASK_STATUSES.has(task.status)) {
+      return { ...submitted, status: task.status, task, waited: true };
+    }
+    if (Date.now() + options.pollIntervalMs > deadline) {
+      return {
+        ...submitted,
+        status: "wait-timeout",
+        ...(isCurrent ? { task } : {}),
+        waited: true,
+      };
+    }
+    await new Promise((done) => setTimeout(done, options.pollIntervalMs));
   }
 }
 
@@ -557,6 +645,12 @@ function formatTextSuccess(options, data) {
   if (options.command === "status") {
     return formatStatusText(options, data);
   }
+  if (options.command === "parse") {
+    return formatParseText(options, data);
+  }
+  if (options.command === "tasks") {
+    return formatTasksText(data);
+  }
   return formatMarkdownText(options, data);
 }
 
@@ -628,6 +722,76 @@ function formatTagsText(options, data) {
   }
 
   return lines.join("\n");
+}
+
+/**
+ * Formats the answer to a parse request, with the next step for each status.
+ */
+function formatParseText(options, data) {
+  const nextSteps = {
+    submitted:
+      "Parsing runs in Zotero. Check it with the tasks command, or run parse with --wait.",
+    "already-parsed":
+      "A result for the current PDF exists, so nothing was submitted. Read it with the markdown command; pass --force only to parse it again (uses MinerU quota).",
+    "already-running":
+      "This PDF is already being parsed. Check it with the tasks command.",
+    succeeded: "The result is ready. Read it with the markdown command.",
+    failed: "The parse failed; see the error above.",
+    cancelled: "The parse was stopped in Zotero.",
+    "wait-timeout":
+      "Still not finished when the wait ended. The parse keeps running in Zotero; check it with the tasks command.",
+  };
+  const lines = [
+    "Parse Request",
+    `Library: ${options.params.libraryID}`,
+    `Attachment: ${valueOrUnknown(data.key)}`,
+    `Status: ${valueOrUnknown(data.status)}`,
+  ];
+  if (data.task) {
+    lines.push(...formatTaskDetails(data.task, ""));
+  }
+  if (nextSteps[data.status]) {
+    lines.push("", nextSteps[data.status]);
+  }
+  return lines.join("\n");
+}
+
+/**
+ * Formats the parse task list.
+ */
+function formatTasksText(data) {
+  const tasks = Array.isArray(data.tasks) ? data.tasks : [];
+  const lines = ["MinerU Parse Tasks", `Tasks: ${tasks.length}`];
+
+  tasks.forEach((task, index) => {
+    lines.push(
+      "",
+      `${index + 1}. ${valueOrUnknown(task.title)}`,
+      `   id: ${valueOrUnknown(task.id)}`,
+      `   key: ${valueOrUnknown(task.key)} (library ${valueOrUnknown(task.libraryID)})`,
+      `   status: ${valueOrUnknown(task.status)}`,
+      ...formatTaskDetails(task, "   "),
+    );
+  });
+
+  return lines.join("\n");
+}
+
+/**
+ * Formats the progress, detail and error lines of a task summary.
+ */
+function formatTaskDetails(task, indent) {
+  const lines = [];
+  if (task.progress !== undefined && task.progress !== null) {
+    lines.push(`${indent}progress: ${task.progress}%`);
+  }
+  if (task.detail) {
+    lines.push(`${indent}detail: ${task.detail}`);
+  }
+  if (task.error) {
+    lines.push(`${indent}error: ${task.error}`);
+  }
+  return lines;
 }
 
 /**
@@ -919,7 +1083,7 @@ function hintForError(code) {
     "collection-not-found":
       "Run the collections command and pass an exact collection name or key.",
     "parse-result-not-found":
-      "Parse this PDF in Zotero first, or choose another attachment with --attachment-key.",
+      "Start a parse with the parse command (uses the user's MinerU quota), or choose another attachment with --attachment-key.",
     "section-not-found":
       "Run with --granularity headings first and use an exact heading path.",
     "missing-query": "Pass a non-empty --query value.",
@@ -950,6 +1114,8 @@ function helpText() {
     "  node mineru-for-zotero-cli/scripts/query-markdown.mjs search --library-id <id> [--title <text>] [--creator <text>] [--collection <name|key>] [--tag <tag>] [--abstract <text>] [--publication <text>] [--citekey <key>] [--doi <doi>] [--item-type <type>] [--since <date>] [--year YYYY] [--has-pdf] [--parsed-only] [--sort-by dateAdded|dateModified|title|year] [--sort-order asc|desc] [--limit <n>] [--format text|json]",
     "  node mineru-for-zotero-cli/scripts/query-markdown.mjs status --library-id <id> --collection <name|key> [--include-subcollections] [--format text|json]",
     "  node mineru-for-zotero-cli/scripts/query-markdown.mjs markdown --library-id <id> --key <key> [--granularity full|headings|section|search|locate] [--output <file>] [--format text|json]",
+    "  node mineru-for-zotero-cli/scripts/query-markdown.mjs parse --library-id <id> --key <key> [--attachment-key <key>] [--force] [--wait] [--format text|json]",
+    "  node mineru-for-zotero-cli/scripts/query-markdown.mjs tasks [--format text|json]",
     "",
     "Common options:",
     "  --port <number>              Zotero local server port. Default: auto-detect from Zotero profile, then 23119",
@@ -986,9 +1152,16 @@ function helpText() {
     "  --context-paragraphs <n>     Context paragraphs for granularity=search or locate.",
     "  --output <file>              With granularity=full, write the Markdown to a file instead of stdout.",
     "",
+    "Parse options (parsing uses the user's MinerU quota):",
+    "  --attachment-key <key>       Select a specific PDF attachment under a regular item.",
+    "  --force                      Parse again even when a result for the current PDF exists.",
+    "  --wait                       Wait until the parse ends; exit 1 unless it succeeded.",
+    "  --wait-timeout-ms <number>   Longest wait for --wait. Default: 900000",
+    "  --poll-interval-ms <number>  Delay between task checks for --wait. Default: 3000",
+    "",
     "Exit codes:",
     "  0  Success",
-    "  1  API error (HTTP 4xx/5xx error envelope)",
+    "  1  API error (HTTP 4xx/5xx error envelope), or a parse awaited with --wait did not succeed",
     "  2  Argument or usage error",
     "  3  Transport error (cannot reach Zotero: connection refused, timeout, or non-JSON response)",
   ].join("\n");
