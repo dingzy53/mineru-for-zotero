@@ -15,7 +15,7 @@
  *      a non-JSON response)
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -38,6 +38,7 @@ const MARKDOWN_ENDPOINT = "/mineru-for-zotero/markdown";
 const LIBRARIES_ENDPOINT = "/mineru-for-zotero/libraries";
 const COLLECTIONS_ENDPOINT = "/mineru-for-zotero/collections";
 const TAGS_ENDPOINT = "/mineru-for-zotero/tags";
+const STATUS_ENDPOINT = "/mineru-for-zotero/status";
 const VALID_FORMATS = new Set(["text", "json"]);
 const VALID_GRANULARITIES = new Set([
   "full",
@@ -55,6 +56,7 @@ const YEAR_PATTERN = /^\d{4}$/;
  */
 const BOOLEAN_FLAGS = new Set([
   "--include-subsections",
+  "--include-subcollections",
   "--has-pdf",
   "--parsed-only",
 ]);
@@ -80,6 +82,9 @@ async function main(argv) {
 
   try {
     const response = await requestMarkdownApi(options);
+    if (options.outputPath) {
+      writeContentFile(options, response);
+    }
     const envelope = createSuccessEnvelope(options, response);
     if (options.format === "json") {
       console.log(JSON.stringify(envelope, null, 2));
@@ -117,6 +122,7 @@ function parseCommand(argv) {
     "libraries",
     "collections",
     "tags",
+    "status",
   ]);
   if (!validCommands.has(command)) {
     throw new CliArgumentError(`Unknown command: ${command}`);
@@ -182,6 +188,25 @@ function parseCommand(argv) {
     };
   }
 
+  if (command === "status") {
+    const params = {
+      libraryID,
+      collection: getRequiredFlag(flags, "--collection").trim(),
+    };
+    if (flags.has("--include-subcollections")) {
+      params.includeSubcollections = "true";
+    }
+    return {
+      command,
+      endpoint: STATUS_ENDPOINT,
+      listenPort,
+      baseUrl,
+      format,
+      timeoutMs,
+      params,
+    };
+  }
+
   if (command === "search") {
     return {
       command,
@@ -220,6 +245,11 @@ function parseCommand(argv) {
     params.contextParagraphs = contextParagraphs;
   }
 
+  const output = getFlag(flags, "--output");
+  if (output !== undefined && granularity !== "full") {
+    throw new CliArgumentError("--output requires --granularity full.");
+  }
+
   return {
     command,
     endpoint: MARKDOWN_ENDPOINT,
@@ -228,7 +258,26 @@ function parseCommand(argv) {
     format,
     timeoutMs,
     params,
+    ...(output === undefined ? {} : { outputPath: resolve(output) }),
   };
+}
+
+/**
+ * Writes the full Markdown of a response to `--output` and replaces it in the
+ * response with the file path, so the paper does not also go to stdout.
+ */
+function writeContentFile(options, data) {
+  const content = typeof data.content === "string" ? data.content : "";
+  try {
+    writeFileSync(options.outputPath, content, "utf8");
+  } catch (error) {
+    throw new NetworkError(
+      `Could not write ${options.outputPath}: ${error?.message ?? error}`,
+    );
+  }
+  delete data.content;
+  data.outputPath = options.outputPath;
+  data.outputCharacters = content.length;
 }
 
 /**
@@ -505,6 +554,9 @@ function formatTextSuccess(options, data) {
   if (options.command === "tags") {
     return formatTagsText(options, data);
   }
+  if (options.command === "status") {
+    return formatStatusText(options, data);
+  }
   return formatMarkdownText(options, data);
 }
 
@@ -573,6 +625,71 @@ function formatTagsText(options, data) {
         tagItem.numItems !== undefined ? ` (${tagItem.numItems} items)` : "";
       lines.push(`- ${tagItem.tag}${countStr}`);
     });
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * Formats a collection status report: one line per item, grouped by whether
+ * the item can be read now.
+ */
+function formatStatusText(options, data) {
+  const items = Array.isArray(data.items) ? data.items : [];
+  const attachmentsOf = (item) =>
+    Array.isArray(item.attachments) ? item.attachments : [];
+  const isParsed = (attachment) =>
+    attachment.state === "precise" || attachment.state === "lite";
+  const groups = [
+    ["Parsed", items.filter((item) => attachmentsOf(item).some(isParsed))],
+    [
+      "Not parsed",
+      items.filter(
+        (item) =>
+          attachmentsOf(item).length > 0 && !attachmentsOf(item).some(isParsed),
+      ),
+    ],
+    ["No PDF", items.filter((item) => attachmentsOf(item).length === 0)],
+  ];
+  const totals = data.totals ?? {};
+  const lines = [
+    "Collection Parse Status",
+    `Library: ${options.params.libraryID}`,
+    `Collection: ${valueOrUnknown(data.collection ?? options.params.collection)}${
+      data.includeSubcollections ? " (with subcollections)" : ""
+    }`,
+    `Items: ${totals.items ?? items.length} | parsed: ${
+      totals.parsed ?? groups[0][1].length
+    } | not parsed: ${totals.notParsed ?? groups[1][1].length} | no PDF: ${
+      totals.noPdf ?? groups[2][1].length
+    }`,
+    "Line format: itemKey | first creator, year | title | attachmentKey state words",
+  ];
+
+  for (const [label, group] of groups) {
+    lines.push("", `[${label}] ${group.length}`);
+    for (const item of group) {
+      const byline = [item.firstCreator, item.year].filter(Boolean).join(", ");
+      const attachments = attachmentsOf(item)
+        .map((attachment) =>
+          [
+            valueOrUnknown(attachment.key),
+            valueOrUnknown(attachment.state),
+            attachment.words === undefined ? "" : `${attachment.words} words`,
+          ]
+            .filter(Boolean)
+            .join(" "),
+        )
+        .join("; ");
+      lines.push(
+        `- ${[
+          valueOrUnknown(item.key),
+          byline || "unknown",
+          valueOrUnknown(item.title),
+          ...(attachments ? [attachments] : []),
+        ].join(" | ")}`,
+      );
+    }
   }
 
   return lines.join("\n");
@@ -666,6 +783,11 @@ function formatMarkdownText(options, data) {
     lines.push(...formatSearchMatches(data));
   } else if (granularity === "locate") {
     lines.push(...formatLocateMatches(data));
+  } else if (data.outputPath) {
+    lines.push(
+      "[Content]",
+      `Written to ${data.outputPath} (${data.outputCharacters} characters)`,
+    );
   } else {
     lines.push("[Content]", data.content ?? "");
   }
@@ -794,6 +916,8 @@ function hintForError(code) {
     "api-disabled": "Enable the Markdown query API in Zotero preferences.",
     "ambiguous-attachment":
       "Pass --attachment-key with one of the candidate keys.",
+    "collection-not-found":
+      "Run the collections command and pass an exact collection name or key.",
     "parse-result-not-found":
       "Parse this PDF in Zotero first, or choose another attachment with --attachment-key.",
     "section-not-found":
@@ -824,7 +948,8 @@ function helpText() {
     "  node mineru-for-zotero-cli/scripts/query-markdown.mjs collections --library-id <id> [--parent-key <key>] [--port <number>] [--format text|json]",
     "  node mineru-for-zotero-cli/scripts/query-markdown.mjs tags --library-id <id> [--limit <n>] [--port <number>] [--format text|json]",
     "  node mineru-for-zotero-cli/scripts/query-markdown.mjs search --library-id <id> [--title <text>] [--creator <text>] [--collection <name|key>] [--tag <tag>] [--abstract <text>] [--publication <text>] [--citekey <key>] [--doi <doi>] [--item-type <type>] [--since <date>] [--year YYYY] [--has-pdf] [--parsed-only] [--sort-by dateAdded|dateModified|title|year] [--sort-order asc|desc] [--limit <n>] [--format text|json]",
-    "  node mineru-for-zotero-cli/scripts/query-markdown.mjs markdown --library-id <id> --key <key> [--granularity full|headings|section|search|locate] [--format text|json]",
+    "  node mineru-for-zotero-cli/scripts/query-markdown.mjs status --library-id <id> --collection <name|key> [--include-subcollections] [--format text|json]",
+    "  node mineru-for-zotero-cli/scripts/query-markdown.mjs markdown --library-id <id> --key <key> [--granularity full|headings|section|search|locate] [--output <file>] [--format text|json]",
     "",
     "Common options:",
     "  --port <number>              Zotero local server port. Default: auto-detect from Zotero profile, then 23119",
@@ -849,12 +974,17 @@ function helpText() {
     "  --sort-order <asc|desc>      Sort direction (default: desc)",
     "  --limit <n>                  Maximum number of candidates to return",
     "",
+    "Status options:",
+    "  --collection <name|key>      Collection to report on (required)",
+    "  --include-subcollections     Also report items in its subcollections",
+    "",
     "Markdown options:",
     "  --attachment-key <key>       Select a specific PDF attachment under a regular item.",
     "  --section-path <path>        Section path for granularity=section.",
     "  --include-subsections        Include same-level subsections in section output.",
     "  --query <text>               Search query for granularity=search or locate.",
     "  --context-paragraphs <n>     Context paragraphs for granularity=search or locate.",
+    "  --output <file>              With granularity=full, write the Markdown to a file instead of stdout.",
     "",
     "Exit codes:",
     "  0  Success",

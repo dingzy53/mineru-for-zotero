@@ -234,9 +234,11 @@ Do not reuse the icon-only toolbar button base class for text menu items.
 ## CLI Tool
 
 The companion CLI (`mineru-for-zotero-cli/scripts/query-markdown.mjs`) provides agent-readable access via the local HTTP query API.
-Commands: `libraries`, `collections`, `tags`, `search`, `markdown`.
+Commands: `libraries`, `collections`, `tags`, `search`, `status`, `markdown`.
 Granularity modes for `markdown`: `full`, `headings`, `section`, `search`, `locate`.
 Auto-detects the server port, outputting agent-readable text by default.
+
+`mineru-for-zotero-cli/` is also the agent skill; `npm run skill:install` (`scripts/install-skill.mjs`) copies or symlinks it into the agent skill folders. Installed copies go stale, so every API response carries `pluginVersion` and `apiVersion` (`MARKDOWN_API_VERSION` in `apiEndpoint.ts`) and the CLI warns on stderr when its `API_VERSION` differs. Bump both constants together on a breaking API change. When a command or option changes, update `SKILL.md`, the CLI help text and the README API section together.
 
 ## Commit & Pull Request Guidelines
 

@@ -167,6 +167,17 @@ curl --get "http://127.0.0.1:23119/mineru-for-zotero/search" \
   --data-urlencode "parsedOnly=true"
 ```
 
+Report which items of a collection are parsed:
+
+```shell
+curl --get "http://127.0.0.1:23119/mineru-for-zotero/status" \
+  --data-urlencode "libraryID=1" \
+  --data-urlencode "collection=AI" \
+  --data-urlencode "includeSubcollections=true"
+```
+
+The response has `totals` (`items`, `parsed`, `notParsed`, `noPdf`) and one entry per regular item or standalone PDF in `items`: `key`, `title`, `year`, `firstCreator`, and `attachments`, each with `key`, `fileName`, `state` (`precise`, `lite`, `running`, `failed`, or `none`) and, when a result exists, `words`.
+
 Read the full Markdown:
 
 ```shell
@@ -218,32 +229,33 @@ The response is `{"tasks":[...]}`. Each summary contains `id`, `attachmentID`, `
 
 Common parameters:
 
-| Parameter            | Endpoint                                             | Description                                                                |
-| -------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------- |
-| `libraryID`          | `collections`, `tags`, `search`, `markdown`, `parse` | Zotero library ID. Personal libraries are usually `1`.                     |
-| `parentKey`          | `collections`                                        | Optional parent collection key.                                            |
-| `title`              | `search`                                             | Title keyword used to find candidate Zotero items.                         |
-| `creator`            | `search`                                             | Creator/author substring to match.                                         |
-| `collection`         | `search`                                             | Collection name or key to filter within a folder.                          |
-| `tag`                | `search`                                             | Exact tag to filter.                                                       |
-| `abstract`           | `search`                                             | Abstract keyword to search.                                                |
-| `publication`        | `search`                                             | Journal or conference title to match.                                      |
-| `citekey`            | `search`                                             | Citation key to match (e.g. `vaswani2017attention`).                       |
-| `doi`                | `search`                                             | DOI substring to match.                                                    |
-| `itemType`           | `search`                                             | Item type filter (e.g. `journalArticle`, `conferencePaper`).               |
-| `since`              | `search`                                             | Date added filter (`YYYY-MM-DD`).                                          |
-| `hasPdf`             | `search`                                             | Filter items that have at least one PDF attachment (`true`).               |
-| `parsedOnly`         | `search`                                             | Filter items with ready MinerU parse results (`true`).                     |
-| `sortBy`             | `search`                                             | Sort by `dateAdded`, `dateModified`, `title`, or `year`.                   |
-| `sortOrder`          | `search`                                             | Sort direction (`asc` or `desc`).                                          |
-| `limit`              | `tags`, `search`                                     | Maximum number of records to return.                                       |
-| `key`                | `markdown`, `parse`                                  | Zotero regular item key or PDF attachment key.                             |
-| `attachmentKey`      | `markdown`, `parse`                                  | Selects the target PDF attachment when a regular item contains PDFs.       |
-| `granularity`        | `markdown`                                           | `full`, `headings`, `section`, `search`, or `locate`. Defaults to `full`.  |
-| `sectionPath`        | `markdown`                                           | Heading path for `section` queries, for example `Introduction/Background`. |
-| `includeSubsections` | `markdown`                                           | Extend section scope to same-level numbered subsections (`true`).          |
-| `q`                  | `markdown`                                           | Keyword used by `search` or `locate` queries.                              |
-| `contextParagraphs`  | `markdown`                                           | Number of context paragraphs around each `search` match.                   |
+| Parameter               | Endpoint                                                       | Description                                                                |
+| ----------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `libraryID`             | `collections`, `tags`, `search`, `status`, `markdown`, `parse` | Zotero library ID. Personal libraries are usually `1`.                     |
+| `parentKey`             | `collections`                                                  | Optional parent collection key.                                            |
+| `title`                 | `search`                                                       | Title keyword used to find candidate Zotero items.                         |
+| `creator`               | `search`                                                       | Creator/author substring to match.                                         |
+| `collection`            | `search`, `status`                                             | Collection name or key to filter within a folder. Required for `status`.   |
+| `includeSubcollections` | `status`                                                       | Also report items in the collection's subcollections (`true`).             |
+| `tag`                   | `search`                                                       | Exact tag to filter.                                                       |
+| `abstract`              | `search`                                                       | Abstract keyword to search.                                                |
+| `publication`           | `search`                                                       | Journal or conference title to match.                                      |
+| `citekey`               | `search`                                                       | Citation key to match (e.g. `vaswani2017attention`).                       |
+| `doi`                   | `search`                                                       | DOI substring to match.                                                    |
+| `itemType`              | `search`                                                       | Item type filter (e.g. `journalArticle`, `conferencePaper`).               |
+| `since`                 | `search`                                                       | Date added filter (`YYYY-MM-DD`).                                          |
+| `hasPdf`                | `search`                                                       | Filter items that have at least one PDF attachment (`true`).               |
+| `parsedOnly`            | `search`                                                       | Filter items with ready MinerU parse results (`true`).                     |
+| `sortBy`                | `search`                                                       | Sort by `dateAdded`, `dateModified`, `title`, or `year`.                   |
+| `sortOrder`             | `search`                                                       | Sort direction (`asc` or `desc`).                                          |
+| `limit`                 | `tags`, `search`                                               | Maximum number of records to return.                                       |
+| `key`                   | `markdown`, `parse`                                            | Zotero regular item key or PDF attachment key.                             |
+| `attachmentKey`         | `markdown`, `parse`                                            | Selects the target PDF attachment when a regular item contains PDFs.       |
+| `granularity`           | `markdown`                                                     | `full`, `headings`, `section`, `search`, or `locate`. Defaults to `full`.  |
+| `sectionPath`           | `markdown`                                                     | Heading path for `section` queries, for example `Introduction/Background`. |
+| `includeSubsections`    | `markdown`                                                     | Extend section scope to same-level numbered subsections (`true`).          |
+| `q`                     | `markdown`                                                     | Keyword used by `search` or `locate` queries.                              |
+| `contextParagraphs`     | `markdown`                                                     | Number of context paragraphs around each `search` match.                   |
 
 Common error codes:
 

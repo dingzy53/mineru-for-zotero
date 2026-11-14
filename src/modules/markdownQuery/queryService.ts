@@ -6,7 +6,9 @@ import {
   searchBoxes,
 } from "./markdownParser";
 import {
+  AttachmentParseState,
   AttachmentSummary,
+  CollectionStatus,
   CollectionSummary,
   ItemSearchInput,
   ItemSummary,
@@ -14,6 +16,8 @@ import {
   MarkdownGranularity,
   MarkdownQueryError,
   ParseStatusReader,
+  StatusAttachment,
+  StatusItem,
   TagSummary,
   ZoteroItemsGateway,
   ZoteroItemLike,
@@ -26,6 +30,9 @@ import type { NormalizedBox } from "../domain";
 
 /** Items whose parse status is read at once while filtering by parsedOnly. */
 const PARSED_ONLY_SCAN_BATCH = 20;
+
+/** Items summarized at once for a collection status report. */
+const STATUS_SCAN_BATCH = 20;
 
 /** Most BibTeX entries kept in memory for Markdown API responses. */
 const BIBTEX_CACHE_LIMIT = 500;
@@ -112,6 +119,11 @@ export interface MarkdownQueryService {
     attachmentKey?: string;
   }): Promise<unknown>;
   getTasks(): Promise<unknown>;
+  getCollectionStatus(input: {
+    libraryID: number;
+    collection: string;
+    includeSubcollections?: boolean;
+  }): Promise<CollectionStatus>;
   getLibraries(): Promise<{ libraries: LibrarySummary[] }>;
   getCollections(input: {
     libraryID: number;
@@ -140,7 +152,11 @@ export function createMarkdownQueryService(deps: {
   ): Promise<TagSummary[]> | TagSummary[];
   /** BibTeX exporter; defaults to Zotero's BibTeX translator. */
   exportBibTeX?(item: ZoteroItemLike): Promise<string>;
+  /** Parse task records; defaults to the task store. */
+  getTasks?(): TaskRecord[];
 }): MarkdownQueryService {
+  const getTaskRecords = () => deps.getTasks?.() ?? taskStore.getTasks();
+
   return {
     async getLibraries() {
       if (deps.getLibraries) {
@@ -217,7 +233,111 @@ export function createMarkdownQueryService(deps: {
     },
 
     async getTasks() {
-      return { tasks: taskStore.getTasks().map(summarizeTask) };
+      return { tasks: getTaskRecords().map(summarizeTask) };
+    },
+
+    async getCollectionStatus(input) {
+      const includeSubcollections = input.includeSubcollections === true;
+      const found = await deps.searchItems({
+        libraryID: input.libraryID,
+        collection: input.collection,
+        includeSubcollections,
+      });
+      // Regular items and standalone PDFs; notes and child items are not
+      // papers of their own.
+      const entries = found.filter(
+        (item) =>
+          item.isRegularItem() ||
+          (item.isPDFAttachment() && !item.parentItemID),
+      );
+      const taskStates = new Map(
+        getTaskRecords().map((task) => [
+          `${task.attachment.libraryID}-${task.attachment.key}`,
+          task.status,
+        ]),
+      );
+
+      const describeAttachment = async (
+        attachment: ZoteroItemLike,
+      ): Promise<StatusAttachment> => {
+        const ref = { libraryID: attachment.libraryID, key: attachment.key };
+        const status = await deps.storage.readParseStatus(ref);
+        const taskStatus = taskStates.get(`${ref.libraryID}-${ref.key}`);
+        const state: AttachmentParseState = status.preciseReady
+          ? "precise"
+          : status.liteReady
+            ? "lite"
+            : taskStatus === "running" || taskStatus === "pending"
+              ? "running"
+              : taskStatus === "failed"
+                ? "failed"
+                : "none";
+        const summary: StatusAttachment = {
+          key: attachment.key,
+          fileName:
+            attachment.attachmentFilename || attachment.getDisplayTitle(),
+          state,
+        };
+        if (state === "precise" || state === "lite") {
+          try {
+            summary.words = countWords(
+              await deps.storage.readPreferredMarkdown(ref),
+            );
+          } catch {
+            // The word count is a convenience; the state already says ready.
+          }
+        }
+        return summary;
+      };
+
+      const describeItem = async (
+        item: ZoteroItemLike,
+      ): Promise<StatusItem> => {
+        const summary = summarizeItem(item);
+        const pdfs = item.isRegularItem()
+          ? (await deps.items.getAsync(item.getAttachments(false))).filter(
+              (candidate) => candidate.isPDFAttachment(),
+            )
+          : [item];
+        const status: StatusItem = {
+          key: summary.key,
+          title: summary.title,
+          attachments: await Promise.all(pdfs.map(describeAttachment)),
+        };
+        if (summary.year) {
+          status.year = summary.year;
+        }
+        if (summary.creators?.[0]) {
+          status.firstCreator = summary.creators[0];
+        }
+        return status;
+      };
+
+      const items: StatusItem[] = [];
+      for (let start = 0; start < entries.length; start += STATUS_SCAN_BATCH) {
+        items.push(
+          ...(await Promise.all(
+            entries.slice(start, start + STATUS_SCAN_BATCH).map(describeItem),
+          )),
+        );
+      }
+
+      const noPdf = items.filter((item) => item.attachments.length === 0);
+      const parsed = items.filter((item) =>
+        item.attachments.some(isReadableAttachment),
+      );
+      return {
+        libraryID: input.libraryID,
+        collection: input.collection,
+        includeSubcollections,
+        totals: {
+          items: items.length,
+          parsed: parsed.length,
+          notParsed: items.length - parsed.length - noPdf.length,
+          noPdf: noPdf.length,
+        },
+        items,
+      };
     },
     async triggerParse(input) {
       const resolved = await resolveAttachment({
@@ -437,6 +557,16 @@ export function createMarkdownQueryService(deps: {
       );
     },
   };
+}
+
+/** Whether an attachment has a parse result that can be read now. */
+function isReadableAttachment(attachment: StatusAttachment): boolean {
+  return attachment.state === "precise" || attachment.state === "lite";
+}
+
+/** Count whitespace-separated words of a Markdown document. */
+function countWords(markdown: string): number {
+  return markdown.split(/\s+/).filter(Boolean).length;
 }
 
 /**

@@ -460,6 +460,135 @@ describe("markdownQueryService", function () {
     assert.deepEqual(searchLimits, [undefined]);
   });
 
+  it("reports which items of a collection are parsed", async function () {
+    const parsedPdf = fakeItem({
+      id: 11,
+      key: "PDFA",
+      pdf: true,
+      parentItemID: 1,
+    });
+    const litePdf = fakeItem({
+      id: 12,
+      key: "PDFB",
+      pdf: true,
+      parentItemID: 1,
+    });
+    const runningPdf = fakeItem({
+      id: 21,
+      key: "PDFC",
+      pdf: true,
+      parentItemID: 2,
+    });
+    const failedPdf = fakeItem({
+      id: 31,
+      key: "PDFD",
+      pdf: true,
+      parentItemID: 3,
+    });
+    const standalonePdf = fakeItem({ id: 50, key: "PDFE", pdf: true });
+    const items = [
+      fakeItem({
+        id: 1,
+        key: "ITEM1",
+        regular: true,
+        title: "Parsed",
+        date: "2022-03-01",
+        creators: [{ lastName: "Chen", firstName: "Wei" }, { name: "Group" }],
+        attachments: [11, 12],
+      }),
+      fakeItem({
+        id: 2,
+        key: "ITEM2",
+        regular: true,
+        title: "Running",
+        attachments: [21],
+      }),
+      fakeItem({
+        id: 3,
+        key: "ITEM3",
+        regular: true,
+        title: "Failed",
+        attachments: [31],
+      }),
+      fakeItem({ id: 4, key: "ITEM4", regular: true, title: "No PDF" }),
+      fakeItem({ id: 5, key: "NOTE1", title: "A note" }),
+      standalonePdf,
+      parsedPdf,
+      litePdf,
+      runningPdf,
+      failedPdf,
+    ];
+    const ready: Record<string, { preciseReady: boolean; liteReady: boolean }> =
+      {
+        PDFA: { preciseReady: true, liteReady: true },
+        PDFB: { preciseReady: false, liteReady: true },
+      };
+    const searches: ItemSearchInput[] = [];
+    const deps = fakeDeps({
+      markdown: "# Title\n\nthree more words",
+      items,
+      searchItems: async (input) => {
+        searches.push(input);
+        return items.filter((item) => !item.parentItemID);
+      },
+    });
+    const service = createMarkdownQueryService({
+      ...deps,
+      storage: {
+        ...deps.storage,
+        async readParseStatus(ref: { key: string }) {
+          return ready[ref.key] ?? { preciseReady: false, liteReady: false };
+        },
+      },
+      getTasks: () =>
+        [
+          { attachment: { libraryID: 1, key: "PDFC" }, status: "running" },
+          { attachment: { libraryID: 1, key: "PDFD" }, status: "failed" },
+          // A failed reparse does not hide the stored result.
+          { attachment: { libraryID: 1, key: "PDFA" }, status: "failed" },
+        ] as never,
+    });
+
+    const status = await service.getCollectionStatus({
+      libraryID: 1,
+      collection: "UGRP",
+      includeSubcollections: true,
+    });
+
+    assert.deepEqual(searches, [
+      { libraryID: 1, collection: "UGRP", includeSubcollections: true },
+    ]);
+    assert.deepEqual(status.totals, {
+      items: 5,
+      parsed: 1,
+      notParsed: 3,
+      noPdf: 1,
+    });
+    assert.deepEqual(status.items[0], {
+      key: "ITEM1",
+      title: "Parsed",
+      year: "2022",
+      firstCreator: "Chen, Wei",
+      attachments: [
+        { key: "PDFA", fileName: "PDFA.pdf", state: "precise", words: 5 },
+        { key: "PDFB", fileName: "PDFB.pdf", state: "lite", words: 5 },
+      ],
+    });
+    assert.deepEqual(
+      status.items.map((item) => [
+        item.key,
+        item.attachments.map((attachment) => attachment.state),
+      ]),
+      [
+        ["ITEM1", ["precise", "lite"]],
+        ["ITEM2", ["running"]],
+        ["ITEM3", ["failed"]],
+        ["ITEM4", []],
+        ["PDFE", ["none"]],
+      ],
+    );
+  });
+
   it("exports BibTeX once per item revision across requests", async function () {
     const pdf = fakeItem({ id: 41, key: "BIBPDF", pdf: true });
     pdf.dateModified = "2026-01-01 00:00:00";

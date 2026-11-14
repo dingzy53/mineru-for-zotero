@@ -235,6 +235,7 @@ describe("markdownApiEndpoint", function () {
       "/mineru-for-zotero/markdown",
       "/mineru-for-zotero/parse",
       "/mineru-for-zotero/tasks",
+      "/mineru-for-zotero/status",
       "/mineru-for-zotero/libraries",
       "/mineru-for-zotero/collections",
       "/mineru-for-zotero/tags",
@@ -391,6 +392,42 @@ describe("markdownApiEndpoint", function () {
     assert.include(String(response[2]), '"tasks":');
   });
 
+  it("forwards status requests and requires a collection", async function () {
+    setMarkdownApiEnabled(true);
+    const requests: unknown[] = [];
+    const endpoint = createMarkdownQueryEndpoint({
+      ...fakeService(),
+      async getCollectionStatus(input) {
+        requests.push(input);
+        return emptyStatus();
+      },
+    });
+
+    const response = await endpoint.init(
+      request("/mineru-for-zotero/status", {
+        query: {
+          libraryID: "1",
+          collection: "UGRP",
+          includeSubcollections: "true",
+        },
+      }),
+    );
+    const missing = await endpoint.init(
+      request("/mineru-for-zotero/status", { query: { libraryID: "1" } }),
+    );
+
+    assert.equal(response[0], 200);
+    assert.include(String(response[2]), '"totals":');
+    assert.deepEqual(requests, [
+      { libraryID: 1, collection: "UGRP", includeSubcollections: true },
+    ]);
+    assert.equal(missing[0], 400);
+    assert.include(
+      String(missing[2]),
+      "Missing required parameter: collection",
+    );
+  });
+
   it("rejects non-POST parse triggers", async function () {
     setMarkdownApiEnabled(true);
     const endpoint = createMarkdownQueryEndpoint(fakeService());
@@ -487,6 +524,16 @@ describe("markdownApiEndpoint", function () {
   });
 });
 
+function emptyStatus() {
+  return {
+    libraryID: 1,
+    collection: "UGRP",
+    includeSubcollections: false,
+    totals: { items: 0, parsed: 0, notParsed: 0, noPdf: 0 },
+    items: [],
+  };
+}
+
 function fakeService() {
   return {
     async searchByTitle() {
@@ -500,6 +547,9 @@ function fakeService() {
     },
     async getTasks() {
       return { tasks: [] };
+    },
+    async getCollectionStatus() {
+      return emptyStatus();
     },
     async getLibraries() {
       return { libraries: [] };

@@ -1,6 +1,6 @@
 ---
 name: mineru-for-zotero-cli
-description: Read papers that MinerU for Zotero has parsed, through a bundled CLI. Use this skill whenever the user says papers are "parsed in Zotero" or parsed with MinerU, or asks to read, summarize, search, quote or cite a paper or a collection in their Zotero library. Finds items by title, author-year citation, collection or tag, then reads headings, single sections, search hits, physical page numbers or the full Markdown. Use it instead of reading the `mineru-copy/` or `MinerU-Sync/` folders or `zotero.sqlite` directly.
+description: Read papers that MinerU for Zotero has parsed, through a bundled CLI. Use this skill whenever the user says papers are "parsed in Zotero" or parsed with MinerU, or asks to read, summarize, search, quote or cite a paper or a collection in their Zotero library. Finds items by title, author-year citation, collection or tag, shows which papers of a collection are parsed, then reads headings, single sections, search hits, physical page numbers or the full Markdown. Use it instead of reading the `mineru-copy/` or `MinerU-Sync/` folders or `zotero.sqlite` directly.
 ---
 
 # MinerU for Zotero CLI
@@ -46,11 +46,12 @@ node scripts/query-markdown.mjs <command> [options]
 | `collections` | List collections/folders within a specified library.                           | `node scripts/query-markdown.mjs collections --library-id 1`                                                  |
 | `tags`        | List tags in a specified library.                                              | `node scripts/query-markdown.mjs tags --library-id 1 --limit 50`                                              |
 | `search`      | Search Zotero items with rich metadata filters and return matching candidates. | `node scripts/query-markdown.mjs search --library-id 1 --title "keyword" --format json`                       |
+| `status`      | Show which items of a collection are parsed, not parsed, or have no PDF.       | `node scripts/query-markdown.mjs status --library-id 1 --collection "Reading List"`                           |
 | `markdown`    | Query saved MinerU Markdown for an item key, with selectable granularity.      | `node scripts/query-markdown.mjs markdown --library-id 1 --key ABCD1234 --granularity headings --format text` |
 
 ### Common Options
 
-- `--library-id <id>` — Zotero library ID; required for `collections`, `tags`, `search`, and `markdown`
+- `--library-id <id>` — Zotero library ID; required for `collections`, `tags`, `search`, `status`, and `markdown`
 - `--port <number>` — Zotero local server port; default is auto-detected from the Zotero profile, then 23119
 - `--format <text|json>` — Output format; default is text, use `--format text` for agent-readable text. use `--format json` when another script or pipeline needs structured output.
 - `--timeout-ms <number>` — Request timeout; default is 30000
@@ -82,6 +83,11 @@ node scripts/query-markdown.mjs <command> [options]
 - `--sort-order <asc|desc>` — Sort direction (`desc` by default, for every `--sort-by` field).
 - `--limit <n>` — Maximum number of candidates to return.
 
+### Status options
+
+- `--collection <name|key>` — Collection to report on; required.
+- `--include-subcollections` — Boolean flag; also report items in its subcollections.
+
 ### Markdown options
 
 - `--attachment-key <key>` — Select a specific PDF attachment after ambiguous-attachment or explicit user choice
@@ -90,6 +96,7 @@ node scripts/query-markdown.mjs <command> [options]
 - `--include-subsections` — With `granularity=section`, extend the range past same-level numbered subsections (e.g. include `3.1`–`3.4` inside `3.`) until the next chapter or unnumbered heading
 - `--query <text>` — Search query for search queries
 - `--context-paragraphs <n>` — Context paragraphs for search queries
+- `--output <file>` — With `--granularity full`, write the Markdown to a file and print only the header and the path
 
 ### Exit Codes
 
@@ -103,6 +110,16 @@ The CLI exits with one of four codes; check the code to decide whether to retry,
 | 3    | Transport error      | Zotero could not be reached: connection refused, timeout, or a non-JSON response.            |
 
 ## Workflows
+
+### Survey a collection before reading it
+
+When the user points at a collection ("the papers in UGRP are parsed in Zotero"), start here. It answers which papers can be read, which still need a parse and which have no PDF, in one call:
+
+```powershell
+node scripts/query-markdown.mjs status --library-id 1 --collection "UGRP" --include-subcollections
+```
+
+Each line is `itemKey | first creator, year | title | attachmentKey state words`. `state` is `precise` or `lite` for a readable result, and `running`, `failed` or `none` otherwise. Use the item key with `markdown`; the word count tells you whether a paper fits in context or should be read by section. Run `collections --library-id 1` first if you do not know the collection name.
 
 ### Search a paper by title
 
@@ -179,6 +196,12 @@ node scripts/query-markdown.mjs markdown --library-id 1 --key ABCD1234 --granula
 ```
 
 Use full Markdown only when section or search output is insufficient.
+
+To hand a paper to a subagent or another tool, write it to a file instead of printing it:
+
+```powershell
+node scripts/query-markdown.mjs markdown --library-id 1 --key ABCD1234 --output /tmp/ABCD1234.md
+```
 
 ## Response Format Notes
 

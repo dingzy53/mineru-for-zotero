@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -636,6 +636,152 @@ test("treats non-JSON responses as transport errors with exit code 3", async () 
       });
     });
   }
+});
+
+test("formats a collection status report grouped by parse state", async () => {
+  await withServer(
+    {
+      status: 200,
+      body: {
+        libraryID: 1,
+        collection: "UGRP",
+        includeSubcollections: true,
+        totals: { items: 3, parsed: 1, notParsed: 1, noPdf: 1 },
+        items: [
+          {
+            key: "ITEM0001",
+            title: "Parsed Paper",
+            year: "2022",
+            firstCreator: "Chen, Wei",
+            attachments: [
+              {
+                key: "PDF00001",
+                fileName: "a.pdf",
+                state: "precise",
+                words: 8421,
+              },
+              { key: "PDF00002", fileName: "b.pdf", state: "none" },
+            ],
+          },
+          {
+            key: "ITEM0002",
+            title: "Waiting Paper",
+            attachments: [
+              { key: "PDF00003", fileName: "c.pdf", state: "running" },
+            ],
+          },
+          { key: "ITEM0003", title: "Web Page", year: "2020", attachments: [] },
+        ],
+      },
+    },
+    async ({ port, requests }) => {
+      const result = await runCli([
+        "status",
+        "--port",
+        String(port),
+        "--library-id",
+        "1",
+        "--collection",
+        "UGRP",
+        "--include-subcollections",
+      ]);
+
+      assert.equal(result.code, 0);
+      assert.equal(result.stderr, "");
+      assert.equal(requests[0].pathname, "/mineru-for-zotero/status");
+      assert.deepEqual(requests[0].searchParams, {
+        libraryID: "1",
+        collection: "UGRP",
+        includeSubcollections: "true",
+      });
+      assert.match(result.stdout, /Collection: UGRP \(with subcollections\)/);
+      assert.match(
+        result.stdout,
+        /Items: 3 \| parsed: 1 \| not parsed: 1 \| no PDF: 1/,
+      );
+      assert.match(
+        result.stdout,
+        /\[Parsed\] 1\n- ITEM0001 \| Chen, Wei, 2022 \| Parsed Paper \| PDF00001 precise 8421 words; PDF00002 none\n/,
+      );
+      assert.match(
+        result.stdout,
+        /\[Not parsed\] 1\n- ITEM0002 \| unknown \| Waiting Paper \| PDF00003 running\n/,
+      );
+      assert.match(
+        result.stdout,
+        /\[No PDF\] 1\n- ITEM0003 \| 2020 \| Web Page\n$/,
+      );
+    },
+  );
+});
+
+test("requires a collection for status", async () => {
+  const result = await runCli(["status", "--library-id", "1"]);
+
+  assert.equal(result.code, 2);
+  assert.match(result.stderr, /Missing required option: --collection/);
+});
+
+test("writes full markdown to a file with --output", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "cli-output-"));
+  const outputPath = join(dir, "paper.md");
+  try {
+    await withServer(
+      {
+        status: 200,
+        body: {
+          item: { key: "ABCD1234", title: "Example Paper" },
+          attachment: { key: "PDFKEY01", fileName: "paper.pdf" },
+          result: { mode: "precise" },
+          granularity: "full",
+          content: "# Example Paper\n\nBody text.",
+        },
+      },
+      async ({ port }) => {
+        const result = await runCli([
+          "markdown",
+          "--port",
+          String(port),
+          "--library-id",
+          "1",
+          "--key",
+          "ABCD1234",
+          "--output",
+          outputPath,
+        ]);
+
+        assert.equal(result.code, 0);
+        assert.equal(
+          await readFile(outputPath, "utf8"),
+          "# Example Paper\n\nBody text.",
+        );
+        assert.match(result.stdout, /Title: Example Paper/);
+        assert.ok(
+          result.stdout.includes(`Written to ${outputPath} (27 characters)`),
+        );
+        assert.doesNotMatch(result.stdout, /Body text/);
+      },
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("rejects --output for granularities other than full", async () => {
+  const result = await runCli([
+    "markdown",
+    "--library-id",
+    "1",
+    "--key",
+    "ABCD1234",
+    "--granularity",
+    "headings",
+    "--output",
+    "out.md",
+  ]);
+
+  assert.equal(result.code, 2);
+  assert.match(result.stderr, /--output requires --granularity full/);
 });
 
 test("warns on stderr when the plugin is newer than the CLI", async () => {

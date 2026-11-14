@@ -32,6 +32,7 @@ export const MARKDOWN_ENDPOINT_PATHS = [
   "/mineru-for-zotero/markdown",
   "/mineru-for-zotero/parse",
   "/mineru-for-zotero/tasks",
+  "/mineru-for-zotero/status",
   "/mineru-for-zotero/libraries",
   "/mineru-for-zotero/collections",
   "/mineru-for-zotero/tags",
@@ -131,6 +132,14 @@ export function createMarkdownQueryEndpoint(service: MarkdownQueryService) {
           });
         } else if (options.pathname === "/mineru-for-zotero/tasks") {
           payload = await service.getTasks();
+        } else if (options.pathname === "/mineru-for-zotero/status") {
+          payload = await service.getCollectionStatus({
+            libraryID: requireInteger(query.libraryID, "libraryID"),
+            collection: requireString(query.collection, "collection"),
+            includeSubcollections: parseOptionalBoolean(
+              query.includeSubcollections,
+            ),
+          });
         } else {
           payload = await service.queryMarkdown({
             libraryID: requireInteger(query.libraryID, "libraryID"),
@@ -215,6 +224,10 @@ async function searchItems(input: ItemSearchInput): Promise<ZoteroItemLike[]> {
   if (input.collection) {
     const col = resolveSearchCollection(input.libraryID, input.collection);
     search.addCondition("collectionID", "is", col.id);
+    if (input.includeSubcollections) {
+      // Zotero spells this condition with the operator as its value.
+      search.addCondition("recursive", "true");
+    }
   }
 
   const ids = await search.search();
