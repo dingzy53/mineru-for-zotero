@@ -127,6 +127,8 @@ Cancellation (Stop in the Task Manager) is a distinct terminal `cancelled` statu
 
 `clearHistory()` (Clear History in the Task Manager) also deletes the per-attachment resume cache under `<Zotero.DataDirectory.dir>/mineru-resume/<attachmentID>/`.
 
+On startup, once the task store has loaded, `removeOrphanResumeDirectories()` (`taskResumeDirectory.ts`) removes `mineru-resume/<id>` directories that are empty and have no task record. A non-empty directory without a task is only logged, never deleted: it may hold chunks the user paid for.
+
 ### Box Normalization
 
 `boxNormalizer.ts` supports two schemas:
