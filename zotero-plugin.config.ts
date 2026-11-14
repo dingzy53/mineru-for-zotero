@@ -1,6 +1,9 @@
 import { defineConfig } from "zotero-plugin-scaffold";
 import pkg from "./package.json";
 
+// One timestamp for the bundle, so "which build is running?" has one answer.
+const buildTime = new Date().toISOString().replace(/\.\d+Z$/, "Z");
+
 export default defineConfig({
   source: ["src", "addon"],
   dist: ".scaffold/build",
@@ -32,6 +35,7 @@ export default defineConfig({
         entryPoints: ["src/index.ts"],
         define: {
           __env__: `"${process.env.NODE_ENV}"`,
+          __buildTime__: JSON.stringify(buildTime),
         },
         bundle: true,
         target: "firefox115",
