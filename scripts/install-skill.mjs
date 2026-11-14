@@ -9,7 +9,9 @@
  *
  * A `disable-model-invocation` line in an installed SKILL.md is a local choice
  * (it hides the skill from the agent until the user types the slash command),
- * so a copy keeps it. `--home <dir>` replaces the home directory, for tests.
+ * so a copy keeps it. Pass `--allow-model-invocation` to drop it, so agents
+ * can load the skill by themselves. `--home <dir>` replaces the home
+ * directory, for tests.
  */
 
 import {
@@ -46,11 +48,17 @@ const sourceDir = resolve(
 
 /** Parse the command line; throws on an unknown option. */
 function parseArgs(argv) {
-  const options = { link: false, home: homedir() };
+  const options = {
+    link: false,
+    allowModelInvocation: false,
+    home: homedir(),
+  };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--link") {
       options.link = true;
+    } else if (arg === "--allow-model-invocation") {
+      options.allowModelInvocation = true;
     } else if (arg === "--home" && argv[index + 1]) {
       options.home = resolve(argv[index + 1]);
       index += 1;
@@ -106,13 +114,14 @@ function withFrontmatterLine(text, line) {
 }
 
 /** Copy the skill into `targetDir`; returns one line per change. */
-function copySkill(targetDir) {
+function copySkill(targetDir, allowModelInvocation) {
   const changes = [];
   if (pathExists(targetDir) && lstatSync(targetDir).isSymbolicLink()) {
     rmSync(targetDir);
     changes.push("replaced the symlink with a copy");
   }
-  const localLine = readLocalLine(targetDir);
+  const installedLine = readLocalLine(targetDir);
+  const localLine = allowModelInvocation ? undefined : installedLine;
   const sourceFiles = listFiles(sourceDir);
 
   for (const file of sourceFiles) {
@@ -140,6 +149,9 @@ function copySkill(targetDir) {
   }
   if (localLine && changes.length > 0) {
     changes.push(`kept local "${localLine}"`);
+  }
+  if (installedLine && !localLine) {
+    changes.push(`dropped local "${installedLine}"`);
   }
   return changes;
 }
@@ -191,7 +203,9 @@ function main(argv) {
       console.log(`${targetDir}: is this repository's copy, skipped`);
       continue;
     }
-    const changes = options.link ? linkSkill(targetDir) : copySkill(targetDir);
+    const changes = options.link
+      ? linkSkill(targetDir)
+      : copySkill(targetDir, options.allowModelInvocation);
     console.log(`${targetDir}:`);
     for (const change of changes.length > 0 ? changes : ["up to date"]) {
       console.log(`  ${change}`);

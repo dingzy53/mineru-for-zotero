@@ -266,7 +266,7 @@ npm run skill:install            # copy into ~/.claude/skills, ~/.pi/agent/skill
 npm run skill:install -- --link  # or symlink, so the skill follows the checkout
 ```
 
-The command prints what it changed. A `disable-model-invocation` line you added to an installed `SKILL.md` is kept. For an agent without a skill folder, point it at `mineru-for-zotero-cli/SKILL.md` instead.
+The command prints what it changed. A `disable-model-invocation: true` line in an installed `SKILL.md` is kept; with it, an agent can only use the skill after you type its slash command, and will otherwise go and read the result folders by hand. Add `--allow-model-invocation` to drop the line, so the agent loads the skill when you mention papers parsed in Zotero. For an agent without a skill folder, point it at `mineru-for-zotero-cli/SKILL.md` instead.
 
 Run the command again after each plugin update: an installed copy does not update itself. Every API response carries `pluginVersion` and `apiVersion`, and the CLI prints a one-line warning on stderr when it and the plugin were built for different API versions.
 

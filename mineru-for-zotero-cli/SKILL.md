@@ -1,6 +1,6 @@
 ---
 name: mineru-for-zotero-cli
-description: Query MinerU for Zotero Markdown parse results through a bundled CLI. Use this skill when the task requires searching Zotero items by title or author (author-year citations), selecting parsed PDF attachments, inspecting Markdown headings, reading specific sections, searching parsed Markdown content, locating physical page numbers, or fetching full Markdown. Produces agent-readable text output or structured JSON for pipeline usage.
+description: Read papers that MinerU for Zotero has parsed, through a bundled CLI. Use this skill whenever the user says papers are "parsed in Zotero" or parsed with MinerU, or asks to read, summarize, search, quote or cite a paper or a collection in their Zotero library. Finds items by title, author-year citation, collection or tag, then reads headings, single sections, search hits, physical page numbers or the full Markdown. Use it instead of reading the `mineru-copy/` or `MinerU-Sync/` folders or `zotero.sqlite` directly.
 ---
 
 # MinerU for Zotero CLI
@@ -10,6 +10,17 @@ description: Query MinerU for Zotero Markdown parse results through a bundled CL
 MinerU is a document parsing system for converting PDFs into structured content such as Markdown, layout regions, formulas, tables, and images. MinerU for Zotero is a Zotero plugin that runs MinerU parsing for PDF attachments, stores the parse results in the local Zotero profile, and exposes saved Markdown through a local query API.
 
 Use the bundled CLI to query parsed Markdown that MinerU for Zotero has already saved. The CLI calls the plugin's local HTTP API; it does not parse PDFs, read Zotero profile files, or bypass Zotero preferences.
+
+## Do not read the result folders directly
+
+The parse results live in `<Zotero data directory>/mineru-copy/attachments/<libraryID>-<attachmentKey>/`, and a copy may exist in a sync folder. Go through the CLI instead of listing or reading those folders:
+
+- **Attachment selection.** Folders are named by attachment key, not by item. The CLI maps an item to the right parsed PDF; doing it by hand means querying `zotero.sqlite` or Zotero's own API.
+- **Sections and search.** `headings`, `section` and `search` return the part you need. Reading `content.md` loads the whole paper into context.
+- **Page lookup.** `locate` gives the physical page of a passage, which `content.md` does not record.
+- **Stable interface.** The folder layout is internal and has changed between versions.
+
+Never copy or open `zotero.sqlite` to map items to files.
 
 ## Preconditions
 

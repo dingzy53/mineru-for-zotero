@@ -86,6 +86,25 @@ test("updates a stale copy and keeps the local invocation line", () => {
   });
 });
 
+test("drops the local invocation line with --allow-model-invocation", () => {
+  withHome((home, install) => {
+    const target = join(home, ".claude", "skills", "mineru-for-zotero-cli");
+    mkdirSync(target, { recursive: true });
+    writeFileSync(
+      join(target, "SKILL.md"),
+      "---\nname: mineru-for-zotero-cli\ndisable-model-invocation: true\n---\n",
+    );
+
+    const output = install("--allow-model-invocation");
+
+    assert.match(output, /dropped local "disable-model-invocation: true"/);
+    assert.equal(
+      readFileSync(join(target, "SKILL.md"), "utf8"),
+      readFileSync(join(sourceDir, "SKILL.md"), "utf8"),
+    );
+  });
+});
+
 test("links the skill to the repository with --link", () => {
   withHome((home, install) => {
     mkdirSync(join(home, ".agents", "skills"), { recursive: true });
