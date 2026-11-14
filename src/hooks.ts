@@ -21,6 +21,11 @@ import {
   parseAttachment,
 } from "./modules/parseManager";
 import { getPdfPageCount } from "./modules/pdfPageCount";
+import {
+  ensureMcpToken,
+  registerMcpEndpoint,
+  unregisterMcpEndpoint,
+} from "./modules/mcp/endpoint";
 import { taskStore } from "./modules/taskStore";
 import { removeOrphanResumeDirectories } from "./modules/taskResumeDirectory";
 import { migrateResultStorage } from "./modules/storageLocation";
@@ -64,6 +69,8 @@ async function onStartup() {
 
   registerPreferencePane();
   registerMarkdownQueryApiEndpoint();
+  ensureMcpToken();
+  registerMcpEndpoint();
 
   await Promise.all(
     Zotero.getMainWindows().map((win) => onMainWindowLoad(win)),
@@ -199,6 +206,7 @@ async function onShutdown(): Promise<void> {
   }
   unregisterReaderToolbar();
   unregisterMarkdownQueryApiEndpoint();
+  unregisterMcpEndpoint();
   destroyAllReaderOverlays();
   unregisterItemTreeColumn();
   ztoolkit.unregisterAll();

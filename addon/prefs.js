@@ -4,6 +4,8 @@ pref("parseTier", "standard");
 pref("localApiBaseURL", "http://127.0.0.1:8000");
 pref("localApiTimeoutMinutes", 30);
 pref("apiEnabled", false);
+pref("mcpEnabled", true);
+pref("mcpToken", "");
 pref("saveImages", true);
 pref("syncFolder", "");
 pref("autoParsePageLimit", 0);

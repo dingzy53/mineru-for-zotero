@@ -20,10 +20,9 @@ interface MarkdownEndpointRequest {
 }
 
 /**
- * Version of the HTTP API contract, reported in every response next to
- * `pluginVersion`. Bump it on a breaking change and bump `API_VERSION` in
- * `mineru-for-zotero-cli/scripts/query-markdown.mjs` with it: the CLI warns
- * when the two differ, because the installed skill is a copy that goes stale.
+ * Version of the REST API contract, reported in every response next to
+ * `pluginVersion`. Bump it on a breaking change, so a script can tell which
+ * contract the running plugin speaks.
  */
 export const MARKDOWN_API_VERSION = 1;
 
@@ -38,6 +37,21 @@ export const MARKDOWN_ENDPOINT_PATHS = [
   "/mineru-for-zotero/tags",
 ] as const;
 
+let sharedService: MarkdownQueryService | undefined;
+
+/**
+ * The query service over the real library and result storage. The REST
+ * endpoints and the MCP tools share this one instance, so they cannot drift.
+ */
+export function getMarkdownQueryService(): MarkdownQueryService {
+  sharedService ??= createMarkdownQueryService({
+    items: Zotero.Items,
+    storage: createStorage(getMinerUStorageRoot()),
+    searchItems,
+  });
+  return sharedService;
+}
+
 /**
  * Register the Markdown query HTTP endpoint for external local clients.
  *
@@ -50,12 +64,9 @@ export const MARKDOWN_ENDPOINT_PATHS = [
  * the `apiEnabled` preference.
  */
 export function registerMarkdownQueryApiEndpoint(): void {
-  const service = createMarkdownQueryService({
-    items: Zotero.Items,
-    storage: createStorage(getMinerUStorageRoot()),
-    searchItems,
-  });
-  const EndpointClass = createMarkdownQueryEndpointClass(service);
+  const EndpointClass = createMarkdownQueryEndpointClass(
+    getMarkdownQueryService(),
+  );
 
   for (const path of MARKDOWN_ENDPOINT_PATHS) {
     Zotero.Server.Endpoints[path] = toZoteroEndpoint(EndpointClass);
