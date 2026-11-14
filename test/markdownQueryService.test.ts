@@ -65,6 +65,36 @@ describe("markdownQueryService", function () {
     assert.nestedPropertyVal(response, "result.mode", "lite");
   });
 
+  it("adds the stored file path only when asked", async function () {
+    const deps = fakeDeps({ markdown: "# Precise" });
+    const service = createMarkdownQueryService({
+      ...deps,
+      storage: {
+        ...deps.storage,
+        async getPreferredMarkdownPath(ref: {
+          libraryID: number;
+          key: string;
+        }) {
+          return `/data/attachments/${ref.libraryID}-${ref.key}/content.md`;
+        },
+      },
+    });
+
+    const plain = await service.queryMarkdown({ libraryID: 1, key: "PDF1" });
+    const withFile = await service.queryMarkdown({
+      libraryID: 1,
+      key: "PDF1",
+      includeFilePath: true,
+    });
+
+    assert.notNestedProperty(plain, "result.file");
+    assert.nestedPropertyVal(
+      withFile,
+      "result.file",
+      "/data/attachments/1-PDF1/content.md",
+    );
+  });
+
   it("returns heading granularity", async function () {
     const service = createMarkdownQueryService(
       fakeDeps({ markdown: "# A\n\n## B" }),

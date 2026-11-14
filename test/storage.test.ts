@@ -95,6 +95,10 @@ describe("storage", function () {
     assert.isTrue(await storage.hasLiteResult(attachment));
     assert.isFalse(await storage.hasReadyResult(attachment));
     assert.equal(await storage.readPreferredMarkdown(attachment), "# Lite");
+    assert.match(
+      await storage.getPreferredMarkdownPath(attachment),
+      /[\\/]lite-content\.md$/,
+    );
   });
 
   it("prefers precise markdown over lite markdown", async function () {
@@ -123,6 +127,9 @@ describe("storage", function () {
     });
 
     assert.equal(await storage.readPreferredMarkdown(attachment), "# Precise");
+    const path = await storage.getPreferredMarkdownPath(attachment);
+    assert.match(path, /12-PREFER[\\/]content\.md$/);
+    assert.equal(await IOUtils.readUTF8(path), "# Precise");
   });
 
   it("keeps lite markdown files when writing a precise result", async function () {

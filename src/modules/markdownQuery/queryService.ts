@@ -122,6 +122,11 @@ export interface PreferredMarkdownReader extends ParseStatusReader {
     key: string;
   }): Promise<string>;
   readBoxes(ref: { libraryID: number; key: string }): Promise<NormalizedBox[]>;
+  /** Native path of the Markdown file behind `readPreferredMarkdown()`. */
+  getPreferredMarkdownPath?(ref: {
+    libraryID: number;
+    key: string;
+  }): Promise<string>;
   /** Manifest of the precise result, used to compare its PDF mtime. */
   readManifestSafe?(ref: {
     libraryID: number;
@@ -148,6 +153,11 @@ export interface MarkdownQueryService {
     includeSubsections?: boolean;
     q?: string;
     contextParagraphs?: number;
+    /**
+     * Add `result.file`, the path of the stored Markdown. Only for callers
+     * that authenticate: the REST API does not disclose the data folder.
+     */
+    includeFilePath?: boolean;
   }): Promise<unknown>;
   triggerParse(input: {
     libraryID: number;
@@ -563,6 +573,14 @@ export function createMarkdownQueryService(deps: {
           source: "preferred" as const,
         },
       };
+
+      if (input.includeFilePath && deps.storage.getPreferredMarkdownPath) {
+        (base.result as { file?: string }).file =
+          await deps.storage.getPreferredMarkdownPath({
+            libraryID: resolved.attachment.libraryID,
+            key: resolved.attachment.key,
+          });
+      }
 
       try {
         const bibtex = await readCachedBibTeX(

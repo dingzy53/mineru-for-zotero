@@ -34,6 +34,14 @@ export function toPlainSearchText(text: string): string {
 }
 
 /**
+ * Remove inline tags from text shown to a reader (`CO<sub>2</sub>` becomes
+ * `CO2`). Tables and other block markup stay as they are.
+ */
+export function stripInlineTags(text: string): string {
+  return text.replace(INLINE_HTML_TAG, "");
+}
+
+/**
  * Build a case-insensitive matcher for a search query.
  *
  * The literal substring test comes first, so everything that matched before

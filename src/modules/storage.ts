@@ -20,6 +20,7 @@ import {
   readText,
   removePath,
   resolveFsRoot,
+  toNativePath,
   writeBytes,
   writeText,
 } from "./storageFs";
@@ -42,6 +43,8 @@ export interface StorageAdapter {
   readManifest(ref: AttachmentKeyRef): Promise<ParseManifest>;
   readMarkdown(ref: AttachmentKeyRef): Promise<string>;
   readPreferredMarkdown(ref: AttachmentKeyRef): Promise<string>;
+  /** Native path of the file `readPreferredMarkdown()` reads. */
+  getPreferredMarkdownPath(ref: AttachmentKeyRef): Promise<string>;
   readBoxes(ref: AttachmentKeyRef): Promise<NormalizedBox[]>;
   readImageDataURL(
     ref: AttachmentKeyRef,
@@ -161,6 +164,13 @@ export function createStorage(rootDir: string): StorageAdapter {
         return await readReadyMarkdown(fsRoot, ref);
       }
       return await readReadyLiteMarkdown(fsRoot, ref);
+    },
+
+    async getPreferredMarkdownPath(ref) {
+      const file = (await hasReadyPreciseResult(fsRoot, ref))
+        ? CONTENT_FILE
+        : LITE_CONTENT_FILE;
+      return toNativePath(joinPath(getAttachmentDir(fsRoot, ref), file));
     },
 
     async readBoxes(ref) {

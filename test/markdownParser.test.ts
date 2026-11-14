@@ -4,6 +4,7 @@ import {
   readSection,
   searchBoxes,
   searchMarkdown,
+  stripInlineTags,
   toPlainSearchText,
 } from "../src/modules/markdownQuery/markdownParser";
 import { MarkdownQueryError } from "../src/modules/markdownQuery/types";
@@ -196,6 +197,15 @@ describe("markdownParser", function () {
       assert.equal(
         toPlainSearchText("x < y and well-known"),
         "x < y and well-known",
+      );
+    });
+
+    it("strips inline tags but keeps tables", function () {
+      assert.equal(
+        stripInlineTags(
+          "CO<sub>2</sub> and <b>bold</b> <table><tr><td>x</td></tr></table>",
+        ),
+        "CO2 and bold <table><tr><td>x</td></tr></table>",
       );
     });
 
