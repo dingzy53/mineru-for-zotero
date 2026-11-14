@@ -99,6 +99,7 @@ node scripts/query-markdown.mjs <command> [options]
 - `--include-subsections` — With `granularity=section`, extend the range past same-level numbered subsections (e.g. include `3.1`–`3.4` inside `3.`) until the next chapter or unnumbered heading
 - `--query <text>` — Search query for search queries
 - `--context-paragraphs <n>` — Context paragraphs for search queries
+- `--plain` — Boolean flag; remove inline HTML tags such as `<sub>` and `<sup>` from the output (`CO<sub>2</sub>` becomes `CO2`). Tables stay as they are
 - `--output <file>` — With `--granularity full`, write the Markdown to a file and print only the header and the path
 
 ### Parse options
@@ -237,7 +238,8 @@ Then read the paper as usual, starting with `--granularity headings`.
 - Prefer `--format text` (the default) when you are reading results directly; it already prints keys, page numbers, and context lines. Use `--format json` only when another script needs structured output.
 - Search responses nest fields under each candidate: read `candidates[i].item.key`, `candidates[i].item.title`, and `candidates[i].attachments[j].key`. There is no top-level `title` on candidates.
 - Markdown query responses put `matches` at the top level of `data` (next to `item` and `attachment`); it is not under `data.result`.
-- `locate` matches carry `page`, `boxIndex`, and `bbox`; use them to cite physical pages. Matching is literal substring matching, so quote surrounding prose rather than LaTeX with spacing artifacts.
+- `locate` matches carry `page`, `boxIndex`, and `bbox`; use them to cite physical pages. `search` and `locate` match case-insensitively on the text as a reader sees it: inline tags such as `<sub>` are ignored (`CO2 emissions` finds `CO<sub>2</sub> emissions`), and a query may span a line break or a word hyphenated across lines. Formulas are stored as LaTeX, so quote surrounding prose rather than a formula.
+- MinerU writes subscripts and superscripts as `<sub>`/`<sup>` tags. Pass `--plain` to `markdown` instead of piping the output through `sed`.
 
 ## Error Handling
 

@@ -123,6 +123,7 @@ Main capabilities:
 - Search candidate Zotero items and PDF attachments by title keywords.
 - Read Markdown for a regular Zotero item or PDF attachment with `libraryID + key`.
 - Query at `full`, `headings`, `section`, or `search` granularity, so external agents can inspect structure before reading a section or keyword context.
+- `search` and `locate` queries match the text as a reader sees it: inline tags such as `<sub>` are ignored (`CO2` finds `CO<sub>2</sub>`), and a query may span a line break.
 - Pass `attachmentKey` to select a specific PDF when a regular item has multiple PDF attachments.
 - Return precise Markdown first; if precise output is unavailable but lite output exists, return lite Markdown and mark it in `result.mode`.
 - Parse an attachment without any interactive prompt (skipping PDFs that already have a current result unless `force=true`), and list current parse tasks with their status, progress, and error text.

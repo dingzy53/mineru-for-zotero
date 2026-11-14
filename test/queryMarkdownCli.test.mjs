@@ -767,6 +767,53 @@ test("writes full markdown to a file with --output", async () => {
   }
 });
 
+test("strips inline HTML tags with --plain", async () => {
+  await withServer(
+    {
+      status: 200,
+      body: {
+        item: { key: "ABCD1234", title: "Example Paper" },
+        attachment: { key: "PDFKEY01", fileName: "paper.pdf" },
+        result: { mode: "precise" },
+        granularity: "search",
+        query: "CO2",
+        matches: [
+          {
+            paragraphIndex: 3,
+            before: ["H<sub>2</sub>O first."],
+            hit: "CO<sub>2</sub> rose by 10<sup>3</sup> t.",
+            after: ["<table><tr><td>kept</td></tr></table>"],
+            context: "unused",
+          },
+        ],
+      },
+    },
+    async ({ port }) => {
+      const args = [
+        "markdown",
+        "--port",
+        String(port),
+        "--library-id",
+        "1",
+        "--key",
+        "ABCD1234",
+        "--granularity",
+        "search",
+        "--query",
+        "CO2",
+      ];
+      const raw = await runCli(args);
+      const plain = await runCli([...args, "--plain"]);
+
+      assert.match(raw.stdout, />> CO<sub>2<\/sub> rose/);
+      assert.equal(plain.code, 0);
+      assert.match(plain.stdout, /H2O first\./);
+      assert.match(plain.stdout, />> CO2 rose by 103 t\./);
+      assert.match(plain.stdout, /<table><tr><td>kept<\/td><\/tr><\/table>/);
+    },
+  );
+});
+
 test("rejects --output for granularities other than full", async () => {
   const result = await runCli([
     "markdown",

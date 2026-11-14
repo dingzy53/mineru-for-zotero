@@ -67,7 +67,12 @@ const BOOLEAN_FLAGS = new Set([
   "--parsed-only",
   "--force",
   "--wait",
+  "--plain",
 ]);
+
+/** Tags MinerU writes inside running text, removed by --plain. */
+const INLINE_HTML_TAG =
+  /<\/?(?:sub|sup|i|b|em|strong|u|s|span|small|mark|font)\b[^>]*>/gi;
 
 /**
  * Runs the CLI entry point and maps failures to stable process output.
@@ -92,6 +97,9 @@ async function main(argv) {
     let response = await requestMarkdownApi(options);
     if (options.wait && response.status !== "already-parsed") {
       response = await waitForParse(options, response);
+    }
+    if (options.plain) {
+      stripInlineTags(response);
     }
     if (options.outputPath) {
       writeContentFile(options, response);
@@ -306,7 +314,30 @@ function parseCommand(argv) {
     timeoutMs,
     params,
     ...(output === undefined ? {} : { outputPath: resolve(output) }),
+    plain: flags.has("--plain"),
   };
+}
+
+/**
+ * Removes inline HTML tags (`CO<sub>2</sub>` becomes `CO2`) from the text of
+ * a Markdown response. Heading titles and paths stay as they are, because
+ * `--section-path` must match them exactly.
+ */
+function stripInlineTags(data) {
+  const strip = (value) =>
+    typeof value === "string" ? value.replace(INLINE_HTML_TAG, "") : value;
+  const stripAll = (value) => (Array.isArray(value) ? value.map(strip) : value);
+
+  data.content = strip(data.content);
+  if (Array.isArray(data.matches)) {
+    data.matches = data.matches.map((match) => ({
+      ...match,
+      hit: strip(match.hit),
+      context: strip(match.context),
+      ...(match.before === undefined ? {} : { before: stripAll(match.before) }),
+      ...(match.after === undefined ? {} : { after: stripAll(match.after) }),
+    }));
+  }
 }
 
 /**
@@ -1113,7 +1144,7 @@ function helpText() {
     "  node mineru-for-zotero-cli/scripts/query-markdown.mjs tags --library-id <id> [--limit <n>] [--port <number>] [--format text|json]",
     "  node mineru-for-zotero-cli/scripts/query-markdown.mjs search --library-id <id> [--title <text>] [--creator <text>] [--collection <name|key>] [--tag <tag>] [--abstract <text>] [--publication <text>] [--citekey <key>] [--doi <doi>] [--item-type <type>] [--since <date>] [--year YYYY] [--has-pdf] [--parsed-only] [--sort-by dateAdded|dateModified|title|year] [--sort-order asc|desc] [--limit <n>] [--format text|json]",
     "  node mineru-for-zotero-cli/scripts/query-markdown.mjs status --library-id <id> --collection <name|key> [--include-subcollections] [--format text|json]",
-    "  node mineru-for-zotero-cli/scripts/query-markdown.mjs markdown --library-id <id> --key <key> [--granularity full|headings|section|search|locate] [--output <file>] [--format text|json]",
+    "  node mineru-for-zotero-cli/scripts/query-markdown.mjs markdown --library-id <id> --key <key> [--granularity full|headings|section|search|locate] [--plain] [--output <file>] [--format text|json]",
     "  node mineru-for-zotero-cli/scripts/query-markdown.mjs parse --library-id <id> --key <key> [--attachment-key <key>] [--force] [--wait] [--format text|json]",
     "  node mineru-for-zotero-cli/scripts/query-markdown.mjs tasks [--format text|json]",
     "",
@@ -1150,6 +1181,7 @@ function helpText() {
     "  --include-subsections        Include same-level subsections in section output.",
     "  --query <text>               Search query for granularity=search or locate.",
     "  --context-paragraphs <n>     Context paragraphs for granularity=search or locate.",
+    "  --plain                      Remove inline HTML tags such as <sub> and <sup> from the output.",
     "  --output <file>              With granularity=full, write the Markdown to a file instead of stdout.",
     "",
     "Parse options (parsing uses the user's MinerU quota):",

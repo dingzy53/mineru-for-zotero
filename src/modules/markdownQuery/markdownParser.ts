@@ -10,6 +10,45 @@ import type { NormalizedBox } from "../domain";
 const ATX_HEADING = /^(#{1,6})\s+(.+?)\s*#*\s*$/;
 const TOP_LEVEL_TITLE = /^#\s+.+$/;
 
+/** Tags MinerU writes inside running text; removing them joins the text. */
+const INLINE_HTML_TAG =
+  /<\/?(?:sub|sup|i|b|em|strong|u|s|span|small|mark|font)\b[^>]*>/gi;
+/** Any other tag (table cells, line breaks) separates text. */
+const HTML_TAG = /<\/?[a-z][^>]*>/gi;
+/** A word hyphenated across a line break of the PDF. */
+const HYPHENATED_LINE_BREAK = /(\p{L})-[ \t]*\r?\n\s*(\p{Ll})/gu;
+
+/**
+ * Reduce text to what a reader sees, for matching: inline tags removed
+ * (`CO<sub>2</sub>` becomes `co2`), words hyphenated across a line break
+ * joined, whitespace collapsed, lower case.
+ */
+export function toPlainSearchText(text: string): string {
+  return text
+    .replace(INLINE_HTML_TAG, "")
+    .replace(HTML_TAG, " ")
+    .replace(HYPHENATED_LINE_BREAK, "$1$2")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * Build a case-insensitive matcher for a search query.
+ *
+ * The literal substring test comes first, so everything that matched before
+ * plain-text matching existed still matches (including queries that contain
+ * tags). Text that fails it is compared again in plain form, so a query can
+ * span a `<sub>` tag or a line break.
+ */
+function createQueryMatcher(query: string): (text: string) => boolean {
+  const literal = query.trim().toLowerCase();
+  const plain = toPlainSearchText(query);
+  return (text) =>
+    text.toLowerCase().includes(literal) ||
+    (plain !== "" && toPlainSearchText(text).includes(plain));
+}
+
 /**
  * Parse Markdown ATX headings and generate hierarchical paths for each heading.
  */
@@ -157,6 +196,7 @@ export function searchMarkdown(
     throw new MarkdownQueryError("missing-query", 400, "missing-query");
   }
 
+  const matchesQuery = createQueryMatcher(query);
   const contextSize = Math.max(0, Math.floor(contextParagraphs));
   const paragraphs = markdown
     .split(/\r?\n\s*\r?\n/)
@@ -168,7 +208,7 @@ export function searchMarkdown(
       : paragraphs;
 
   return searchableParagraphs.flatMap((paragraph, index) => {
-    if (!paragraph.toLowerCase().includes(normalizedQuery)) {
+    if (!matchesQuery(paragraph)) {
       return [];
     }
 
@@ -205,16 +245,16 @@ export function searchBoxes(
     throw new MarkdownQueryError("missing-query", 400, "missing-query");
   }
 
+  const matchesQuery = createQueryMatcher(query);
   const contextSize = Math.max(0, Math.floor(contextBoxes));
   const matches: MarkdownLocateMatch[] = [];
 
   boxes.forEach((box, index) => {
     const textToSearch = [box.markdown, box.formula, box.tableFormats?.markdown]
       .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
+      .join(" ");
 
-    if (textToSearch.includes(normalizedQuery)) {
+    if (matchesQuery(textToSearch)) {
       const before = boxes.slice(Math.max(0, index - contextSize), index);
       const after = boxes.slice(index + 1, index + 1 + contextSize);
       const contextText = [...before, box, ...after]

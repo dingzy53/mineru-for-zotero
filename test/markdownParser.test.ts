@@ -2,7 +2,9 @@ import { assert } from "chai";
 import {
   parseHeadings,
   readSection,
+  searchBoxes,
   searchMarkdown,
+  toPlainSearchText,
 } from "../src/modules/markdownQuery/markdownParser";
 import { MarkdownQueryError } from "../src/modules/markdownQuery/types";
 
@@ -44,6 +46,18 @@ const sameLevelMarkdown = [
   "## 4. Algorithm",
   "",
   "Algorithm body.",
+].join("\n");
+
+const taggedPaper = [
+  "# Paper",
+  "",
+  "Global CO<sub>2</sub> emissions rose by 10<sup>3</sup> t, a trans-",
+  "formative change across",
+  "many sectors.",
+  "",
+  "<table><tr><td>CO2</td><td>emissions</td></tr></table>",
+  "",
+  "Literal CO2 emissions paragraph.",
 ].join("\n");
 
 describe("markdownParser", function () {
@@ -170,6 +184,72 @@ describe("markdownParser", function () {
         after: [],
       },
     ]);
+  });
+
+  describe("plain-text matching", function () {
+    it("reduces text to what a reader sees", function () {
+      assert.equal(
+        toPlainSearchText("H<sub>2</sub>O  and\n<b>bold</b> trans-\nform"),
+        "h2o and bold transform",
+      );
+      assert.equal(toPlainSearchText("<td>a</td><td>b</td>"), "a b");
+      assert.equal(
+        toPlainSearchText("x < y and well-known"),
+        "x < y and well-known",
+      );
+    });
+
+    it("finds a query that spans an inline tag, returning the original text", function () {
+      const matches = searchMarkdown(taggedPaper, "CO2 emissions", 0);
+
+      assert.deepEqual(
+        matches.map((match) => match.paragraphIndex),
+        [0, 1, 2],
+      );
+      assert.include(matches[0].hit, "CO<sub>2</sub> emissions");
+    });
+
+    it("finds a query that spans a line break or a hyphenated word", function () {
+      assert.lengthOf(
+        searchMarkdown(taggedPaper, "change across many sectors"),
+        1,
+      );
+      assert.lengthOf(
+        searchMarkdown(taggedPaper, "a transformative change"),
+        1,
+      );
+      assert.lengthOf(searchMarkdown(taggedPaper, "10 3 t"), 0);
+    });
+
+    it("treats a query written with the tags like its plain form", function () {
+      assert.deepEqual(
+        searchMarkdown(taggedPaper, "co<sub>2</sub>").map(
+          (match) => match.paragraphIndex,
+        ),
+        [0, 1, 2],
+      );
+    });
+
+    it("locates boxes through plain-text matching", function () {
+      const box = (markdown: string, page: number) =>
+        ({
+          markdown,
+          page,
+          type: "text",
+          bbox: { x: 0, y: 0, width: 1, height: 1 },
+        }) as never;
+
+      const matches = searchBoxes(
+        [box("Intro", 0), box("CO<sub>2</sub> emissions\nrose", 3)],
+        "co2 emissions rose",
+        0,
+      );
+
+      assert.deepEqual(
+        matches.map((match) => [match.page, match.hit]),
+        [[3, "CO<sub>2</sub> emissions\nrose"]],
+      );
+    });
   });
 
   it("rejects empty search queries", function () {
