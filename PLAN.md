@@ -1,6 +1,6 @@
 # PLAN: replace the companion skill with an MCP server
 
-> Branch `feat/mcp-server`, from `fix/agent-usage-findings`. Written 2026-11-14. Steps 0 to 6 are implemented, one commit each. Still open: the scaffold suite and the real-client checks under Verification, and the owner's steps there (release, run the command from settings, delete the installed skill copies).
+> Branch `feat/mcp-server`, from `fix/agent-usage-findings`. Written 2026-11-14. Steps 0 to 6 are implemented, one commit each, and the scaffold suite passes in Zotero 10.0.8 (510 tests, including the requests through Zotero's real server). Still open: the real-client and bridge-by-hand checks under Verification, and the owner's steps there (release, run the command from settings, delete the installed skill copies).
 >
 > This replaces the "fix what agents ran into when reading parsed papers" plan, which is implemented in `dd6b016`…`53bf371` (see git history for its text).
 
