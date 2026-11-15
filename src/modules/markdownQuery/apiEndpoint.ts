@@ -1,6 +1,6 @@
 import { version as pluginVersion } from "../../../package.json";
 import { getMarkdownApiEnabled } from "../../utils/prefs";
-import { getMinerUStorageRoot } from "../preferenceScript";
+import { getMinerUStorageRoot } from "../storageLocation";
 import { createStorage } from "../storage";
 import { extractItemYear } from "./itemYear";
 import {

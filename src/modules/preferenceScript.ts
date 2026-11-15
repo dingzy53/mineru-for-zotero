@@ -1,12 +1,16 @@
 import { config } from "../../package.json";
 import {
   getMarkdownApiEnabled,
+  getMcpEnabled,
+  getMcpToken,
   getSaveImages,
   getLocalApiTimeoutMinutes,
   getOnlineApiTimeoutMinutes,
   getParseTier,
   getParseSource,
   setMarkdownApiEnabled,
+  setMcpEnabled,
+  setMcpToken,
   setApiKey,
   setLocalApiBaseURL,
   setLocalApiTimeoutMinutes,
@@ -23,6 +27,8 @@ import {
   type ParseSource,
   type ParseTier,
 } from "../utils/prefs";
+import { bridgeCommand, bridgePath, httpCommand } from "./mcp/bridge";
+import { generateToken, mcpEndpointURL } from "./mcp/endpoint";
 import { createStorage } from "./storage";
 import { getMinerUStorageRoot } from "./storageLocation";
 
@@ -44,6 +50,7 @@ export async function registerPrefsScripts(_window: Window) {
   const document = _window.document;
 
   registerPreferenceValueSync(document);
+  registerMcpSettings(_window);
 
   setText(
     document,
@@ -113,6 +120,85 @@ export async function registerPrefsScripts(_window: Window) {
 
 export { getMinerUStorageRoot };
 
+/** What the MCP settings section needs from outside; tests replace it. */
+export interface McpSettingsDeps {
+  /** URL of the MCP endpoint on this computer. */
+  endpoint(): string;
+  /** Path of the installed stdio bridge. */
+  bridgePath(): string;
+  copyText(text: string): void;
+  /** How long a button says "Copied" before its label returns. */
+  feedbackMs: number;
+}
+
+const defaultMcpSettingsDeps: McpSettingsDeps = {
+  endpoint: mcpEndpointURL,
+  bridgePath: () => bridgePath(),
+  copyText: (text) => {
+    new ztoolkit.Clipboard().addText(text, "text/unicode").copy();
+  },
+  feedbackMs: 1200,
+};
+
+/**
+ * Fill the MCP section: the endpoint, the token and the two commands a user
+ * pastes into a terminal, with their Copy buttons and Regenerate.
+ */
+export function registerMcpSettings(
+  _window: Window,
+  deps: McpSettingsDeps = defaultMcpSettingsDeps,
+): void {
+  const document = _window.document;
+  const element = (suffix: string) =>
+    document.getElementById(
+      `zotero-prefpane-${config.addonRef}-mcp-${suffix}`,
+    ) as HTMLInputElement | null;
+
+  const commands = {
+    stdio: () =>
+      bridgeCommand(getMcpToken(), deps.endpoint(), deps.bridgePath()),
+    http: () => httpCommand(getMcpToken(), deps.endpoint()),
+  };
+  const render = () => {
+    const values: Record<string, string> = {
+      endpoint: deps.endpoint(),
+      token: getMcpToken(),
+      "command-stdio": commands.stdio(),
+      "command-http": commands.http(),
+    };
+    for (const [suffix, value] of Object.entries(values)) {
+      const input = element(suffix);
+      if (input) {
+        input.value = value;
+      }
+    }
+  };
+  render();
+
+  const onCopy = (suffix: string, text: () => string) => {
+    const button = element(suffix);
+    button?.addEventListener("click", () => {
+      deps.copyText(text());
+      void formatL10n(_window, "pref-mcp-copied").then((label) => {
+        button.textContent = label;
+      });
+      setTimeout(() => {
+        void formatL10n(_window, "pref-mcp-copy").then((label) => {
+          button.textContent = label;
+        });
+      }, deps.feedbackMs);
+    });
+  };
+  onCopy("copy-token", getMcpToken);
+  onCopy("copy-command-stdio", commands.stdio);
+  onCopy("copy-command-http", commands.http);
+
+  element("regenerate")?.addEventListener("click", () => {
+    setMcpToken(generateToken());
+    render();
+  });
+}
+
 /**
  * Explicitly synchronize preferences.xhtml control values to prevent stale preferences before Zotero restarts.
  */
@@ -158,6 +244,12 @@ export function registerPreferenceValueSync(document: Document): void {
     `zotero-prefpane-${config.addonRef}-api-enabled`,
     getMarkdownApiEnabled,
     setMarkdownApiEnabled,
+  );
+  registerCheckboxPreferenceSync(
+    document,
+    `zotero-prefpane-${config.addonRef}-mcp-enabled`,
+    getMcpEnabled,
+    setMcpEnabled,
   );
   registerCheckboxPreferenceSync(
     document,
