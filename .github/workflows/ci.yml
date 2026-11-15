@@ -47,7 +47,7 @@ jobs:
         with:
           node-version: "lts/*"
       - name: Run standalone node:test suites
-        run: node --test test/queryMarkdownCli.test.mjs test/mcpBridge.test.mjs scripts/fix-zotero-connector-port.test.mjs
+        run: node --test test/mcpBridge.test.mjs scripts/fix-zotero-connector-port.test.mjs
 
   # `zotero-plugin test` builds the plugin into `.scaffold/build` itself before
   # launching Zotero, so this job needs neither the `build` job's artifact nor a

@@ -33,8 +33,7 @@
     "test": "zotero-plugin test",
     "test:bridge": "node --test test/mcpBridge.test.mjs",
     "preserve": "node scripts/fix-test-profile.mjs && node scripts/ensure-test-libraries.mjs",
-    "update-deps": "npm update --save",
-    "skill:install": "node scripts/install-skill.mjs"
+    "update-deps": "npm update --save"
   },
   "devDependencies": {
     "@types/chai": "^5.2.3",

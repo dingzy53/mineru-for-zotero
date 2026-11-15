@@ -13,6 +13,7 @@ Core feature modules currently include:
 - `boxNormalizer.ts`, `copyFormatter.ts` — MinerU schema normalization into stable boxes and copy output.
 - `readerToolbar/`, `readerOverlay/` — PDF Reader toolbar UI and box rendering/selection behavior.
 - `markdownQuery/` — the local HTTP Markdown query API (endpoint, attachment resolver, Markdown parser, query service). It has no token: the only switch is the `apiEnabled` preference, and safety relies on Zotero's server binding to `127.0.0.1` plus its non-local `Host` rejection. `POST /mineru-for-zotero/parse` is non-interactive and never opens a dialog: `triggerParse()` answers `already-parsed` when a precise result for the current PDF mtime exists (unless `force=true`) and `already-running` for an active task, and only otherwise calls `parseAttachment(item, { force: true })`, where `force` merely skips the reparse prompt. Keep that order: any local process can call the endpoint, so it must not spend MinerU quota by default. `GET /mineru-for-zotero/tasks` returns sanitized task summaries without absolute PDF paths.
+- `mcp/` — the MCP server for AI agents at `POST /mineru-for-zotero/mcp` (dispatcher, tools, text formatters, token-protected endpoint, stdio bridge install). See "MCP Server" below.
 - `agentSync.ts`, `itemTreeColumn.ts`, `itemMenu.ts`, `preferenceScript.ts` — sync-folder export, item-tree status column, `Zotero.MenuManager` menus (attachment-only context menu and the Tools → MinerU Task Manager entry), and settings-page UI.
 
 ## Build, Test, and Development Commands
@@ -43,7 +44,7 @@ Scaffold streams test results as JSON, which drops non-enumerable Error properti
 
 After code changes, run full tests with `zotero-plugin test --exit-on-finish`.
 
-Standalone `node:test` files (`test/queryMarkdownCli.test.mjs`, `scripts/*.test.mjs`) are not part of the scaffold suite; run them directly with `node --test`.
+Standalone `node:test` files (`test/mcpBridge.test.mjs`, `scripts/*.test.mjs`) are not part of the scaffold suite; run them directly with `node --test`.
 
 ## Test Profile Port Isolation
 
@@ -233,14 +234,35 @@ Do not reuse the icon-only toolbar button base class for text menu items.
 
 `buildReaderOverlayRoot()` returns `{ root, cleanup }`; tests must destructure. `createDocumentStub()` must provide synchronous mocks for APIs like `IntersectionObserver`.
 
-## CLI Tool
+## MCP Server
 
-The companion CLI (`mineru-for-zotero-cli/scripts/query-markdown.mjs`) provides agent-readable access via the local HTTP query API.
-Commands: `libraries`, `collections`, `tags`, `search`, `status`, `markdown`, `parse` (`--force`, `--wait`), `tasks`.
-Granularity modes for `markdown`: `full`, `headings`, `section`, `search`, `locate`.
-Auto-detects the server port, outputting agent-readable text by default.
+Agents reach parsed papers through an MCP server inside the plugin: `POST /mineru-for-zotero/mcp` on Zotero's local server. It replaced the `mineru-for-zotero-cli` skill and CLI; do not reintroduce a separately installed client. The code in `src/modules/mcp/` is adapted from zotero-S2 (`../zotero-S2`, commit `c5370a1`).
 
-`mineru-for-zotero-cli/` is also the agent skill; `npm run skill:install` (`scripts/install-skill.mjs`) copies or symlinks it into the agent skill folders. Installed copies go stale, so every API response carries `pluginVersion` and `apiVersion` (`MARKDOWN_API_VERSION` in `apiEndpoint.ts`) and the CLI warns on stderr when its `API_VERSION` differs. Bump both constants together on a breaking API change. When a command or option changes, update `SKILL.md`, the CLI help text and the README API section together.
+| File                                                           | Role                                                                                                       |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `server.ts`                                                    | JSON-RPC dispatcher: stateless 2026-07-28 and the `initialize`-based 2025 revisions. Pure and unit-tested. |
+| `schema.ts`, `errors.ts`                                       | Argument validation (`prepareArgs`) and `ToolError`.                                                       |
+| `tools.ts`                                                     | **All tools** (`TOOLS`): name, description, JSON Schema, annotations, handler.                             |
+| `format.ts`                                                    | The text every tool returns, and the next-step hints for query errors.                                     |
+| `runTool.ts`                                                   | The only way tools run: validates, sets the deadline, caps the result, never throws.                       |
+| `endpoint.ts`                                                  | `checkAccess`, the endpoint class, registration, the token.                                                |
+| `bridge.ts` + `addon/content/bridge/mineru-for-zotero-mcp.mjs` | The stdio bridge and its install into `<data dir>/mineru-mcp/`.                                            |
+
+Invariants:
+
+- Tool handlers call `MarkdownQueryService` only. The REST endpoints and the tools share one instance (`getMarkdownQueryService()`); there is no second query path.
+- A tool returns **text**, not JSON: papers are Markdown, and there is no `structuredContent`. Build the text in `format.ts`.
+- Add a tool by appending a `ToolDef` to `TOOLS`. Names are snake*case with a `mineru*`prefix. Give accurate`annotations`; a tool that writes or spends quota sets `destructiveHint` explicitly.
+- Throw `ToolError` for mistakes the agent can fix; a `MarkdownQueryError` is mapped to a message with the next step. Both become `isError` results. Any other error is a bug and is also logged.
+- Every call has a 50 s budget (`TOOL_BUDGET_MS`, below the ~60 s at which MCP clients give up) and an 80,000-character result cap. A tool that waits must answer with the state it reached before `ctx.deadline`.
+- Keep `checkAccess()` as it is: `mcpEnabled` off → 503, any `Origin` → 403, wrong bearer token → 401. `allowRequestsFromUnsafeWebContent = true` is intentional: Zotero 10 would otherwise drop requests with an `Origin` or a `Mozilla/` user agent without answering.
+- The endpoint class keeps a **one-argument** `init(req)` returning `[status, headers, body]`; Zotero picks the calling convention from `init.length`.
+- Zotero's server only knows some reason phrases. `registerMcpEndpoint()` adds 202, 401 and 405; add any new status code there.
+- Zotero answers one buffered HTTP/1.0 response per request: no SSE, no sessions. `GET` and `DELETE` get 405, notifications 202.
+- The bridge stays one file with no dependencies and no build step, and must not contain `__name__`-style tokens (scaffold substitutes them in assets). It forwards messages unchanged and answers `tools/call` with an `isError` result while Zotero is down.
+- The REST API keeps its own switch (`apiEnabled`, no token) and reports `pluginVersion` and `apiVersion` (`MARKDOWN_API_VERSION`); bump the latter on a breaking REST change. It never returns the stored file path; only the token-protected MCP tools do (`includeFilePath`).
+
+Tests: `mcpServer`, `mcpSchema`, `mcpTools`, `mcpEndpoint`, `mcpBridgeInstall` (`*.test.ts`, scaffold) and `test/mcpBridge.test.mjs` (plain Node: `npm run test:bridge`). When a tool or its arguments change, update the README tool table.
 
 ## Commit & Pull Request Guidelines
 

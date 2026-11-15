@@ -1,6 +1,6 @@
 # PLAN: replace the companion skill with an MCP server
 
-> Branch `feat/mcp-server`, from `fix/agent-usage-findings`. Written 2026-11-14. Nothing here is implemented yet.
+> Branch `feat/mcp-server`, from `fix/agent-usage-findings`. Written 2026-11-14. Steps 0 to 6 are implemented, one commit each. Still open: the scaffold suite and the real-client checks under Verification, and the owner's steps there (release, run the command from settings, delete the installed skill copies).
 >
 > This replaces the "fix what agents ran into when reading parsed papers" plan, which is implemented in `dd6b016`…`53bf371` (see git history for its text).
 

@@ -112,7 +112,65 @@ To migrate only your parsed results without re-running parsing or consuming API 
 For AI workflows, you can configure an **Agent-friendly Sync Folder** in the settings. When enabled, MinerU for Zotero will automatically copy parsed results (Markdown + images) into a clean, flat directory structure named after the citation key and title (`[CitationKey] - Title/`). When two PDFs would share a folder name (for example a paper and its supplement), the attachment key is appended to keep them apart (`[CitationKey] - Title [ATTACHMENTKEY]/`).
 It will also automatically generate a `metadata.bib` file containing the BibTeX metadata for each item. You can click `Sync All Results Now` in the settings to bulk-export all existing historical results to this folder.
 
-This enables you to use AI Agents (like Cursor, Claude Desktop, etc.) to read the high-quality Markdown output directly. You can even equip your agent with the included CLI script (see below) to dynamically search and read files directly from the Zotero database!
+This lets AI agents read the Markdown files directly. For searching, reading single sections and finding page numbers without knowing the folder layout, connect the agent to the [MCP server](#mcp-server-for-ai-agents) instead.
+
+## MCP server for AI agents
+
+The plugin serves an [MCP](https://modelcontextprotocol.io) endpoint from inside Zotero, on Zotero's own local server, so AI agents (Claude Code, and any other MCP client) can read your parsed papers. There is nothing separate to install or keep up to date: the tools ship with the plugin.
+
+### Connect an agent
+
+1. Open **Edit → Settings → MinerU for Zotero** and find **MCP Server (for AI agents)**.
+2. Copy one of the two ready-made commands and run it in a terminal:
+
+```bash
+# Recommended: a small bridge that also works when Zotero starts after your agent (needs Node.js 18+)
+claude mcp add mineru-for-zotero -e MINERU_ZOTERO_TOKEN=<token> \
+  -- node "<Zotero data directory>/mineru-mcp/mineru-for-zotero-mcp.mjs"
+
+# Direct HTTP connection
+claude mcp add --transport http mineru-for-zotero http://127.0.0.1:23119/mineru-for-zotero/mcp \
+  --header "Authorization: Bearer <token>"
+```
+
+Any MCP client that supports Streamable HTTP can use the endpoint with the token as a bearer token. The server speaks the stateless MCP 2026-07-28 protocol and the `initialize`-based 2025-03-26 … 2025-11-25 revisions. Responses are plain JSON: there is no SSE and no session.
+
+An HTTP client connects once, when its session starts. If Zotero is not open at that moment, the tools are missing for the whole session. The bridge avoids this: it always starts, answers the tool list from a saved copy while Zotero is closed, and reaches Zotero as soon as it is running.
+
+### Tools
+
+| Tool                       | What it does                                                                                                                             |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `mineru_list_collections`  | Libraries and collections, as paths with keys.                                                                                           |
+| `mineru_list_tags`         | Tags of a library.                                                                                                                       |
+| `mineru_collection_status` | Which items of a collection are parsed, not parsed, or have no PDF, with word counts.                                                    |
+| `mineru_search_items`      | Find items by title, creator, year, collection, tag, DOI and more.                                                                       |
+| `mineru_get_outline`       | Heading tree, size and stored file path of a parsed paper.                                                                               |
+| `mineru_read_section`      | One section as Markdown.                                                                                                                 |
+| `mineru_search_in_paper`   | Paragraphs that contain a phrase, with context.                                                                                          |
+| `mineru_locate_in_pdf`     | Physical page of a passage (precise results only).                                                                                       |
+| `mineru_read_markdown`     | The full Markdown, in pages.                                                                                                             |
+| `mineru_parse_pdf`         | Start a MinerU parse for a PDF without a result. Spends your MinerU quota; a PDF with a current result is skipped unless `force` is set. |
+| `mineru_list_tasks`        | Parse tasks with status, progress and errors.                                                                                            |
+
+A tool call answers within about 50 seconds. `mineru_parse_pdf` waits for the parse that long and otherwise answers `running`; follow it with `mineru_list_tasks`.
+
+### Access and errors
+
+- Every request needs the token from the settings pane. **Regenerate** replaces it and cuts off clients until you run the new command.
+- Requests that carry an `Origin` header, which is to say requests from web pages, are rejected.
+- The token is stored in Zotero's preferences and in your MCP client's configuration. It only works from this computer.
+
+| Response                   | Meaning                                                                                                             |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `401`                      | The bearer token is missing or wrong. Copy the command again from settings.                                         |
+| `403`                      | The request came from a web page (`Origin` header).                                                                 |
+| `503`                      | **Enable MCP server** is unchecked in settings.                                                                     |
+| Tools missing in the agent | Zotero was not running when an HTTP client connected. Reconnect (`/mcp` in Claude Code), or use the bridge command. |
+
+### If you installed the earlier skill
+
+Versions up to 0.11 shipped a `mineru-for-zotero-cli` skill with a Node CLI. It is replaced by the MCP server. Delete the `mineru-for-zotero-cli` folder from your agent's skill folder (for example `~/.claude/skills/`). The REST API it used is still there for scripts; see [Local Markdown query API](#local-markdown-query-api).
 
 ## Local Markdown query API
 
@@ -272,50 +330,6 @@ Common error codes:
 - `parse-result-not-found`: the target PDF has no usable parse result yet; parse it in Zotero or through `/parse` first.
 - `section-not-found`: the section path does not match; run `granularity=headings` first to inspect exact paths.
 - `missing-query`: `granularity=search` was used without `q`.
-
-### AI agent integration (companion skill)
-
-The repository includes a companion Skill in the `mineru-for-zotero-cli/` folder, which is designed to teach AI Agents (like Cursor, Claude Desktop, or local LLMs) how to query your local Zotero database directly.
-
-Install the skill into your agent's skill folder from a checkout of this repository:
-
-```bash
-npm run skill:install            # copy into ~/.claude/skills, ~/.pi/agent/skills and ~/.agents/skills (those that exist)
-npm run skill:install -- --link  # or symlink, so the skill follows the checkout
-```
-
-The command prints what it changed. A `disable-model-invocation: true` line in an installed `SKILL.md` is kept; with it, an agent can only use the skill after you type its slash command, and will otherwise go and read the result folders by hand. Add `--allow-model-invocation` to drop the line, so the agent loads the skill when you mention papers parsed in Zotero. For an agent without a skill folder, point it at `mineru-for-zotero-cli/SKILL.md` instead.
-
-Run the command again after each plugin update: an installed copy does not update itself. Every API response carries `pluginVersion` and `apiVersion`, and the CLI prints a one-line warning on stderr when it and the plugin were built for different API versions.
-
-This integration abstracts away HTTP parameters, port detection, and error handling, providing the Agent with a clean, text-optimized interface for traversing complex academic documents without overflowing its context window.
-
-### Example agent workflow
-
-Because the CLI output is heavily optimized for LLM consumption, external agents can autonomously traverse complex academic documents.
-
-For example, when an AI Agent is tasked to analyze the paper _Attention Is All You Need_ using this CLI, it successfully executes the following steps completely autonomously:
-
-<details>
-<summary>Click to view the Agent's autonomous test report</summary>
-
-**✅ Step 1 — Search & Identify (`search --title`)**
-The agent queries the title, identifies the item `D634TSCH`, and confirms that the precise parse result exists.
-
-**✅ Step 2 — Structure Extraction (`markdown --granularity headings`)**
-The agent extracts the 25-node heading tree (Abstract → 1 Introduction → ... → 7 Conclusion) to understand the document's structure without loading the full text into context.
-
-**✅ Step 3 — Targeted Section Reading (`markdown --granularity section`)**
-The agent precisely targets `Attention Is All You Need / 3.2.1 Scaled Dot-Product Attention` and successfully extracts the exact LaTeX formula:
-`\operatorname{Attention}(Q, K, V) = \operatorname{softmax}\left(\frac{QK^{\mathsf{T}}}{\sqrt{d_k}}\right)V`
-
-**✅ Step 4 — Contextual Search (`markdown --granularity search`)**
-By searching for `"Table 1"` with `--context-paragraphs 2`, the agent accurately locates the layer complexity table and perfectly recreates it in Markdown format, pulling the exact explanation of why Self-Attention is faster ($O(1)$ sequential operations vs $O(n)$ for Recurrent).
-
-**✅ Step 5 — Full Document Fetching (`markdown --granularity full`)**
-The agent fetches the full Markdown and flawlessly lists all 8 authors and their affiliations from the header.
-
-</details>
 
 ## Privacy and security
 
