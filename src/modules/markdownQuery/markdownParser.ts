@@ -158,10 +158,28 @@ export function readSection(
   };
 }
 
+function editDistance(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const curr = [i];
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+    }
+    prev = curr;
+  }
+  return prev[n];
+}
+
 function findClosestHeadingPaths(
   headings: MarkdownHeading[],
   requested: string[],
 ): string[][] {
+  if (headings.length === 0) {
+    return [];
+  }
   const leaf = (requested[requested.length - 1] ?? "").trim().toLowerCase();
   if (!leaf) {
     return headings.slice(0, 5).map((h) => h.path);
@@ -179,10 +197,21 @@ function findClosestHeadingPaths(
           score += 3;
         }
       }
+      const dist = editDistance(leaf, title);
+      const maxDist = Math.max(
+        2,
+        Math.floor(Math.max(leaf.length, title.length) / 2),
+      );
+      if (dist <= maxDist) {
+        score += Math.max(1, 8 - dist);
+      }
       return { path: heading.path, score };
     })
     .filter((entry) => entry.score > 0)
     .sort((a, b) => b.score - a.score);
+  if (scored.length === 0) {
+    return headings.slice(0, 5).map((h) => h.path);
+  }
   return scored.slice(0, 5).map((entry) => entry.path);
 }
 
