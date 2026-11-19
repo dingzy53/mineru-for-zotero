@@ -7,6 +7,11 @@ import type {
 } from "./domain";
 import { BOX_NORMALIZER_VERSION, normalizeMinerUBoxes } from "./boxNormalizer";
 import {
+  bytesToBase64,
+  extractInlineImages,
+  stripInlineDataImages,
+} from "./inlineImages";
+import {
   computeDirSize,
   exists,
   joinPath,
@@ -20,6 +25,7 @@ import {
   readText,
   removePath,
   resolveFsRoot,
+  toNativePath,
   writeBytes,
   writeText,
 } from "./storageFs";
@@ -42,6 +48,8 @@ export interface StorageAdapter {
   readManifest(ref: AttachmentKeyRef): Promise<ParseManifest>;
   readMarkdown(ref: AttachmentKeyRef): Promise<string>;
   readPreferredMarkdown(ref: AttachmentKeyRef): Promise<string>;
+  /** Native path of the file `readPreferredMarkdown()` reads. */
+  getPreferredMarkdownPath(ref: AttachmentKeyRef): Promise<string>;
   readBoxes(ref: AttachmentKeyRef): Promise<NormalizedBox[]>;
   readImageDataURL(
     ref: AttachmentKeyRef,
@@ -163,6 +171,13 @@ export function createStorage(rootDir: string): StorageAdapter {
       return await readReadyLiteMarkdown(fsRoot, ref);
     },
 
+    async getPreferredMarkdownPath(ref) {
+      const file = (await hasReadyPreciseResult(fsRoot, ref))
+        ? CONTENT_FILE
+        : LITE_CONTENT_FILE;
+      return toNativePath(joinPath(getAttachmentDir(fsRoot, ref), file));
+    },
+
     async readBoxes(ref) {
       const dir = getAttachmentDir(fsRoot, ref);
       const manifest = await readManifestFile(dir);
@@ -207,6 +222,10 @@ export function createStorage(rootDir: string): StorageAdapter {
     },
 
     async writeResult(input) {
+      const normalized = extractInlineImages(
+        input.markdown,
+        input.images ?? [],
+      );
       const manifest: ParseManifest = {
         attachmentID: input.attachment.id,
         attachmentKey: input.attachment.key,
@@ -223,9 +242,9 @@ export function createStorage(rootDir: string): StorageAdapter {
       await writeAttachmentResultDir(fsRoot, input.attachment, {
         manifest,
         rawResult: input.rawResult,
-        markdown: input.markdown,
+        markdown: normalized.markdown,
         boxes: input.boxes,
-        images: input.images,
+        images: normalized.images,
         validate: validateReadyDir,
       });
     },
@@ -253,7 +272,8 @@ export function createStorage(rootDir: string): StorageAdapter {
     },
 
     async writeLiteResult(input) {
-      if (!input.markdown.trim()) {
+      const markdown = stripInlineDataImages(input.markdown);
+      if (!markdown.trim()) {
         throw new Error("MinerU lite markdown is empty");
       }
       const dir = getAttachmentDir(fsRoot, input.attachment);
@@ -270,7 +290,7 @@ export function createStorage(rootDir: string): StorageAdapter {
         mode: "lite",
         status: "ready",
       };
-      await writeText(joinPath(dir, LITE_CONTENT_FILE), input.markdown);
+      await writeText(joinPath(dir, LITE_CONTENT_FILE), markdown);
       await writeJson(joinPath(dir, LITE_MANIFEST_FILE), manifest);
     },
 
@@ -709,21 +729,4 @@ function getImageMimeType(path: string): string {
     return "image/gif";
   }
   return "image/png";
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  const alphabet =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  let output = "";
-  for (let index = 0; index < bytes.length; index += 3) {
-    const first = bytes[index] ?? 0;
-    const second = bytes[index + 1] ?? 0;
-    const third = bytes[index + 2] ?? 0;
-    const value = (first << 16) | (second << 8) | third;
-    output += alphabet[(value >> 18) & 63];
-    output += alphabet[(value >> 12) & 63];
-    output += index + 1 < bytes.length ? alphabet[(value >> 6) & 63] : "=";
-    output += index + 2 < bytes.length ? alphabet[value & 63] : "=";
-  }
-  return output;
 }

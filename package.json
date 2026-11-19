@@ -31,6 +31,7 @@
     "release": "zotero-plugin release",
     "pretest": "node scripts/fix-test-profile.mjs && node scripts/ensure-test-libraries.mjs",
     "test": "zotero-plugin test",
+    "test:bridge": "node --test test/mcpBridge.test.mjs",
     "preserve": "node scripts/fix-test-profile.mjs && node scripts/ensure-test-libraries.mjs",
     "update-deps": "npm update --save"
   },

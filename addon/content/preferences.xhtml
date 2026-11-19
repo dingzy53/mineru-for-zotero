@@ -96,6 +96,82 @@
   </vbox>
   <vbox>
     <label>
+      <html:h2 data-l10n-id="pref-mcp-title"></html:h2>
+    </label>
+    <checkbox
+      id="zotero-prefpane-__addonRef__-mcp-enabled"
+      data-l10n-id="pref-mcp-enabled"
+      native="true"
+      preference="mcpEnabled"
+    />
+    <hbox align="center" style="gap: 6px; margin-top: 6px">
+      <label
+        for="zotero-prefpane-__addonRef__-mcp-endpoint"
+        data-l10n-id="pref-mcp-endpoint"
+      ></label>
+      <html:input
+        type="text"
+        readonly="true"
+        id="zotero-prefpane-__addonRef__-mcp-endpoint"
+        style="flex: 1; font-family: monospace"
+      ></html:input>
+    </hbox>
+    <hbox align="center" style="gap: 6px; margin-top: 6px">
+      <label
+        for="zotero-prefpane-__addonRef__-mcp-token"
+        data-l10n-id="pref-mcp-token"
+      ></label>
+      <html:input
+        type="password"
+        readonly="true"
+        id="zotero-prefpane-__addonRef__-mcp-token"
+        style="flex: 1; font-family: monospace"
+      ></html:input>
+      <html:button
+        id="zotero-prefpane-__addonRef__-mcp-copy-token"
+        data-l10n-id="pref-mcp-copy"
+      ></html:button>
+      <html:button
+        id="zotero-prefpane-__addonRef__-mcp-regenerate"
+        data-l10n-id="pref-mcp-regenerate"
+      ></html:button>
+    </hbox>
+    <hbox align="center" style="gap: 6px; margin-top: 6px">
+      <label
+        for="zotero-prefpane-__addonRef__-mcp-command-stdio"
+        data-l10n-id="pref-mcp-command-stdio"
+      ></label>
+      <html:input
+        type="text"
+        readonly="true"
+        id="zotero-prefpane-__addonRef__-mcp-command-stdio"
+        style="flex: 1; font-family: monospace"
+      ></html:input>
+      <html:button
+        id="zotero-prefpane-__addonRef__-mcp-copy-command-stdio"
+        data-l10n-id="pref-mcp-copy"
+      ></html:button>
+    </hbox>
+    <hbox align="center" style="gap: 6px; margin-top: 6px">
+      <label
+        for="zotero-prefpane-__addonRef__-mcp-command-http"
+        data-l10n-id="pref-mcp-command-http"
+      ></label>
+      <html:input
+        type="text"
+        readonly="true"
+        id="zotero-prefpane-__addonRef__-mcp-command-http"
+        style="flex: 1; font-family: monospace"
+      ></html:input>
+      <html:button
+        id="zotero-prefpane-__addonRef__-mcp-copy-command-http"
+        data-l10n-id="pref-mcp-copy"
+      ></html:button>
+    </hbox>
+    <html:p data-l10n-id="pref-mcp-help" style="opacity: 0.7"></html:p>
+  </vbox>
+  <vbox>
+    <label>
       <html:h2 data-l10n-id="pref-query-api-title"></html:h2>
     </label>
     <checkbox

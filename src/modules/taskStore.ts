@@ -110,9 +110,14 @@ class TaskManagerStore {
   }
 
   public getTasks(): TaskRecord[] {
-    return Array.from(this.tasks.values()).sort(
-      (a, b) => b.createdAt - a.createdAt,
-    );
+    return Array.from(this.tasks.values()).sort((a, b) => {
+      const aActive = a.status === "running" || a.status === "pending" ? 0 : 1;
+      const bActive = b.status === "running" || b.status === "pending" ? 0 : 1;
+      if (aActive !== bActive) {
+        return aActive - bActive;
+      }
+      return (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt);
+    });
   }
 
   public getTask(id: string): TaskRecord | undefined {
@@ -136,6 +141,12 @@ class TaskManagerStore {
     }
     task.status = status;
     if (error) task.error = error;
+    if (isFinishedTaskStatus(status)) {
+      task.detail = undefined;
+      if (status === "succeeded") {
+        task.error = undefined;
+      }
+    }
     task.updatedAt = Date.now();
     this.notify();
     return this.save();

@@ -1,4 +1,5 @@
 import { resolveAttachment } from "./attachmentResolver";
+import { stripInlineDataImages } from "../inlineImages";
 import {
   parseHeadings,
   readSection,
@@ -6,7 +7,9 @@ import {
   searchBoxes,
 } from "./markdownParser";
 import {
+  AttachmentParseState,
   AttachmentSummary,
+  CollectionStatus,
   CollectionSummary,
   ItemSearchInput,
   ItemSummary,
@@ -14,6 +17,8 @@ import {
   MarkdownGranularity,
   MarkdownQueryError,
   ParseStatusReader,
+  StatusAttachment,
+  StatusItem,
   TagSummary,
   ZoteroItemsGateway,
   ZoteroItemLike,
@@ -26,6 +31,9 @@ import type { NormalizedBox } from "../domain";
 
 /** Items whose parse status is read at once while filtering by parsedOnly. */
 const PARSED_ONLY_SCAN_BATCH = 20;
+
+/** Items summarized at once for a collection status report. */
+const STATUS_SCAN_BATCH = 20;
 
 /** Most BibTeX entries kept in memory for Markdown API responses. */
 const BIBTEX_CACHE_LIMIT = 500;
@@ -69,6 +77,48 @@ async function exportZoteroItemBibTeX(item: ZoteroItemLike): Promise<string> {
   return zoteroItem ? exportBibTeX(zoteroItem) : "";
 }
 
+/** Modification time of the PDF behind an attachment, as Zotero reports it. */
+async function readZoteroAttachmentMtime(
+  attachment: ZoteroItemLike,
+): Promise<number | undefined> {
+  const item = Zotero.Items.getByLibraryAndKey(
+    attachment.libraryID,
+    attachment.key,
+  );
+  return item
+    ? ((await item.attachmentModificationTime) ?? undefined)
+    : undefined;
+}
+
+/**
+ * Start a precise parse in Zotero without waiting for it: waiting would block
+ * the HTTP response. `force` only keeps the parse non-interactive, because an
+ * HTTP caller must never be able to open a modal reparse prompt in the Zotero
+ * window; whether to parse at all is decided before this is called.
+ */
+function startZoteroParse(attachment: ZoteroItemLike, force?: boolean): void {
+  void (async () => {
+    const item =
+      (await Zotero.Items.getByLibraryAndKeyAsync?.(
+        attachment.libraryID,
+        attachment.key,
+      )) ||
+      Zotero.Items.getByLibraryAndKey(attachment.libraryID, attachment.key);
+    if (!item) {
+      return;
+    }
+    await taskStore.waitUntilLoaded();
+    const existing = taskStore.getTask(String(item.id));
+    const resume =
+      !force && Boolean(existing?.resume && existing.status === "failed");
+    await parseAttachment(item, {
+      force: true,
+      resume,
+      nonInteractive: true,
+    });
+  })().catch((e) => ztoolkit.log("API Trigger Parse Error", e));
+}
+
 /** One search hit: the item and the parse status of its PDF attachments. */
 interface SearchCandidate {
   item: ItemSummary;
@@ -84,6 +134,16 @@ export interface PreferredMarkdownReader extends ParseStatusReader {
     key: string;
   }): Promise<string>;
   readBoxes(ref: { libraryID: number; key: string }): Promise<NormalizedBox[]>;
+  /** Native path of the Markdown file behind `readPreferredMarkdown()`. */
+  getPreferredMarkdownPath?(ref: {
+    libraryID: number;
+    key: string;
+  }): Promise<string>;
+  /** Manifest of the precise result, used to compare its PDF mtime. */
+  readManifestSafe?(ref: {
+    libraryID: number;
+    key: string;
+  }): Promise<{ pdfMtime?: number } | null>;
 }
 
 /**
@@ -105,13 +165,31 @@ export interface MarkdownQueryService {
     includeSubsections?: boolean;
     q?: string;
     contextParagraphs?: number;
+    /**
+     * Add `result.file`, the path of the stored Markdown. Only for callers
+     * that authenticate: the REST API does not disclose the data folder.
+     */
+    includeFilePath?: boolean;
   }): Promise<unknown>;
   triggerParse(input: {
     libraryID: number;
     key: string;
     attachmentKey?: string;
-  }): Promise<unknown>;
+    /** Parse again even when a result for the current PDF exists. */
+    force?: boolean;
+  }): Promise<{
+    status: "submitted" | "already-parsed" | "already-running";
+    itemID: number;
+    key: string;
+    /** Time the parse was handed to Zotero; only for `submitted`. */
+    submittedAt?: number;
+  }>;
   getTasks(): Promise<unknown>;
+  getCollectionStatus(input: {
+    libraryID: number;
+    collection: string;
+    includeSubcollections?: boolean;
+  }): Promise<CollectionStatus>;
   getLibraries(): Promise<{ libraries: LibrarySummary[] }>;
   getCollections(input: {
     libraryID: number;
@@ -140,7 +218,33 @@ export function createMarkdownQueryService(deps: {
   ): Promise<TagSummary[]> | TagSummary[];
   /** BibTeX exporter; defaults to Zotero's BibTeX translator. */
   exportBibTeX?(item: ZoteroItemLike): Promise<string>;
+  /** Parse task records; defaults to the task store. */
+  getTasks?(): TaskRecord[];
+  /** Modification time of an attachment's PDF; defaults to Zotero's. */
+  getAttachmentMtime?(attachment: ZoteroItemLike): Promise<number | undefined>;
+  /** Start a precise parse without waiting for it; defaults to Zotero's. */
+  startParse?(attachment: ZoteroItemLike): void;
 }): MarkdownQueryService {
+  const getTaskRecords = () => deps.getTasks?.() ?? taskStore.getTasks();
+
+  /**
+   * Whether a ready precise result was made from the PDF as it is now. When
+   * either modification time is unknown, the stored result counts as current.
+   */
+  const hasCurrentPreciseResult = async (
+    attachment: ZoteroItemLike,
+  ): Promise<boolean> => {
+    const ref = { libraryID: attachment.libraryID, key: attachment.key };
+    if (!(await deps.storage.readParseStatus(ref)).preciseReady) {
+      return false;
+    }
+    const parsedMtime = (await deps.storage.readManifestSafe?.(ref))?.pdfMtime;
+    const currentMtime = await (
+      deps.getAttachmentMtime ?? readZoteroAttachmentMtime
+    )(attachment);
+    return !parsedMtime || !currentMtime || parsedMtime === currentMtime;
+  };
+
   return {
     async getLibraries() {
       if (deps.getLibraries) {
@@ -217,7 +321,122 @@ export function createMarkdownQueryService(deps: {
     },
 
     async getTasks() {
-      return { tasks: taskStore.getTasks().map(summarizeTask) };
+      return { tasks: getTaskRecords().map(summarizeTask) };
+    },
+
+    async getCollectionStatus(input) {
+      const includeSubcollections = input.includeSubcollections === true;
+      const found = await deps.searchItems({
+        libraryID: input.libraryID,
+        collection: input.collection,
+        includeSubcollections,
+      });
+      // Regular items and standalone PDFs; notes and child items are not
+      // papers of their own.
+      const entries = found.filter(
+        (item) =>
+          item.isRegularItem() ||
+          (item.isPDFAttachment() && !item.parentItemID),
+      );
+      const taskStates = new Map(
+        getTaskRecords().map((task) => [
+          `${task.attachment.libraryID}-${task.attachment.key}`,
+          task.status,
+        ]),
+      );
+
+      const describeAttachment = async (
+        attachment: ZoteroItemLike,
+      ): Promise<StatusAttachment> => {
+        const ref = { libraryID: attachment.libraryID, key: attachment.key };
+        const status = await deps.storage.readParseStatus(ref);
+        const taskStatus = taskStates.get(`${ref.libraryID}-${ref.key}`);
+        const state: AttachmentParseState = status.preciseReady
+          ? "precise"
+          : status.liteReady
+            ? "lite"
+            : taskStatus === "running" || taskStatus === "pending"
+              ? "running"
+              : taskStatus === "failed"
+                ? "failed"
+                : "none";
+        const summary: StatusAttachment = {
+          key: attachment.key,
+          fileName:
+            attachment.attachmentFilename || attachment.getDisplayTitle(),
+          state,
+        };
+        if (state === "precise" || state === "lite") {
+          try {
+            summary.words = countWords(
+              await deps.storage.readPreferredMarkdown(ref),
+            );
+          } catch {
+            // The word count is a convenience; the state already says ready.
+          }
+        }
+        return summary;
+      };
+
+      const describeItem = async (
+        item: ZoteroItemLike,
+      ): Promise<StatusItem> => {
+        const summary = summarizeItem(item);
+        const pdfs = item.isRegularItem()
+          ? (await deps.items.getAsync(item.getAttachments(false))).filter(
+              (candidate) => candidate.isPDFAttachment(),
+            )
+          : [item];
+        const status: StatusItem = {
+          key: summary.key,
+          title: summary.title,
+          attachments: await Promise.all(pdfs.map(describeAttachment)),
+        };
+        if (summary.year) {
+          status.year = summary.year;
+        }
+        if (summary.creators?.[0]) {
+          status.firstCreator = summary.creators[0];
+        }
+        return status;
+      };
+
+      const items: StatusItem[] = [];
+      for (let start = 0; start < entries.length; start += STATUS_SCAN_BATCH) {
+        items.push(
+          ...(await Promise.all(
+            entries.slice(start, start + STATUS_SCAN_BATCH).map(describeItem),
+          )),
+        );
+      }
+
+      const noPdf = items.filter((item) => item.attachments.length === 0);
+      const parsed = items.filter((item) =>
+        item.attachments.some(isReadableAttachment),
+      );
+      const resolvedCol = await resolveCollectionMeta(
+        input.libraryID,
+        input.collection,
+        deps.getCollections,
+      );
+      return {
+        libraryID: input.libraryID,
+        collection: input.collection,
+        ...(resolvedCol
+          ? {
+              collectionKey: resolvedCol.key,
+              collectionName: resolvedCol.name,
+            }
+          : {}),
+        includeSubcollections,
+        totals: {
+          items: items.length,
+          parsed: parsed.length,
+          notParsed: items.length - parsed.length - noPdf.length,
+          noPdf: noPdf.length,
+        },
+        items,
+      };
     },
     async triggerParse(input) {
       const resolved = await resolveAttachment({
@@ -227,24 +446,33 @@ export function createMarkdownQueryService(deps: {
         items: deps.items,
         storage: deps.storage,
       });
-      // Try to parse using Zotero backend. This won't wait for it to finish.
-      // We don't await because it blocks the HTTP response. `force` keeps the
-      // request non-interactive: an HTTP caller must never be able to open a
-      // modal reparse prompt in the Zotero window.
-      const item = Zotero.Items.getByLibraryAndKey(
-        input.libraryID,
-        resolved.attachment.key,
+      const attachment = resolved.attachment;
+      const target = { itemID: attachment.id, key: attachment.key };
+
+      const activeTask = getTaskRecords().find(
+        (task) =>
+          task.attachment.libraryID === attachment.libraryID &&
+          task.attachment.key === attachment.key &&
+          (task.status === "running" || task.status === "pending"),
       );
-      if (item) {
-        parseAttachment(item, { force: true }).catch((e) =>
-          ztoolkit.log("API Trigger Parse Error", e),
-        );
+      if (activeTask) {
+        // The parse manager ignores a second parse of a running attachment.
+        return { status: "already-running", ...target };
       }
-      return {
-        status: "submitted",
-        itemID: resolved.attachment.id,
-        key: resolved.attachment.key,
-      };
+
+      // Any local process can call this endpoint, so it must not spend MinerU
+      // quota on a PDF that is already parsed unless the caller says so.
+      if (input.force !== true && (await hasCurrentPreciseResult(attachment))) {
+        return { status: "already-parsed", ...target };
+      }
+
+      const submittedAt = Date.now();
+      if (deps.startParse) {
+        deps.startParse(attachment);
+      } else {
+        startZoteroParse(attachment, input.force);
+      }
+      return { status: "submitted", ...target, submittedAt };
     },
     async searchByTitle(input) {
       const hasFilter = Boolean(
@@ -373,6 +601,14 @@ export function createMarkdownQueryService(deps: {
         },
       };
 
+      if (input.includeFilePath && deps.storage.getPreferredMarkdownPath) {
+        (base.result as { file?: string }).file =
+          await deps.storage.getPreferredMarkdownPath({
+            libraryID: resolved.attachment.libraryID,
+            key: resolved.attachment.key,
+          });
+      }
+
       try {
         const bibtex = await readCachedBibTeX(
           resolved.item,
@@ -437,6 +673,48 @@ export function createMarkdownQueryService(deps: {
       );
     },
   };
+}
+
+/** Whether an attachment has a parse result that can be read now. */
+function isReadableAttachment(attachment: StatusAttachment): boolean {
+  return attachment.state === "precise" || attachment.state === "lite";
+}
+
+async function resolveCollectionMeta(
+  libraryID: number,
+  collectionParam: string,
+  getCollections?: (
+    libraryID: number,
+  ) => Promise<CollectionSummary[]> | CollectionSummary[],
+): Promise<{ key: string; name: string } | undefined> {
+  try {
+    let list: Array<{ key?: unknown; name?: unknown }> = [];
+    if (getCollections) {
+      list = await getCollections(libraryID);
+    } else if (
+      typeof Zotero !== "undefined" &&
+      (Zotero as any).Collections?.getByLibrary
+    ) {
+      list = (Zotero as any).Collections.getByLibrary(libraryID) ?? [];
+    }
+    const target = collectionParam.trim().toLowerCase();
+    const match = list.find(
+      (col) =>
+        String(col.key ?? "").toLowerCase() === target ||
+        String(col.name ?? "").toLowerCase() === target,
+    );
+    if (match && match.key && match.name) {
+      return { key: String(match.key), name: String(match.name) };
+    }
+  } catch {
+    // Best-effort metadata lookup.
+  }
+  return undefined;
+}
+
+/** Count whitespace-separated words of a Markdown document. */
+function countWords(markdown: string): number {
+  return stripInlineDataImages(markdown).split(/\s+/).filter(Boolean).length;
 }
 
 /**

@@ -1,11 +1,14 @@
 import { assert } from "chai";
 import {
   openExternalURL,
+  registerMcpSettings,
   registerPrefsScripts,
   registerPreferenceValueSync,
 } from "../src/modules/preferenceScript";
 import {
   getMarkdownApiEnabled,
+  getMcpEnabled,
+  getMcpToken,
   getLocalApiBaseURL,
   getLocalApiTimeoutMinutes,
   getOnlineApiTimeoutMinutes,
@@ -14,6 +17,8 @@ import {
   getSaveImages,
   getStatusTagsEnabled,
   setMarkdownApiEnabled,
+  setMcpEnabled,
+  setMcpToken,
   setLocalApiBaseURL,
   setLocalApiTimeoutMinutes,
   setOnlineApiTimeoutMinutes,
@@ -221,6 +226,117 @@ describe("preferenceScript", function () {
     assert.notInclude(preferences, "mineruForZotero-api-token");
     assert.notInclude(preferences, "mineruForZotero-api-regenerate-token");
     assert.notInclude(preferences, "Authorization: Bearer");
+  });
+
+  it("shows the MCP section before the local query API", async function () {
+    const preferences = await fetchPreferencePanelMarkup();
+
+    assertIncreasingIndexes(preferences, [
+      'data-l10n-id="mineruForZotero-pref-mcp-title"',
+      'id="zotero-prefpane-mineruForZotero-mcp-enabled"',
+      'id="zotero-prefpane-mineruForZotero-mcp-endpoint"',
+      'id="zotero-prefpane-mineruForZotero-mcp-token"',
+      'id="zotero-prefpane-mineruForZotero-mcp-copy-token"',
+      'id="zotero-prefpane-mineruForZotero-mcp-regenerate"',
+      'id="zotero-prefpane-mineruForZotero-mcp-command-stdio"',
+      'id="zotero-prefpane-mineruForZotero-mcp-command-http"',
+      'data-l10n-id="mineruForZotero-pref-query-api-title"',
+    ]);
+  });
+
+  it("persists the MCP server checkbox immediately", function () {
+    const enabled = fakePreferenceElement("true", "", "checkbox");
+    const document = fakePreferenceDocument({
+      "zotero-prefpane-mineruForZotero-mcp-enabled": enabled,
+    });
+
+    try {
+      registerPreferenceValueSync(document);
+      assert.isTrue(enabled.checked);
+
+      enabled.checked = false;
+      enabled.emit("command");
+
+      assert.isFalse(getMcpEnabled());
+    } finally {
+      setMcpEnabled(true);
+    }
+  });
+
+  it("renders the MCP endpoint, token and commands, and copies them", async function () {
+    const id = (suffix: string) =>
+      `zotero-prefpane-mineruForZotero-mcp-${suffix}`;
+    const names = [
+      "endpoint",
+      "token",
+      "command-stdio",
+      "command-http",
+      "copy-token",
+      "copy-command-stdio",
+      "copy-command-http",
+      "regenerate",
+    ];
+    const elements = Object.fromEntries(
+      names.map((name) => [name, fakePreferenceElement("")]),
+    );
+    const document = fakePreferenceDocument(
+      Object.fromEntries(names.map((name) => [id(name), elements[name]])),
+    );
+    const copied: string[] = [];
+    const endpoint = "http://127.0.0.1:24000/mineru-for-zotero/mcp";
+    const savedToken = getMcpToken();
+
+    try {
+      setMcpToken("first-token");
+      registerMcpSettings(fakePreferenceWindow(document), {
+        endpoint: () => endpoint,
+        bridgePath: () => "/data/mineru-mcp/mineru-for-zotero-mcp.mjs",
+        copyText: (text) => copied.push(text),
+        feedbackMs: 60,
+      });
+
+      assert.equal(elements.endpoint.value, endpoint);
+      assert.equal(elements.token.value, "first-token");
+      assert.equal(
+        elements["command-http"].value,
+        `claude mcp add --transport http mineru-for-zotero ${endpoint} --header "Authorization: Bearer first-token"`,
+      );
+      assert.equal(
+        elements["command-stdio"].value,
+        `claude mcp add mineru-for-zotero -e MINERU_ZOTERO_TOKEN=first-token -e MINERU_ZOTERO_URL=${endpoint} -- node "/data/mineru-mcp/mineru-for-zotero-mcp.mjs"`,
+      );
+
+      elements["copy-token"].emit("click");
+      elements["copy-command-stdio"].emit("click");
+      assert.deepEqual(copied, [
+        "first-token",
+        elements["command-stdio"].value,
+      ]);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      assert.equal(
+        elements["copy-token"].textContent,
+        "mineruForZotero-pref-mcp-copied",
+      );
+      await new Promise((resolve) => setTimeout(resolve, 90));
+      assert.equal(
+        elements["copy-token"].textContent,
+        "mineruForZotero-pref-mcp-copy",
+      );
+
+      elements.regenerate.emit("click");
+      const token = getMcpToken();
+      assert.match(token, /^[0-9a-f]{64}$/);
+      assert.equal(elements.token.value, token);
+      assert.include(elements["command-http"].value, `Bearer ${token}`);
+      assert.include(
+        elements["command-stdio"].value,
+        `MINERU_ZOTERO_TOKEN=${token} `,
+      );
+      elements["copy-command-http"].emit("click");
+      assert.equal(copied[2], elements["command-http"].value);
+    } finally {
+      setMcpToken(savedToken);
+    }
   });
 
   it("persists markdown query API checkbox changes immediately", function () {

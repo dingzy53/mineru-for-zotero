@@ -112,20 +112,79 @@ To migrate only your parsed results without re-running parsing or consuming API 
 For AI workflows, you can configure an **Agent-friendly Sync Folder** in the settings. When enabled, MinerU for Zotero will automatically copy parsed results (Markdown + images) into a clean, flat directory structure named after the citation key and title (`[CitationKey] - Title/`). When two PDFs would share a folder name (for example a paper and its supplement), the attachment key is appended to keep them apart (`[CitationKey] - Title [ATTACHMENTKEY]/`).
 It will also automatically generate a `metadata.bib` file containing the BibTeX metadata for each item. You can click `Sync All Results Now` in the settings to bulk-export all existing historical results to this folder.
 
-This enables you to use AI Agents (like Cursor, Claude Desktop, etc.) to read the high-quality Markdown output directly. You can even equip your agent with the included CLI script (see below) to dynamically search and read files directly from the Zotero database!
+This lets AI agents read the Markdown files directly. For searching, reading single sections and finding page numbers without knowing the folder layout, connect the agent to the [MCP server](#mcp-server-for-ai-agents) instead.
+
+## MCP server for AI agents
+
+The plugin serves an [MCP](https://modelcontextprotocol.io) endpoint from inside Zotero, on Zotero's own local server, so AI agents (Claude Code, and any other MCP client) can read your parsed papers. There is nothing separate to install or keep up to date: the tools ship with the plugin.
+
+### Connect an agent
+
+1. Open **Edit → Settings → MinerU for Zotero** and find **MCP Server (for AI agents)**.
+2. Copy one of the two ready-made commands and run it in a terminal:
+
+```bash
+# Recommended: a small bridge that also works when Zotero starts after your agent (needs Node.js 18+)
+claude mcp add mineru-for-zotero -e MINERU_ZOTERO_TOKEN=<token> \
+  -- node "<Zotero data directory>/mineru-mcp/mineru-for-zotero-mcp.mjs"
+
+# Direct HTTP connection
+claude mcp add --transport http mineru-for-zotero http://127.0.0.1:23119/mineru-for-zotero/mcp \
+  --header "Authorization: Bearer <token>"
+```
+
+Any MCP client that supports Streamable HTTP can use the endpoint with the token as a bearer token. The server speaks the stateless MCP 2026-07-28 protocol and the `initialize`-based 2025-03-26 … 2025-11-25 revisions. Responses are plain JSON: there is no SSE and no session.
+
+An HTTP client connects once, when its session starts. If Zotero is not open at that moment, the tools are missing for the whole session. The bridge avoids this: it always starts, answers the tool list from a saved copy while Zotero is closed, and reaches Zotero as soon as it is running.
+
+### Tools
+
+| Tool                       | What it does                                                                                                                             |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `mineru_list_collections`  | Libraries and collections, as paths with keys.                                                                                           |
+| `mineru_list_tags`         | Tags of a library.                                                                                                                       |
+| `mineru_collection_status` | Which items of a collection are parsed, not parsed, or have no PDF, with word counts.                                                    |
+| `mineru_search_items`      | Find items by title, creator, year, collection, tag, DOI and more.                                                                       |
+| `mineru_get_outline`       | Heading tree, size and stored file path of a parsed paper.                                                                               |
+| `mineru_read_section`      | One section as Markdown.                                                                                                                 |
+| `mineru_search_in_paper`   | Paragraphs that contain a phrase, with context.                                                                                          |
+| `mineru_locate_in_pdf`     | Physical page of a passage (precise results only).                                                                                       |
+| `mineru_read_markdown`     | The full Markdown, in pages.                                                                                                             |
+| `mineru_parse_pdf`         | Start a MinerU parse for a PDF without a result. Spends your MinerU quota; a PDF with a current result is skipped unless `force` is set. |
+| `mineru_list_tasks`        | Parse tasks with status, progress and errors.                                                                                            |
+
+A tool call answers within about 50 seconds. `mineru_parse_pdf` waits for the parse that long and otherwise answers `running`; follow it with `mineru_list_tasks`.
+
+### Access and errors
+
+- Every request needs the token from the settings pane. **Regenerate** replaces it and cuts off clients until you run the new command.
+- Requests that carry an `Origin` header, which is to say requests from web pages, are rejected.
+- The token is stored in Zotero's preferences and in your MCP client's configuration. It only works from this computer.
+
+| Response                   | Meaning                                                                                                             |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `401`                      | The bearer token is missing or wrong. Copy the command again from settings.                                         |
+| `403`                      | The request came from a web page (`Origin` header).                                                                 |
+| `503`                      | **Enable MCP server** is unchecked in settings.                                                                     |
+| Tools missing in the agent | Zotero was not running when an HTTP client connected. Reconnect (`/mcp` in Claude Code), or use the bridge command. |
+
+### If you installed the earlier skill
+
+Versions up to 0.11 shipped a `mineru-for-zotero-cli` skill with a Node CLI. It is replaced by the MCP server. Delete the `mineru-for-zotero-cli` folder from your agent's skill folder (for example `~/.claude/skills/`). The REST API it used is still there for scripts; see [Local Markdown query API](#local-markdown-query-api).
 
 ## Local Markdown query API
 
-The local Markdown query API lets local external tools read Markdown parse results that MinerU for Zotero has already saved through Zotero's built-in local HTTP server. It reads existing local results, can submit a reparse for an existing PDF attachment, and never opens a dialog or directly exposes the plugin data folder.
+The local Markdown query API lets local external tools read Markdown parse results that MinerU for Zotero has already saved through Zotero's built-in local HTTP server. It reads existing local results, can submit a parse for an existing PDF attachment, and never opens a dialog or directly exposes the plugin data folder.
 
 Main capabilities:
 
 - Search candidate Zotero items and PDF attachments by title keywords.
 - Read Markdown for a regular Zotero item or PDF attachment with `libraryID + key`.
 - Query at `full`, `headings`, `section`, or `search` granularity, so external agents can inspect structure before reading a section or keyword context.
+- `search` and `locate` queries match the text as a reader sees it: inline tags such as `<sub>` are ignored (`CO2` finds `CO<sub>2</sub>`), and a query may span a line break.
 - Pass `attachmentKey` to select a specific PDF when a regular item has multiple PDF attachments.
 - Return precise Markdown first; if precise output is unavailable but lite output exists, return lite Markdown and mark it in `result.mode`.
-- Reparse an attachment without any interactive prompt, and list current parse tasks with their status, progress, and error text.
+- Parse an attachment without any interactive prompt (skipping PDFs that already have a current result unless `force=true`), and list current parse tasks with their status, progress, and error text.
 
 ### Configuration
 
@@ -167,6 +226,17 @@ curl --get "http://127.0.0.1:23119/mineru-for-zotero/search" \
   --data-urlencode "parsedOnly=true"
 ```
 
+Report which items of a collection are parsed:
+
+```shell
+curl --get "http://127.0.0.1:23119/mineru-for-zotero/status" \
+  --data-urlencode "libraryID=1" \
+  --data-urlencode "collection=AI" \
+  --data-urlencode "includeSubcollections=true"
+```
+
+The response has `totals` (`items`, `parsed`, `notParsed`, `noPdf`) and one entry per regular item or standalone PDF in `items`: `key`, `title`, `year`, `firstCreator`, and `attachments`, each with `key`, `fileName`, `state` (`precise`, `lite`, `running`, `failed`, or `none`) and, when a result exists, `words`.
+
 Read the full Markdown:
 
 ```shell
@@ -200,13 +270,17 @@ curl --get "http://127.0.0.1:23119/mineru-for-zotero/markdown" \
   --data-urlencode "contextParagraphs=2"
 ```
 
-Reparse a PDF attachment (`POST` only; returns immediately and never opens a dialog):
+Parse a PDF attachment (`POST` only; returns immediately and never opens a dialog):
 
 ```shell
 curl -X POST "http://127.0.0.1:23119/mineru-for-zotero/parse?libraryID=1&key=ABCD1234"
 ```
 
-The response is `{"status":"submitted","itemID":123,"key":"ABCD1234"}`. Pass `attachmentKey` to pick one PDF when `key` is a regular item. This endpoint always reparses and replaces any existing result, without the `Use existing result` prompt, and a request for an attachment that is already parsing in this session is ignored.
+The response is `{"status":"submitted","itemID":123,"key":"ABCD1234","submittedAt":1763100000000}`. Pass `attachmentKey` to pick one PDF when `key` is a regular item. `status` is one of:
+
+- `submitted`: the parse was started; follow it through `/tasks`. A task whose `updatedAt` is older than `submittedAt` is the record of an earlier parse.
+- `already-parsed`: a precise result made from the PDF as it is now already exists, so nothing was submitted and no MinerU quota was spent. Add `force=true` to parse again and replace the result.
+- `already-running`: the attachment is being parsed; nothing was submitted.
 
 List parse tasks:
 
@@ -218,32 +292,34 @@ The response is `{"tasks":[...]}`. Each summary contains `id`, `attachmentID`, `
 
 Common parameters:
 
-| Parameter            | Endpoint                                             | Description                                                                |
-| -------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------- |
-| `libraryID`          | `collections`, `tags`, `search`, `markdown`, `parse` | Zotero library ID. Personal libraries are usually `1`.                     |
-| `parentKey`          | `collections`                                        | Optional parent collection key.                                            |
-| `title`              | `search`                                             | Title keyword used to find candidate Zotero items.                         |
-| `creator`            | `search`                                             | Creator/author substring to match.                                         |
-| `collection`         | `search`                                             | Collection name or key to filter within a folder.                          |
-| `tag`                | `search`                                             | Exact tag to filter.                                                       |
-| `abstract`           | `search`                                             | Abstract keyword to search.                                                |
-| `publication`        | `search`                                             | Journal or conference title to match.                                      |
-| `citekey`            | `search`                                             | Citation key to match (e.g. `vaswani2017attention`).                       |
-| `doi`                | `search`                                             | DOI substring to match.                                                    |
-| `itemType`           | `search`                                             | Item type filter (e.g. `journalArticle`, `conferencePaper`).               |
-| `since`              | `search`                                             | Date added filter (`YYYY-MM-DD`).                                          |
-| `hasPdf`             | `search`                                             | Filter items that have at least one PDF attachment (`true`).               |
-| `parsedOnly`         | `search`                                             | Filter items with ready MinerU parse results (`true`).                     |
-| `sortBy`             | `search`                                             | Sort by `dateAdded`, `dateModified`, `title`, or `year`.                   |
-| `sortOrder`          | `search`                                             | Sort direction (`asc` or `desc`).                                          |
-| `limit`              | `tags`, `search`                                     | Maximum number of records to return.                                       |
-| `key`                | `markdown`, `parse`                                  | Zotero regular item key or PDF attachment key.                             |
-| `attachmentKey`      | `markdown`, `parse`                                  | Selects the target PDF attachment when a regular item contains PDFs.       |
-| `granularity`        | `markdown`                                           | `full`, `headings`, `section`, `search`, or `locate`. Defaults to `full`.  |
-| `sectionPath`        | `markdown`                                           | Heading path for `section` queries, for example `Introduction/Background`. |
-| `includeSubsections` | `markdown`                                           | Extend section scope to same-level numbered subsections (`true`).          |
-| `q`                  | `markdown`                                           | Keyword used by `search` or `locate` queries.                              |
-| `contextParagraphs`  | `markdown`                                           | Number of context paragraphs around each `search` match.                   |
+| Parameter               | Endpoint                                                       | Description                                                                |
+| ----------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `libraryID`             | `collections`, `tags`, `search`, `status`, `markdown`, `parse` | Zotero library ID. Personal libraries are usually `1`.                     |
+| `parentKey`             | `collections`                                                  | Optional parent collection key.                                            |
+| `title`                 | `search`                                                       | Title keyword used to find candidate Zotero items.                         |
+| `creator`               | `search`                                                       | Creator/author substring to match.                                         |
+| `collection`            | `search`, `status`                                             | Collection name or key to filter within a folder. Required for `status`.   |
+| `includeSubcollections` | `status`                                                       | Also report items in the collection's subcollections (`true`).             |
+| `tag`                   | `search`                                                       | Exact tag to filter.                                                       |
+| `abstract`              | `search`                                                       | Abstract keyword to search.                                                |
+| `publication`           | `search`                                                       | Journal or conference title to match.                                      |
+| `citekey`               | `search`                                                       | Citation key to match (e.g. `vaswani2017attention`).                       |
+| `doi`                   | `search`                                                       | DOI substring to match.                                                    |
+| `itemType`              | `search`                                                       | Item type filter (e.g. `journalArticle`, `conferencePaper`).               |
+| `since`                 | `search`                                                       | Date added filter (`YYYY-MM-DD`).                                          |
+| `hasPdf`                | `search`                                                       | Filter items that have at least one PDF attachment (`true`).               |
+| `parsedOnly`            | `search`                                                       | Filter items with ready MinerU parse results (`true`).                     |
+| `sortBy`                | `search`                                                       | Sort by `dateAdded`, `dateModified`, `title`, or `year`.                   |
+| `sortOrder`             | `search`                                                       | Sort direction (`asc` or `desc`).                                          |
+| `limit`                 | `tags`, `search`                                               | Maximum number of records to return.                                       |
+| `key`                   | `markdown`, `parse`                                            | Zotero regular item key or PDF attachment key.                             |
+| `attachmentKey`         | `markdown`, `parse`                                            | Selects the target PDF attachment when a regular item contains PDFs.       |
+| `force`                 | `parse`                                                        | Parse again even when a current result exists (`true`).                    |
+| `granularity`           | `markdown`                                                     | `full`, `headings`, `section`, `search`, or `locate`. Defaults to `full`.  |
+| `sectionPath`           | `markdown`                                                     | Heading path for `section` queries, for example `Introduction/Background`. |
+| `includeSubsections`    | `markdown`                                                     | Extend section scope to same-level numbered subsections (`true`).          |
+| `q`                     | `markdown`                                                     | Keyword used by `search` or `locate` queries.                              |
+| `contextParagraphs`     | `markdown`                                                     | Number of context paragraphs around each `search` match.                   |
 
 Common error codes:
 
@@ -251,47 +327,9 @@ Common error codes:
 - `invalid-request`: a required parameter is missing or invalid; `/parse` also returns it for non-`POST` requests.
 - `ambiguous-attachment`: the regular item has multiple PDFs; pass `attachmentKey`.
 - `collection-not-found`: the `collection` search filter matches no collection key or name in the library; list them with `/collections`.
-- `parse-result-not-found`: the target PDF has no usable parse result yet; parse it in Zotero first.
+- `parse-result-not-found`: the target PDF has no usable parse result yet; parse it in Zotero or through `/parse` first.
 - `section-not-found`: the section path does not match; run `granularity=headings` first to inspect exact paths.
 - `missing-query`: `granularity=search` was used without `q`.
-
-### AI agent integration (companion skill)
-
-The repository includes a companion Skill in the `mineru-for-zotero-cli/` folder, which is designed to teach AI Agents (like Cursor, Claude Desktop, or local LLMs) how to query your local Zotero database directly.
-
-To equip your Agent with this skill:
-
-1. Direct your Agent to read the `mineru-for-zotero-cli/SKILL.md` file. This file contains the complete system prompt, context, and command workflows the Agent needs to interact with the local API.
-2. The Agent can then use the bundled Node.js script (`query-markdown.mjs`) to autonomously execute commands (e.g., `search`, `headings`, `section`) directly against your running Zotero client.
-
-This integration abstracts away HTTP parameters, port detection, and error handling, providing the Agent with a clean, text-optimized interface for traversing complex academic documents without overflowing its context window.
-
-### Example agent workflow
-
-Because the CLI output is heavily optimized for LLM consumption, external agents can autonomously traverse complex academic documents.
-
-For example, when an AI Agent is tasked to analyze the paper _Attention Is All You Need_ using this CLI, it successfully executes the following steps completely autonomously:
-
-<details>
-<summary>Click to view the Agent's autonomous test report</summary>
-
-**✅ Step 1 — Search & Identify (`search --title`)**
-The agent queries the title, identifies the item `D634TSCH`, and confirms that the precise parse result exists.
-
-**✅ Step 2 — Structure Extraction (`markdown --granularity headings`)**
-The agent extracts the 25-node heading tree (Abstract → 1 Introduction → ... → 7 Conclusion) to understand the document's structure without loading the full text into context.
-
-**✅ Step 3 — Targeted Section Reading (`markdown --granularity section`)**
-The agent precisely targets `Attention Is All You Need / 3.2.1 Scaled Dot-Product Attention` and successfully extracts the exact LaTeX formula:
-`\operatorname{Attention}(Q, K, V) = \operatorname{softmax}\left(\frac{QK^{\mathsf{T}}}{\sqrt{d_k}}\right)V`
-
-**✅ Step 4 — Contextual Search (`markdown --granularity search`)**
-By searching for `"Table 1"` with `--context-paragraphs 2`, the agent accurately locates the layer complexity table and perfectly recreates it in Markdown format, pulling the exact explanation of why Self-Attention is faster ($O(1)$ sequential operations vs $O(n)$ for Recurrent).
-
-**✅ Step 5 — Full Document Fetching (`markdown --granularity full`)**
-The agent fetches the full Markdown and flawlessly lists all 8 authors and their affiliations from the header.
-
-</details>
 
 ## Privacy and security
 
@@ -299,6 +337,7 @@ The agent fetches the full Markdown and flawlessly lists all 8 authors and their
 - **Local API:** the PDF goes only to the server address you set.
 - **API key:** stored in your local Zotero preferences and sent only to `mineru.net`.
 - **Files:** results go to the `mineru-copy` folder in your Zotero data directory, and to the sync folder if you set one.
+- **MCP server (for AI agents):** enabled by default on `127.0.0.1` and protected by a 256-bit bearer token stored in Zotero preferences (plus `Origin` header rejection for browser pages). Authenticated callers can read stored Markdown file paths and start parses. The plugin copies the stdio bridge script into `<Zotero data directory>/mineru-mcp/`, and the bridge caches tool metadata (no paper content, no token) in `~/.cache/mineru-for-zotero/`. When Zotero's debug output is enabled, it logs request headers including the bearer token.
 - **Local Markdown query API:** off by default. When on, it answers only on this computer (`127.0.0.1`) and has no token of its own.
 - No telemetry. The plugin contacts nothing else.
 

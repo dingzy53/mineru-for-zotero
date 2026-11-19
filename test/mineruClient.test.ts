@@ -7,7 +7,11 @@ import {
   MinerUTaskError,
   MinerUTaskFailedError,
 } from "../src/modules/mineruClient";
-import { fallbackDownloadBinary } from "../src/modules/mineruClient/http";
+import {
+  fallbackDownloadBinary,
+  normalizeResponseStatus,
+} from "../src/modules/mineruClient/http";
+import { requestJson } from "../src/modules/mineruClient/api";
 import { extractJobError } from "../src/modules/mineruClient/v1";
 import { createFallbackUpload } from "../src/modules/mineruClient/v4";
 import { readZip } from "../src/modules/mineruClient/zip";
@@ -767,6 +771,26 @@ describe("mineruClient (V1)", function () {
       }
 
       assert.equal((error as Error).message, "second");
+    });
+
+    it("treats XHR status 0 with an empty ArrayBuffer as a connection failure, not 200 OK", async function () {
+      assert.equal(normalizeResponseStatus(0, null), 500);
+      assert.equal(normalizeResponseStatus(0, ""), 500);
+      assert.equal(normalizeResponseStatus(0, new ArrayBuffer(0)), 500);
+      assert.equal(normalizeResponseStatus(0, new Uint8Array(0)), 500);
+      assert.equal(normalizeResponseStatus(0, new Uint8Array([1]).buffer), 200);
+
+      const emptyError = await rejectionOf(
+        requestJson(
+          async () => new Response("", { status: 200 }),
+          `${LOCAL_BASE}/v1/uploads`,
+          "upload",
+          { method: "POST" },
+        ),
+      );
+      assert.instanceOf(emptyError, MinerURequestError);
+      assert.equal((emptyError as MinerURequestError).status, 0);
+      assert.match((emptyError as Error).message, /Empty response/);
     });
   });
 });

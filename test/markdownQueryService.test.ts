@@ -65,6 +65,36 @@ describe("markdownQueryService", function () {
     assert.nestedPropertyVal(response, "result.mode", "lite");
   });
 
+  it("adds the stored file path only when asked", async function () {
+    const deps = fakeDeps({ markdown: "# Precise" });
+    const service = createMarkdownQueryService({
+      ...deps,
+      storage: {
+        ...deps.storage,
+        async getPreferredMarkdownPath(ref: {
+          libraryID: number;
+          key: string;
+        }) {
+          return `/data/attachments/${ref.libraryID}-${ref.key}/content.md`;
+        },
+      },
+    });
+
+    const plain = await service.queryMarkdown({ libraryID: 1, key: "PDF1" });
+    const withFile = await service.queryMarkdown({
+      libraryID: 1,
+      key: "PDF1",
+      includeFilePath: true,
+    });
+
+    assert.notNestedProperty(plain, "result.file");
+    assert.nestedPropertyVal(
+      withFile,
+      "result.file",
+      "/data/attachments/1-PDF1/content.md",
+    );
+  });
+
   it("returns heading granularity", async function () {
     const service = createMarkdownQueryService(
       fakeDeps({ markdown: "# A\n\n## B" }),
@@ -458,6 +488,258 @@ describe("markdownQueryService", function () {
       ["ITEM2"],
     );
     assert.deepEqual(searchLimits, [undefined]);
+  });
+
+  it("reports which items of a collection are parsed", async function () {
+    const parsedPdf = fakeItem({
+      id: 11,
+      key: "PDFA",
+      pdf: true,
+      parentItemID: 1,
+    });
+    const litePdf = fakeItem({
+      id: 12,
+      key: "PDFB",
+      pdf: true,
+      parentItemID: 1,
+    });
+    const runningPdf = fakeItem({
+      id: 21,
+      key: "PDFC",
+      pdf: true,
+      parentItemID: 2,
+    });
+    const failedPdf = fakeItem({
+      id: 31,
+      key: "PDFD",
+      pdf: true,
+      parentItemID: 3,
+    });
+    const standalonePdf = fakeItem({ id: 50, key: "PDFE", pdf: true });
+    const items = [
+      fakeItem({
+        id: 1,
+        key: "ITEM1",
+        regular: true,
+        title: "Parsed",
+        date: "2022-03-01",
+        creators: [{ lastName: "Chen", firstName: "Wei" }, { name: "Group" }],
+        attachments: [11, 12],
+      }),
+      fakeItem({
+        id: 2,
+        key: "ITEM2",
+        regular: true,
+        title: "Running",
+        attachments: [21],
+      }),
+      fakeItem({
+        id: 3,
+        key: "ITEM3",
+        regular: true,
+        title: "Failed",
+        attachments: [31],
+      }),
+      fakeItem({ id: 4, key: "ITEM4", regular: true, title: "No PDF" }),
+      fakeItem({ id: 5, key: "NOTE1", title: "A note" }),
+      standalonePdf,
+      parsedPdf,
+      litePdf,
+      runningPdf,
+      failedPdf,
+    ];
+    const ready: Record<string, { preciseReady: boolean; liteReady: boolean }> =
+      {
+        PDFA: { preciseReady: true, liteReady: true },
+        PDFB: { preciseReady: false, liteReady: true },
+      };
+    const searches: ItemSearchInput[] = [];
+    const deps = fakeDeps({
+      markdown: "# Title\n\nthree more words",
+      items,
+      searchItems: async (input) => {
+        searches.push(input);
+        return items.filter((item) => !item.parentItemID);
+      },
+    });
+    const service = createMarkdownQueryService({
+      ...deps,
+      storage: {
+        ...deps.storage,
+        async readParseStatus(ref: { key: string }) {
+          return ready[ref.key] ?? { preciseReady: false, liteReady: false };
+        },
+      },
+      getTasks: () =>
+        [
+          { attachment: { libraryID: 1, key: "PDFC" }, status: "running" },
+          { attachment: { libraryID: 1, key: "PDFD" }, status: "failed" },
+          // A failed reparse does not hide the stored result.
+          { attachment: { libraryID: 1, key: "PDFA" }, status: "failed" },
+        ] as never,
+    });
+
+    const status = await service.getCollectionStatus({
+      libraryID: 1,
+      collection: "UGRP",
+      includeSubcollections: true,
+    });
+
+    assert.deepEqual(searches, [
+      { libraryID: 1, collection: "UGRP", includeSubcollections: true },
+    ]);
+    assert.deepEqual(status.totals, {
+      items: 5,
+      parsed: 1,
+      notParsed: 3,
+      noPdf: 1,
+    });
+    assert.deepEqual(status.items[0], {
+      key: "ITEM1",
+      title: "Parsed",
+      year: "2022",
+      firstCreator: "Chen, Wei",
+      attachments: [
+        { key: "PDFA", fileName: "PDFA.pdf", state: "precise", words: 5 },
+        { key: "PDFB", fileName: "PDFB.pdf", state: "lite", words: 5 },
+      ],
+    });
+    assert.deepEqual(
+      status.items.map((item) => [
+        item.key,
+        item.attachments.map((attachment) => attachment.state),
+      ]),
+      [
+        ["ITEM1", ["precise", "lite"]],
+        ["ITEM2", ["running"]],
+        ["ITEM3", ["failed"]],
+        ["ITEM4", []],
+        ["PDFE", ["none"]],
+      ],
+    );
+  });
+
+  describe("triggerParse", function () {
+    function parseService(input: {
+      preciseReady: boolean;
+      parsedMtime?: number;
+      currentMtime?: number;
+      taskStatus?: string;
+    }) {
+      const started: string[] = [];
+      const deps = fakeDeps({
+        markdown: "# X",
+        parseStatus: { preciseReady: input.preciseReady, liteReady: true },
+      });
+      const service = createMarkdownQueryService({
+        ...deps,
+        storage: {
+          ...deps.storage,
+          async readManifestSafe() {
+            return input.parsedMtime === undefined
+              ? null
+              : { pdfMtime: input.parsedMtime };
+          },
+        },
+        getTasks: () =>
+          (input.taskStatus
+            ? [
+                {
+                  attachment: { libraryID: 1, key: "PDF1" },
+                  status: input.taskStatus,
+                },
+              ]
+            : []) as never,
+        getAttachmentMtime: async () => input.currentMtime,
+        startParse: (attachment) => {
+          started.push(attachment.key);
+        },
+      });
+      return { service, started };
+    }
+
+    it("answers already-parsed without starting a parse", async function () {
+      const { service, started } = parseService({
+        preciseReady: true,
+        parsedMtime: 100,
+        currentMtime: 100,
+      });
+
+      const response = await service.triggerParse({
+        libraryID: 1,
+        key: "PDF1",
+      });
+
+      assert.deepEqual(response, {
+        status: "already-parsed",
+        itemID: 1,
+        key: "PDF1",
+      });
+      assert.deepEqual(started, []);
+    });
+
+    it("parses again when forced", async function () {
+      const { service, started } = parseService({
+        preciseReady: true,
+        parsedMtime: 100,
+        currentMtime: 100,
+      });
+      const before = Date.now();
+
+      const response = await service.triggerParse({
+        libraryID: 1,
+        key: "PDF1",
+        force: true,
+      });
+
+      assert.equal(response.status, "submitted");
+      assert.isAtLeast(response.submittedAt ?? 0, before);
+      assert.deepEqual(started, ["PDF1"]);
+    });
+
+    it("parses when the PDF changed after the stored result", async function () {
+      const { service, started } = parseService({
+        preciseReady: true,
+        parsedMtime: 100,
+        currentMtime: 200,
+      });
+
+      const response = await service.triggerParse({
+        libraryID: 1,
+        key: "PDF1",
+      });
+
+      assert.equal(response.status, "submitted");
+      assert.deepEqual(started, ["PDF1"]);
+    });
+
+    it("parses when only a lite result exists", async function () {
+      const { service, started } = parseService({ preciseReady: false });
+
+      const response = await service.triggerParse({
+        libraryID: 1,
+        key: "PDF1",
+      });
+
+      assert.equal(response.status, "submitted");
+      assert.deepEqual(started, ["PDF1"]);
+    });
+
+    it("answers already-running for an active task, even when forced", async function () {
+      const { service, started } = parseService({
+        preciseReady: false,
+        taskStatus: "running",
+      });
+
+      const response = await service.triggerParse({
+        libraryID: 1,
+        key: "PDF1",
+        force: true,
+      });
+
+      assert.equal(response.status, "already-running");
+      assert.deepEqual(started, []);
+    });
   });
 
   it("exports BibTeX once per item revision across requests", async function () {

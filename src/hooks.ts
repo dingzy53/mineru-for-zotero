@@ -21,7 +21,14 @@ import {
   parseAttachment,
 } from "./modules/parseManager";
 import { getPdfPageCount } from "./modules/pdfPageCount";
+import {
+  ensureMcpToken,
+  registerMcpEndpoint,
+  unregisterMcpEndpoint,
+} from "./modules/mcp/endpoint";
+import { installBridge } from "./modules/mcp/bridge";
 import { taskStore } from "./modules/taskStore";
+import { removeOrphanResumeDirectories } from "./modules/taskResumeDirectory";
 import { migrateResultStorage } from "./modules/storageLocation";
 
 let notifierID: string | null = null;
@@ -47,8 +54,34 @@ async function onStartup() {
     ztoolkit.log("MinerU result migration failed", error);
   }
 
+  // Before anything can start a parse, which creates a resume directory.
+  try {
+    await taskStore.waitUntilLoaded();
+    const { removed } = await removeOrphanResumeDirectories({
+      hasTask: (taskID) => taskStore.getTask(taskID) !== undefined,
+      log: (message) => ztoolkit.log(message),
+    });
+    if (removed.length > 0) {
+      ztoolkit.log(`Removed ${removed.length} empty MinerU resume directories`);
+    }
+  } catch (error) {
+    ztoolkit.log("MinerU resume cleanup failed", error);
+  }
+
   registerPreferencePane();
   registerMarkdownQueryApiEndpoint();
+  ensureMcpToken();
+  registerMcpEndpoint();
+  // Only the stdio setup needs the file; the plugin works without it.
+  installBridge().catch((error) => {
+    ztoolkit.log(
+      "MinerU MCP bridge install failed",
+      error instanceof Error
+        ? `${error.message}\n${error.stack ?? ""}`
+        : String(error),
+    );
+    Zotero.logError(error as Error);
+  });
 
   await Promise.all(
     Zotero.getMainWindows().map((win) => onMainWindowLoad(win)),
@@ -184,6 +217,7 @@ async function onShutdown(): Promise<void> {
   }
   unregisterReaderToolbar();
   unregisterMarkdownQueryApiEndpoint();
+  unregisterMcpEndpoint();
   destroyAllReaderOverlays();
   unregisterItemTreeColumn();
   ztoolkit.unregisterAll();

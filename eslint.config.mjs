@@ -15,7 +15,11 @@ export default [
         },
       },
       {
-        files: ["scripts/**/*.mjs"],
+        files: [
+          "scripts/**/*.mjs",
+          "test/**/*.mjs",
+          "addon/content/bridge/**/*.mjs",
+        ],
         languageOptions: {
           globals: {
             ...globals.node,

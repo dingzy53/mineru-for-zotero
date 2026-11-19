@@ -10,6 +10,57 @@ import type { NormalizedBox } from "../domain";
 const ATX_HEADING = /^(#{1,6})\s+(.+?)\s*#*\s*$/;
 const TOP_LEVEL_TITLE = /^#\s+.+$/;
 
+const HTML_ATTRS =
+  "(?:\\s+[a-z_:][a-z0-9_.:-]*(?:\\s*=\\s*(?:\"[^\"]*\"|'[^']*'|[^\\s\"'=<>`]+))?)*";
+/** Tags MinerU writes inside running text; removing them joins the text. */
+const INLINE_HTML_TAG = new RegExp(
+  `</?(?:sub|sup|i|b|em|strong|u|s|span|small|mark|font)${HTML_ATTRS}\\s*/?>`,
+  "gi",
+);
+/** Any other tag (table cells, line breaks) separates text. */
+const HTML_TAG = new RegExp(`</?[a-z][a-z0-9-]*${HTML_ATTRS}\\s*/?>`, "gi");
+/** A word hyphenated across a line break of the PDF. */
+const HYPHENATED_LINE_BREAK = /(\p{L})-[ \t]*\r?\n\s*(\p{Ll})/gu;
+
+/**
+ * Reduce text to what a reader sees, for matching: inline tags removed
+ * (`CO<sub>2</sub>` becomes `co2`), words hyphenated across a line break
+ * joined, whitespace collapsed, lower case.
+ */
+export function toPlainSearchText(text: string): string {
+  return text
+    .replace(INLINE_HTML_TAG, "")
+    .replace(HTML_TAG, " ")
+    .replace(HYPHENATED_LINE_BREAK, "$1$2")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * Remove inline tags from text shown to a reader (`CO<sub>2</sub>` becomes
+ * `CO2`). Tables and other block markup stay as they are.
+ */
+export function stripInlineTags(text: string): string {
+  return text.replace(INLINE_HTML_TAG, "");
+}
+
+/**
+ * Build a case-insensitive matcher for a search query.
+ *
+ * The literal substring test comes first, so everything that matched before
+ * plain-text matching existed still matches (including queries that contain
+ * tags). Text that fails it is compared again in plain form, so a query can
+ * span a `<sub>` tag or a line break.
+ */
+function createQueryMatcher(query: string): (text: string) => boolean {
+  const literal = query.trim().toLowerCase();
+  const plain = toPlainSearchText(query);
+  return (text) =>
+    text.toLowerCase().includes(literal) ||
+    (plain !== "" && toPlainSearchText(text).includes(plain));
+}
+
 /**
  * Parse Markdown ATX headings and generate hierarchical paths for each heading.
  */
@@ -65,10 +116,27 @@ export function readSection(
   const path = normalizeSectionPath(sectionPath);
   const lines = markdown.split(/\r?\n/);
   const headings = parseHeadings(markdown);
-  const matches = headings.filter((heading) => samePath(heading.path, path));
+  let matches = headings.filter((heading) => samePath(heading.path, path));
+
+  // Agents often pass only the leaf heading title (e.g. ["Introduction"]).
+  if (matches.length === 0 && path.length === 1) {
+    matches = headings.filter((heading) => heading.title === path[0]);
+    if (matches.length === 0) {
+      const target = path[0].toLowerCase();
+      matches = headings.filter(
+        (heading) => heading.title.toLowerCase() === target,
+      );
+    }
+  }
 
   if (matches.length === 0) {
-    throw new MarkdownQueryError("section-not-found", 404, "section-not-found");
+    const suggestions = findClosestHeadingPaths(headings, path);
+    throw new MarkdownQueryError(
+      "section-not-found",
+      404,
+      "section-not-found",
+      suggestions.length > 0 ? { suggestions } : undefined,
+    );
   }
   if (matches.length > 1) {
     throw new MarkdownQueryError(
@@ -88,6 +156,63 @@ export function readSection(
     heading,
     content: lines.slice(heading.line, endLine).join("\n").trimEnd(),
   };
+}
+
+function editDistance(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const curr = [i];
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+    }
+    prev = curr;
+  }
+  return prev[n];
+}
+
+function findClosestHeadingPaths(
+  headings: MarkdownHeading[],
+  requested: string[],
+): string[][] {
+  if (headings.length === 0) {
+    return [];
+  }
+  const leaf = (requested[requested.length - 1] ?? "").trim().toLowerCase();
+  if (!leaf) {
+    return headings.slice(0, 5).map((h) => h.path);
+  }
+  const tokens = leaf.split(/\W+/).filter((t) => t.length >= 2);
+  const scored = headings
+    .map((heading) => {
+      const title = heading.title.toLowerCase();
+      let score = 0;
+      if (title.includes(leaf) || leaf.includes(title)) {
+        score += 10;
+      }
+      for (const token of tokens) {
+        if (title.includes(token)) {
+          score += 3;
+        }
+      }
+      const dist = editDistance(leaf, title);
+      const maxDist = Math.max(
+        2,
+        Math.floor(Math.max(leaf.length, title.length) / 2),
+      );
+      if (dist <= maxDist) {
+        score += Math.max(1, 8 - dist);
+      }
+      return { path: heading.path, score };
+    })
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score);
+  if (scored.length === 0) {
+    return headings.slice(0, 5).map((h) => h.path);
+  }
+  return scored.slice(0, 5).map((entry) => entry.path);
 }
 
 /**
@@ -157,6 +282,7 @@ export function searchMarkdown(
     throw new MarkdownQueryError("missing-query", 400, "missing-query");
   }
 
+  const matchesQuery = createQueryMatcher(query);
   const contextSize = Math.max(0, Math.floor(contextParagraphs));
   const paragraphs = markdown
     .split(/\r?\n\s*\r?\n/)
@@ -168,7 +294,7 @@ export function searchMarkdown(
       : paragraphs;
 
   return searchableParagraphs.flatMap((paragraph, index) => {
-    if (!paragraph.toLowerCase().includes(normalizedQuery)) {
+    if (!matchesQuery(paragraph)) {
       return [];
     }
 
@@ -205,16 +331,16 @@ export function searchBoxes(
     throw new MarkdownQueryError("missing-query", 400, "missing-query");
   }
 
+  const matchesQuery = createQueryMatcher(query);
   const contextSize = Math.max(0, Math.floor(contextBoxes));
   const matches: MarkdownLocateMatch[] = [];
 
   boxes.forEach((box, index) => {
     const textToSearch = [box.markdown, box.formula, box.tableFormats?.markdown]
       .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
+      .join(" ");
 
-    if (textToSearch.includes(normalizedQuery)) {
+    if (matchesQuery(textToSearch)) {
       const before = boxes.slice(Math.max(0, index - contextSize), index);
       const after = boxes.slice(index + 1, index + 1 + contextSize);
       const contextText = [...before, box, ...after]

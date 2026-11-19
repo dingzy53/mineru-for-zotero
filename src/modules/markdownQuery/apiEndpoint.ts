@@ -1,5 +1,6 @@
+import { version as pluginVersion } from "../../../package.json";
 import { getMarkdownApiEnabled } from "../../utils/prefs";
-import { getMinerUStorageRoot } from "../preferenceScript";
+import { getMinerUStorageRoot } from "../storageLocation";
 import { createStorage } from "../storage";
 import { extractItemYear } from "./itemYear";
 import {
@@ -18,15 +19,38 @@ interface MarkdownEndpointRequest {
   data: unknown;
 }
 
+/**
+ * Version of the REST API contract, reported in every response next to
+ * `pluginVersion`. Bump it on a breaking change, so a script can tell which
+ * contract the running plugin speaks.
+ */
+export const MARKDOWN_API_VERSION = 1;
+
 export const MARKDOWN_ENDPOINT_PATHS = [
   "/mineru-for-zotero/search",
   "/mineru-for-zotero/markdown",
   "/mineru-for-zotero/parse",
   "/mineru-for-zotero/tasks",
+  "/mineru-for-zotero/status",
   "/mineru-for-zotero/libraries",
   "/mineru-for-zotero/collections",
   "/mineru-for-zotero/tags",
 ] as const;
+
+let sharedService: MarkdownQueryService | undefined;
+
+/**
+ * The query service over the real library and result storage. The REST
+ * endpoints and the MCP tools share this one instance, so they cannot drift.
+ */
+export function getMarkdownQueryService(): MarkdownQueryService {
+  sharedService ??= createMarkdownQueryService({
+    items: Zotero.Items,
+    storage: createStorage(getMinerUStorageRoot()),
+    searchItems,
+  });
+  return sharedService;
+}
 
 /**
  * Register the Markdown query HTTP endpoint for external local clients.
@@ -40,12 +64,9 @@ export const MARKDOWN_ENDPOINT_PATHS = [
  * the `apiEnabled` preference.
  */
 export function registerMarkdownQueryApiEndpoint(): void {
-  const service = createMarkdownQueryService({
-    items: Zotero.Items,
-    storage: createStorage(getMinerUStorageRoot()),
-    searchItems,
-  });
-  const EndpointClass = createMarkdownQueryEndpointClass(service);
+  const EndpointClass = createMarkdownQueryEndpointClass(
+    getMarkdownQueryService(),
+  );
 
   for (const path of MARKDOWN_ENDPOINT_PATHS) {
     Zotero.Server.Endpoints[path] = toZoteroEndpoint(EndpointClass);
@@ -119,9 +140,18 @@ export function createMarkdownQueryEndpoint(service: MarkdownQueryService) {
             libraryID: requireInteger(query.libraryID, "libraryID"),
             key: requireString(query.key, "key"),
             attachmentKey: optionalString(query.attachmentKey),
+            force: parseOptionalBoolean(query.force),
           });
         } else if (options.pathname === "/mineru-for-zotero/tasks") {
           payload = await service.getTasks();
+        } else if (options.pathname === "/mineru-for-zotero/status") {
+          payload = await service.getCollectionStatus({
+            libraryID: requireInteger(query.libraryID, "libraryID"),
+            collection: requireString(query.collection, "collection"),
+            includeSubcollections: parseOptionalBoolean(
+              query.includeSubcollections,
+            ),
+          });
         } else {
           payload = await service.queryMarkdown({
             libraryID: requireInteger(query.libraryID, "libraryID"),
@@ -206,6 +236,10 @@ async function searchItems(input: ItemSearchInput): Promise<ZoteroItemLike[]> {
   if (input.collection) {
     const col = resolveSearchCollection(input.libraryID, input.collection);
     search.addCondition("collectionID", "is", col.id);
+    if (input.includeSubcollections) {
+      // Zotero spells this condition with the operator as its value.
+      search.addCondition("recursive", "true");
+    }
   }
 
   const ids = await search.search();
@@ -544,10 +578,19 @@ function parseSectionPath(
 }
 
 /**
- * Generate a standard JSON HTTP response tuple.
+ * Generate a standard JSON HTTP response tuple. Every body, success or error,
+ * carries the plugin and API versions.
  */
 function json(code: number, payload: unknown) {
-  return [code, "application/json", JSON.stringify(payload)] as const;
+  return [
+    code,
+    "application/json",
+    JSON.stringify({
+      ...(payload as Record<string, unknown>),
+      pluginVersion,
+      apiVersion: MARKDOWN_API_VERSION,
+    }),
+  ] as const;
 }
 
 /**

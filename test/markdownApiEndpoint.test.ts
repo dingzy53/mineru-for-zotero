@@ -1,8 +1,10 @@
 import { assert } from "chai";
+import { version } from "../package.json";
 import {
   createMarkdownQueryEndpoint,
   createMarkdownQueryEndpointClass,
   itemMatchesYear,
+  MARKDOWN_API_VERSION,
   MARKDOWN_ENDPOINT_PATHS,
   resolveSearchCollection,
 } from "../src/modules/markdownQuery/apiEndpoint";
@@ -28,8 +30,26 @@ describe("markdownApiEndpoint", function () {
       JSON.stringify({
         error: "api-disabled",
         message: "Markdown query API is disabled",
+        pluginVersion: version,
+        apiVersion: MARKDOWN_API_VERSION,
       }),
     ]);
+  });
+
+  it("reports the plugin and API versions in successful responses", async function () {
+    setMarkdownApiEnabled(true);
+    const endpoint = createMarkdownQueryEndpoint(fakeService());
+
+    const response = await endpoint.init(
+      request("/mineru-for-zotero/libraries"),
+    );
+
+    assert.equal(response[0], 200);
+    assert.deepEqual(JSON.parse(String(response[2])), {
+      libraries: [],
+      pluginVersion: version,
+      apiVersion: MARKDOWN_API_VERSION,
+    });
   });
 
   it("forwards creator, year, tag, and limit search parameters", async function () {
@@ -108,7 +128,7 @@ describe("markdownApiEndpoint", function () {
         return { granularity: "full", content: "# Body" };
       },
       async triggerParse() {
-        return { status: "submitted" };
+        return { status: "submitted" as const, itemID: 1, key: "PDF1" };
       },
       async getTasks() {
         return { tasks: [] };
@@ -215,6 +235,7 @@ describe("markdownApiEndpoint", function () {
       "/mineru-for-zotero/markdown",
       "/mineru-for-zotero/parse",
       "/mineru-for-zotero/tasks",
+      "/mineru-for-zotero/status",
       "/mineru-for-zotero/libraries",
       "/mineru-for-zotero/collections",
       "/mineru-for-zotero/tags",
@@ -371,6 +392,42 @@ describe("markdownApiEndpoint", function () {
     assert.include(String(response[2]), '"tasks":');
   });
 
+  it("forwards status requests and requires a collection", async function () {
+    setMarkdownApiEnabled(true);
+    const requests: unknown[] = [];
+    const endpoint = createMarkdownQueryEndpoint({
+      ...fakeService(),
+      async getCollectionStatus(input) {
+        requests.push(input);
+        return emptyStatus();
+      },
+    });
+
+    const response = await endpoint.init(
+      request("/mineru-for-zotero/status", {
+        query: {
+          libraryID: "1",
+          collection: "UGRP",
+          includeSubcollections: "true",
+        },
+      }),
+    );
+    const missing = await endpoint.init(
+      request("/mineru-for-zotero/status", { query: { libraryID: "1" } }),
+    );
+
+    assert.equal(response[0], 200);
+    assert.include(String(response[2]), '"totals":');
+    assert.deepEqual(requests, [
+      { libraryID: 1, collection: "UGRP", includeSubcollections: true },
+    ]);
+    assert.equal(missing[0], 400);
+    assert.include(
+      String(missing[2]),
+      "Missing required parameter: collection",
+    );
+  });
+
   it("rejects non-POST parse triggers", async function () {
     setMarkdownApiEnabled(true);
     const endpoint = createMarkdownQueryEndpoint(fakeService());
@@ -392,7 +449,7 @@ describe("markdownApiEndpoint", function () {
       ...fakeService(),
       async triggerParse(input) {
         submitted = input;
-        return { status: "submitted", itemID: 1, key: "PDF1" };
+        return { status: "submitted" as const, itemID: 1, key: "PDF1" };
       },
     });
 
@@ -405,9 +462,20 @@ describe("markdownApiEndpoint", function () {
 
     assert.equal(response[0], 200);
     assert.include(String(response[2]), '"submitted"');
-    const trigger = submitted as { libraryID: number; key: string };
-    assert.equal(trigger.libraryID, 1);
-    assert.equal(trigger.key, "ABC1");
+    assert.deepEqual(submitted, {
+      libraryID: 1,
+      key: "ABC1",
+      attachmentKey: undefined,
+      force: undefined,
+    });
+
+    await endpoint.init(
+      request("/mineru-for-zotero/parse", {
+        method: "POST",
+        query: { libraryID: "1", key: "ABC1", force: "true" },
+      }),
+    );
+    assert.propertyVal(submitted, "force", true);
   });
 
   describe("collection filter", function () {
@@ -467,6 +535,16 @@ describe("markdownApiEndpoint", function () {
   });
 });
 
+function emptyStatus() {
+  return {
+    libraryID: 1,
+    collection: "UGRP",
+    includeSubcollections: false,
+    totals: { items: 0, parsed: 0, notParsed: 0, noPdf: 0 },
+    items: [],
+  };
+}
+
 function fakeService() {
   return {
     async searchByTitle() {
@@ -476,10 +554,13 @@ function fakeService() {
       return { granularity: "full", content: "# Body" };
     },
     async triggerParse() {
-      return { status: "submitted" };
+      return { status: "submitted" as const, itemID: 1, key: "PDF1" };
     },
     async getTasks() {
       return { tasks: [] };
+    },
+    async getCollectionStatus() {
+      return emptyStatus();
     },
     async getLibraries() {
       return { libraries: [] };

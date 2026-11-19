@@ -141,6 +141,28 @@ export function setMarkdownApiEnabled(value: boolean) {
   return setPref("apiEnabled", value);
 }
 
+/**
+ * Read whether the MCP server answers requests. On by default: nothing can
+ * call it without the bearer token.
+ */
+export function getMcpEnabled(): boolean {
+  return getPref("mcpEnabled") !== false;
+}
+
+export function setMcpEnabled(value: boolean) {
+  return setPref("mcpEnabled", value);
+}
+
+/** The bearer token MCP clients must send; empty until first startup. */
+export function getMcpToken(): string {
+  const value = getPref("mcpToken");
+  return typeof value === "string" ? value.trim() : "";
+}
+
+export function setMcpToken(value: string) {
+  return setPref("mcpToken", value);
+}
+
 export function getSaveImages(): boolean {
   const value = getPref("saveImages");
   return value !== false;

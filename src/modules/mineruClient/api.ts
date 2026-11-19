@@ -34,7 +34,23 @@ export async function requestJson<T>(
   init: RequestInit,
 ): Promise<T> {
   const response = await requestOk(request, url, stage, init);
-  return (await response.json()) as T;
+  const text = await response.text();
+  if (!text.trim()) {
+    throw new MinerURequestError(
+      stage,
+      0,
+      `Empty response from ${url} (server may have stopped or closed the connection)`,
+    );
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new MinerURequestError(
+      stage,
+      response.status,
+      `Invalid JSON response from ${url}`,
+    );
+  }
 }
 
 /**

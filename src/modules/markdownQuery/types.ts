@@ -116,6 +116,8 @@ export interface ItemSearchInput {
   year?: string;
   tag?: string;
   collection?: string;
+  /** With `collection`: also match items in its subcollections. */
+  includeSubcollections?: boolean;
   abstract?: string;
   publication?: string;
   citekey?: string;
@@ -242,4 +244,59 @@ export interface AttachmentSummary {
   fileName: string;
   preciseReady?: boolean;
   liteReady?: boolean;
+}
+
+/**
+ * Parse state of one PDF attachment. A stored result wins over the task
+ * state, because it stays readable while a reparse runs or after one fails.
+ */
+export type AttachmentParseState =
+  | "precise"
+  | "lite"
+  | "running"
+  | "failed"
+  | "none";
+
+/**
+ * One PDF attachment in a collection status report.
+ */
+export interface StatusAttachment {
+  key: string;
+  fileName: string;
+  state: AttachmentParseState;
+  /** Word count of the stored Markdown; only for `precise` and `lite`. */
+  words?: number;
+}
+
+/**
+ * One item in a collection status report.
+ */
+export interface StatusItem {
+  key: string;
+  title: string;
+  year?: string;
+  firstCreator?: string;
+  attachments: StatusAttachment[];
+}
+
+/**
+ * Which items of a collection have a readable parse result.
+ */
+export interface CollectionStatus {
+  libraryID: number;
+  collection: string;
+  /** Stored Zotero collection key when resolved from the library. */
+  collectionKey?: string;
+  /** Stored Zotero collection name when resolved from the library. */
+  collectionName?: string;
+  includeSubcollections: boolean;
+  totals: {
+    items: number;
+    /** Items with at least one `precise` or `lite` attachment. */
+    parsed: number;
+    /** Items that have a PDF but no readable result. */
+    notParsed: number;
+    noPdf: number;
+  };
+  items: StatusItem[];
 }

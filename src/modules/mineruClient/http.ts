@@ -94,8 +94,23 @@ export function xhrUploadBinary(
     for (const [name, value] of Object.entries(headers ?? {})) {
       xhr.setRequestHeader(name, value);
     }
-    xhr.onload = () => resolve(xhrToResponse(xhr));
-    xhr.onerror = () => reject(new Error("XMLHttpRequest upload failed"));
+    xhr.onload = () => {
+      if (xhr.status === 0 && isEmptyResponseBody(xhr.response)) {
+        reject(
+          new Error(
+            `Cannot reach ${formatOrigin(url)} (connection refused or interrupted)`,
+          ),
+        );
+        return;
+      }
+      resolve(xhrToResponse(xhr));
+    };
+    xhr.onerror = () =>
+      reject(
+        new Error(
+          `Cannot reach ${formatOrigin(url)} (connection refused or interrupted)`,
+        ),
+      );
     xhr.send(toStandaloneArrayBuffer(body));
   });
 }
@@ -114,8 +129,23 @@ export function xhrDownloadBinary(
     for (const [name, value] of Object.entries(headers ?? {})) {
       xhr.setRequestHeader(name, value);
     }
-    xhr.onload = () => resolve(xhrToResponse(xhr));
-    xhr.onerror = () => reject(new Error("XMLHttpRequest download failed"));
+    xhr.onload = () => {
+      if (xhr.status === 0 && isEmptyResponseBody(xhr.response)) {
+        reject(
+          new Error(
+            `Cannot reach ${formatOrigin(url)} (connection refused or interrupted)`,
+          ),
+        );
+        return;
+      }
+      resolve(xhrToResponse(xhr));
+    };
+    xhr.onerror = () =>
+      reject(
+        new Error(
+          `Cannot reach ${formatOrigin(url)} (connection refused or interrupted)`,
+        ),
+      );
     xhr.send();
   });
 }
@@ -128,16 +158,31 @@ export async function zoteroHttpFetch(
   init?: RequestInit,
 ): Promise<Response> {
   const headers = normalizeHeaders(init?.headers);
-  const xhr = await Zotero.HTTP.request(
-    getRequestMethod(input, init),
-    getRequestURL(input),
-    {
+  const url = getRequestURL(input);
+  let xhr: XMLHttpRequest;
+  try {
+    xhr = await Zotero.HTTP.request(getRequestMethod(input, init), url, {
       body: normalizeRequestBody(init?.body),
       ...(headers ? { headers } : {}),
       responseType: "arraybuffer",
       successCodes: false,
-    },
-  );
+    });
+  } catch (error) {
+    const status =
+      (error as { status?: number; xmlhttp?: { status?: number } })?.status ??
+      (error as { xmlhttp?: { status?: number } })?.xmlhttp?.status;
+    if (status === 0) {
+      throw new Error(
+        `Cannot reach ${formatOrigin(url)} (connection refused or interrupted)`,
+      );
+    }
+    throw error;
+  }
+  if (xhr.status === 0) {
+    throw new Error(
+      `Cannot reach ${formatOrigin(url)} (connection refused or interrupted)`,
+    );
+  }
   return xhrToResponse(xhr);
 }
 
@@ -156,6 +201,7 @@ export function xhrToResponse(xhr: XMLHttpRequest): Response {
 
 /**
  * Normalizes XHR status codes, accommodating status 0 that local runtimes may return.
+ * An empty response body with status 0 indicates a failed or aborted connection.
  */
 export function normalizeResponseStatus(
   status: number,
@@ -164,7 +210,28 @@ export function normalizeResponseStatus(
   if (status !== 0) {
     return status;
   }
-  return response == null ? 500 : 200;
+  return isEmptyResponseBody(response) ? 500 : 200;
+}
+
+function isEmptyResponseBody(response: unknown): boolean {
+  if (response == null || response === "") {
+    return true;
+  }
+  if (isArrayBuffer(response)) {
+    return response.byteLength === 0;
+  }
+  if (ArrayBuffer.isView(response)) {
+    return response.byteLength === 0;
+  }
+  return false;
+}
+
+function formatOrigin(url: string): string {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return url;
+  }
 }
 
 /**
