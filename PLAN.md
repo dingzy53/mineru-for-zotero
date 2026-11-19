@@ -162,7 +162,9 @@ Not in this plan: bumping the version. The owner runs `npm run release`; the MCP
 - Searching text across a whole collection in one call. Worth adding as a twelfth tool once the single-paper tools are in use.
 - Sharing the MCP core between the two plugins as a package. The four copied files are small; each names its zotero-S2 source commit in a header comment.
 
-## Open bug: the stdio bridge is never installed from a packed .xpi (found 2026-11-15, not fixed)
+## Bug: the stdio bridge is never installed from a packed .xpi (found 2026-11-15, fixed on this branch)
+
+> Fixed in `src/modules/mcp/bridge.ts` (`Zotero.File.getResourceAsync`) and `src/hooks.ts` (full error message/stack + `Zotero.logError`), with a direct `installBridge({ dataDirectory })` test in `test/mcpBridgeInstall.test.ts`.
 
 **Symptom.** After installing the built `mineru-for-zotero.xpi` (0.11.0) in Zotero 10.0.9 and restarting, `<data dir>/mineru-mcp/mineru-for-zotero-mcp.mjs` does not exist, so the stdio command from the settings pane points at a missing file. The debug log (`zotero -ZoteroDebugText`) shows only `[MinerU for Zotero] MinerU MCP bridge install failed {}`: the error object is logged as `{}`, which hides the cause.
 
@@ -176,7 +178,11 @@ Not in this plan: bumping the version. The owner runs `npm run release`; the MCP
 
 **Workaround in use.** The bridge was copied by hand from `addon/content/bridge/` to `~/Zotero/mineru-mcp/`. Until the fix ships, that copy is not refreshed on plugin updates.
 
-## Findings from install, human and agent testing (2026-11-15, not fixed)
+## Findings from install, human and agent testing (2026-11-15)
+
+> Critical bugs fixed on this branch: #1 & #16 (local server down / crashed connection handling instead of `JSON.parse: unexpected end of data`, plus local-API-aware error/quota hints), #2 (`resultsManager` resolves `attachmentID` from `libraryID` + `key` before manifest `attachmentID`), #3 (`mineru_parse_pdf` returns `isError: true` on terminal failure), #15 & #20c (non-blocking `Zotero.ProgressWindow` instead of modal `mainWin.alert()`), #17 (`taskStore` clears stale `detail` when a task reaches a terminal state), #19b (Locate preserves the current collection), #20b (`triggerParse` resumes/restarts failed tasks and `mineru_parse_pdf` reports `not-started` as a tool error if no current task appears), #20d (inline `data:image/...;base64,...` URIs rewritten to saved `images/...` files on write and stripped in MCP output/word counts), #21 & #22 (unknown-argument errors list valid argument names and closest match; `year` also accepts integers), #23 (`mineru_read_section` accepts unique leaf headings, lists closest headings, and avoids repeated `section-not-found: section-not-found`), #24 (source-aware quota wording for local vs online API), #25 (`taskStore` and `mineru_list_tasks` list running/pending tasks first), #26 (`mineru_collection_status` prints the resolved collection's stored name and key).
+>
+> Remaining larger features and polish items (#4, #5, #6, #7, #8, #9, #10–12, #13–14, #18–19, #20, #20e–20f) are tracked below for follow-up PRs.
 
 Tested with the 0.11.0 build in Zotero 10.0.9 on macOS: a 58-item collection imported from RIS, 49 results restored from a Sync-folder export, the MCP tools driven through the stdio bridge and over HTTP, and the GUI driven by hand. Screenshots are in `.screenshots/` (untracked, listed in `.git/info/exclude`).
 
