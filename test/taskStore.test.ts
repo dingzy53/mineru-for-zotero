@@ -50,6 +50,31 @@ describe("taskStore", function () {
 
     assert.equal(calls, 1);
   });
+
+  it("clears stale detail on terminal status and lists running tasks first", async function () {
+    await taskStore.waitUntilLoaded();
+    await taskStore.upsertTask({
+      ...taskRecord("7303"),
+      detail: "MinerU connection interrupted; reconnecting (attempt 2, in 6s)",
+      createdAt: 1000,
+    });
+    await taskStore.updateTaskStatus("7303", "failed", "server stopped");
+    assert.isUndefined(taskStore.getTask("7303")?.detail);
+    assert.equal(taskStore.getTask("7303")?.error, "server stopped");
+
+    await taskStore.upsertTask({
+      ...taskRecord("7304"),
+      status: "running",
+      createdAt: 500,
+    });
+    await taskStore.upsertTask({
+      ...taskRecord("7305"),
+      status: "succeeded",
+      createdAt: 2000,
+    });
+    const ids = taskStore.getTasks().map((t) => t.id);
+    assert.equal(ids[0], "7304");
+  });
 });
 
 function taskRecord(id: string): TaskRecord {

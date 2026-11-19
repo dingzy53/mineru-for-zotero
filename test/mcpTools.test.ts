@@ -652,7 +652,7 @@ describe("MCP tools", function () {
       assert.include(result.text, "Read it with mineru_get_outline");
     });
 
-    it("reports MinerU's error for a failed parse", async function () {
+    it("reports MinerU's error for a failed parse as a tool error", async function () {
       const result = await parse({
         submitted,
         taskLists: [
@@ -667,11 +667,32 @@ describe("MCP tools", function () {
         ],
       });
 
+      assert.match(result.text, /^ERROR PDF: PDF00001/);
       assert.include(
         result.text,
         "Status: failed\nerror: daily limit (code -60018)",
       );
       assert.include(result.text, "a retry spends quota again");
+    });
+
+    it("reports not-started as a tool error if no current task record appears before the deadline", async function () {
+      const result = await parse({
+        submitted,
+        taskLists: [
+          [
+            {
+              ...task,
+              status: "failed",
+              error: "previous failure",
+              updatedAt: 500,
+            },
+          ],
+        ],
+      });
+
+      assert.match(result.text, /^ERROR PDF: PDF00001/);
+      assert.include(result.text, "Status: not-started");
+      assert.include(result.text, "did not start in Zotero");
     });
 
     it("answers running before the time budget ends", async function () {

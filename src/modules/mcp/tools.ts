@@ -507,14 +507,19 @@ export const TOOLS: ToolDef[] = [
           task !== undefined &&
           (task.updatedAt ?? Infinity) >= (submitted.submittedAt ?? 0);
         if (isCurrent && FINISHED_TASK_STATUSES.has(task.status)) {
-          return formatParseResult(submitted.key, task.status, task);
+          const text = formatParseResult(submitted.key, task.status, task);
+          if (task.status === "failed") {
+            throw new ToolError(text);
+          }
+          return text;
         }
         if (ctx.now() + PARSE_POLL_MS + DEADLINE_MARGIN_MS > ctx.deadline) {
-          return formatParseResult(
-            submitted.key,
-            "running",
-            isCurrent ? task : undefined,
-          );
+          if (!isCurrent) {
+            throw new ToolError(
+              formatParseResult(submitted.key, "not-started", task),
+            );
+          }
+          return formatParseResult(submitted.key, "running", task);
         }
         await ctx.sleep(PARSE_POLL_MS);
       }

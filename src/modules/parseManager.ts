@@ -1228,6 +1228,7 @@ async function runParseAttachment(
       phase,
       mode === "precise" && hasExistingResult,
       source,
+      localApiBaseURL,
     );
 
     // Persist the failure before alerting, so the failed state does not depend
@@ -1418,15 +1419,24 @@ export function resolveReparseChoiceFromPromptButton(
 
 function showMessage(id: FluentMessageId, args?: Record<string, string>): void {
   const lines = createProgressWindowTexts(id, args, getMessageText);
-  const text = lines.map((l) => l.text).join("\n");
   try {
-    const mainWin = Zotero.getMainWindow();
-    if (mainWin) {
-      mainWin.alert(text);
+    if (
+      typeof Zotero !== "undefined" &&
+      typeof Zotero.ProgressWindow === "function"
+    ) {
+      const pw = new Zotero.ProgressWindow({ closeOnClick: true });
+      pw.changeHeadline("MinerU for Zotero");
+      for (const line of lines) {
+        pw.addDescription(line.text);
+      }
+      pw.show();
+      pw.startCloseTimer(id.startsWith("parse-error-") ? 8000 : 4000);
+      return;
     }
   } catch (e) {
-    ztoolkit.log("Failed to show alert", e);
+    ztoolkit.log("Failed to show MinerU progress notice", e);
   }
+  ztoolkit.log("MinerU notice:", lines.map((l) => l.text).join(" | "));
 }
 
 export function isMinerUGeneratedAttachment(item: Zotero.Item): boolean {
@@ -1611,14 +1621,25 @@ function getParseFailureMessage(
   phase: ParsePhase,
   hasReadyResult: boolean,
   source: ParseSource,
+  localApiBaseURL?: string,
 ): { id: FluentMessageId; args?: Record<string, string> } {
   const message = error instanceof Error ? error.message : String(error);
   // The local (V1) client names its request stages like the online one
   // ("submit", "poll", ...), so local failures are recognized by the source.
   if (source === "local" && error instanceof MinerURequestError) {
-    return isTaskNotFoundError(error, source)
-      ? { id: "parse-error-local-task-lost", args: { message } }
-      : { id: "parse-error-local-api-unavailable", args: { message } };
+    if (isTaskNotFoundError(error, source)) {
+      return { id: "parse-error-local-task-lost", args: { message } };
+    }
+    if (error.status === 0) {
+      const target = localApiBaseURL ? ` at ${localApiBaseURL}` : "";
+      return {
+        id: "parse-error-local-api-unavailable",
+        args: {
+          message: `Cannot reach the local MinerU server${target} (${error.message}). Start it or switch to Online API in settings.`,
+        },
+      };
+    }
+    return { id: "parse-error-local-api-unavailable", args: { message } };
   }
   if (
     error instanceof MinerURequestError &&

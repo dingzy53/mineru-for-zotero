@@ -318,6 +318,8 @@ const PARSE_NEXT_STEPS: Record<string, string> = {
   failed:
     "The parse failed; the error above is MinerU's. Report it to the user instead of retrying, because a retry spends quota again.",
   cancelled: "The parse was stopped in Zotero.",
+  "not-started":
+    "The parse did not start in Zotero. Check mineru_list_tasks or Zotero's MinerU Task Manager before retrying.",
 };
 
 /** Answer to a parse request, with the next step for each status. */

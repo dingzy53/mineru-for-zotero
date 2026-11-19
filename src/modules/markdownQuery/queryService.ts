@@ -95,16 +95,27 @@ async function readZoteroAttachmentMtime(
  * HTTP caller must never be able to open a modal reparse prompt in the Zotero
  * window; whether to parse at all is decided before this is called.
  */
-function startZoteroParse(attachment: ZoteroItemLike): void {
-  const item = Zotero.Items.getByLibraryAndKey(
-    attachment.libraryID,
-    attachment.key,
-  );
-  if (item) {
-    parseAttachment(item, { force: true, nonInteractive: true }).catch((e) =>
-      ztoolkit.log("API Trigger Parse Error", e),
-    );
-  }
+function startZoteroParse(attachment: ZoteroItemLike, force?: boolean): void {
+  void (async () => {
+    const item =
+      (await Zotero.Items.getByLibraryAndKeyAsync?.(
+        attachment.libraryID,
+        attachment.key,
+      )) ||
+      Zotero.Items.getByLibraryAndKey(attachment.libraryID, attachment.key);
+    if (!item) {
+      return;
+    }
+    await taskStore.waitUntilLoaded();
+    const existing = taskStore.getTask(String(item.id));
+    const resume =
+      !force && Boolean(existing?.resume && existing.status === "failed");
+    await parseAttachment(item, {
+      force: true,
+      resume,
+      nonInteractive: true,
+    });
+  })().catch((e) => ztoolkit.log("API Trigger Parse Error", e));
 }
 
 /** One search hit: the item and the parse status of its PDF attachments. */
@@ -444,7 +455,11 @@ export function createMarkdownQueryService(deps: {
       }
 
       const submittedAt = Date.now();
-      (deps.startParse ?? startZoteroParse)(attachment);
+      if (deps.startParse) {
+        deps.startParse(attachment);
+      } else {
+        startZoteroParse(attachment, input.force);
+      }
       return { status: "submitted", ...target, submittedAt };
     },
     async searchByTitle(input) {
