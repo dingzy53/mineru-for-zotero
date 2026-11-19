@@ -2,9 +2,17 @@
 
 import { ToolError } from "./errors";
 
+export type SchemaType =
+  | "string"
+  | "integer"
+  | "number"
+  | "boolean"
+  | "array"
+  | "object";
+
 /** The subset of JSON Schema our tool definitions use. */
 export interface JSONSchema {
-  type?: "string" | "integer" | "number" | "boolean" | "array" | "object";
+  type?: SchemaType | readonly SchemaType[];
   description?: string;
   enum?: readonly (string | number)[];
   default?: unknown;
@@ -25,14 +33,56 @@ function typeOf(value: unknown): string {
   return typeof value;
 }
 
+function levenshtein(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const curr = [i];
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+    }
+    prev = curr;
+  }
+  return prev[n];
+}
+
+function closestArgument(input: string, valid: string[]): string | null {
+  if (!valid.length) return null;
+  const strip = (s: string) => s.toLowerCase().replace(/[_-]/g, "");
+  const norm = strip(input);
+  const exact = valid.find((cand) => strip(cand) === norm);
+  if (exact) return exact;
+
+  const lower = input.toLowerCase();
+  let best: string | null = null;
+  let bestDist = Infinity;
+  for (const cand of valid) {
+    const dist = levenshtein(lower, cand.toLowerCase());
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = cand;
+    }
+  }
+  const threshold = best
+    ? Math.max(2, Math.floor(Math.max(input.length, best.length) / 2))
+    : 0;
+  return best && bestDist <= threshold ? best : null;
+}
+
 function check(schema: JSONSchema, value: unknown, path: string): void {
   if (schema.type) {
+    const allowed = Array.isArray(schema.type) ? schema.type : [schema.type];
     const actual = typeOf(value);
-    const ok =
-      actual === schema.type ||
-      (schema.type === "number" && actual === "integer");
-    if (!ok)
-      throw new ToolError(`${path} must be ${schema.type}, got ${actual}`);
+    const ok = allowed.some(
+      (t) => actual === t || (t === "number" && actual === "integer"),
+    );
+    if (!ok) {
+      throw new ToolError(
+        `${path} must be ${allowed.join(" or ")}, got ${actual}`,
+      );
+    }
   }
   if (schema.enum && !schema.enum.includes(value as string | number)) {
     throw new ToolError(`${path} must be one of: ${schema.enum.join(", ")}`);
@@ -72,10 +122,16 @@ export function prepareArgs(
     throw new ToolError("arguments must be an object");
   }
   const args: Record<string, any> = {};
+  const valid = Object.keys(schema.properties ?? {});
   for (const [key, value] of Object.entries((raw ?? {}) as object)) {
     if (value === "" || value === null || value === undefined) continue;
     if (!Object.hasOwn(schema.properties ?? {}, key)) {
-      throw new ToolError(`Unknown argument "${key}"`);
+      const suggestion = closestArgument(key, valid);
+      const didYouMean = suggestion ? ` Did you mean "${suggestion}"?` : "";
+      const accepted = valid.length ? valid.join(", ") : "(none)";
+      throw new ToolError(
+        `Unknown argument "${key}".${didYouMean} Accepted arguments: ${accepted}`,
+      );
     }
     args[key] = value;
   }

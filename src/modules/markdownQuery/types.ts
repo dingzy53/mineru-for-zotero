@@ -285,6 +285,10 @@ export interface StatusItem {
 export interface CollectionStatus {
   libraryID: number;
   collection: string;
+  /** Stored Zotero collection key when resolved from the library. */
+  collectionKey?: string;
+  /** Stored Zotero collection name when resolved from the library. */
+  collectionName?: string;
   includeSubcollections: boolean;
   totals: {
     items: number;

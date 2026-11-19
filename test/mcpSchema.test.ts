@@ -40,7 +40,14 @@ describe("MCP argument validation", function () {
   });
 
   it("rejects unknown arguments and wrong types", function () {
-    rejects({ key: "A", libraryID: 1 }, /Unknown argument "libraryID"/);
+    rejects(
+      { key: "A", libraryID: 1 },
+      /Unknown argument "libraryID"\. Accepted arguments: key, limit, plain, section_path, sort_by/,
+    );
+    rejects(
+      { key: "A", sectionPath: ["x"] },
+      /Unknown argument "sectionPath"\. Did you mean "section_path"\? Accepted arguments:/,
+    );
     rejects({ key: 5 }, /key must be string, got integer/);
     rejects({ key: "A", plain: "yes" }, /plain must be boolean/);
     rejects("ABCD1234", /arguments must be an object/);

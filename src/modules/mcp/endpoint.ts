@@ -1,7 +1,12 @@
 // Adapted from zotero-S2 (src/http/endpoints.ts at c5370a1).
 
 import { BUILD } from "../../utils/build";
-import { getMcpEnabled, getMcpToken, setMcpToken } from "../../utils/prefs";
+import {
+  getMcpEnabled,
+  getMcpToken,
+  getParseSource,
+  setMcpToken,
+} from "../../utils/prefs";
 import { getMarkdownQueryService } from "../markdownQuery/apiEndpoint";
 import type { MarkdownQueryService } from "../markdownQuery/queryService";
 import { runTool } from "./runTool";
@@ -95,6 +100,7 @@ export function createMcpEndpointClass(
       runTool(tool, args, {
         service: getService(),
         defaultLibraryID: () => Zotero.Libraries.userLibraryID,
+        parseSource: () => getParseSource(),
         logError: (error) => Zotero.logError(error as Error),
       }),
   });

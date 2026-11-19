@@ -6,6 +6,8 @@ export interface ToolContext {
   service: MarkdownQueryService;
   /** Library used when a call gives no `library_id`. */
   defaultLibraryID: number;
+  /** Current MinerU parse source ("online" or "local"). */
+  parseSource: "online" | "local";
   /** Epoch ms by which the call should answer (`TOOL_BUDGET_MS`). */
   deadline: number;
   now(): number;

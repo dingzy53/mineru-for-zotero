@@ -167,6 +167,24 @@ describe("markdownParser", function () {
     );
   });
 
+  it("matches a unique leaf heading and suggests closest headings when missing", function () {
+    const intro = readSection(markdown, ["Introduction"]);
+    assert.deepEqual(intro.heading.path, ["Example Paper", "Introduction"]);
+    assert.include(intro.content, "Intro body");
+
+    let missing: MarkdownQueryError | undefined;
+    try {
+      readSection(markdown, ["Backgrond"]);
+    } catch (e) {
+      missing = e as MarkdownQueryError;
+    }
+    assert.instanceOf(missing, MarkdownQueryError);
+    assert.equal(missing!.code, "section-not-found");
+    const suggestions = (missing!.details as { suggestions?: string[][] })
+      ?.suggestions;
+    assert.isArray(suggestions);
+  });
+
   it("searches paragraphs case-insensitively with context", function () {
     assert.deepEqual(searchMarkdown(markdown, "retrieval", 1), [
       {

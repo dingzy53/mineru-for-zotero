@@ -789,7 +789,7 @@ describe("MCP tools", function () {
       );
       assert.equal(
         await failure("mineru_get_outline", { key: "A", libraryID: 1 }),
-        'Unknown argument "libraryID"',
+        'Unknown argument "libraryID". Did you mean "library_id"? Accepted arguments: key, attachment_key, library_id',
       );
       assert.match(
         await failure("mineru_read_markdown", { key: "A", max_chars: 500 }),
@@ -848,20 +848,67 @@ describe("MCP tools", function () {
         ),
         "ambiguous-attachment: Multiple PDFs\n- PDF00001 a.pdf (precise)\n- PDF00002 b.pdf (not parsed)\nCall again with attachment_key set to one of the candidate keys.",
       );
-      assert.match(
-        await failure(
-          "mineru_read_section",
-          { key: "ITEM0001", section_path: ["Nope"] },
-          throwing(
-            new MarkdownQueryError(
-              "section-not-found",
-              404,
-              "section-not-found",
-            ),
+      const secErr = await failure(
+        "mineru_read_section",
+        { key: "ITEM0001", section_path: ["Nope"] },
+        throwing(
+          new MarkdownQueryError(
+            "section-not-found",
+            404,
+            "section-not-found",
+            { suggestions: [["Paper Title", "1. Introduction"]] },
           ),
         ),
+      );
+      assert.match(
+        secErr,
         /Call mineru_get_outline and copy one of its section_path lines exactly/,
       );
+      assert.notInclude(secErr, "section-not-found: section-not-found");
+      assert.include(
+        secErr,
+        'Closest headings:\n- ["Paper Title","1. Introduction"]',
+      );
+
+      const localUnparsed = await runTool(
+        TOOLS_BY_NAME.get("mineru_get_outline")!,
+        { key: "ITEM0001" },
+        {
+          service: fakeService(
+            throwing(
+              new MarkdownQueryError(
+                "parse-result-not-found",
+                404,
+                "Target PDF has no available parse result",
+              ),
+            ),
+          ),
+          defaultLibraryID: () => 1,
+          parseSource: () => "local",
+        },
+      );
+      assert.isFalse(localUnparsed.ok);
+      if (!localUnparsed.ok) {
+        assert.include(localUnparsed.message, "local MinerU server");
+        assert.notInclude(localUnparsed.message, "quota");
+      }
+
+      const colOut = await text(
+        "mineru_collection_status",
+        { collection: "mimmc" },
+        {
+          getCollectionStatus: () => ({
+            libraryID: 1,
+            collection: "mimmc",
+            collectionName: "MIMMC",
+            collectionKey: "COL00001",
+            includeSubcollections: false,
+            totals: { items: 0, parsed: 0, notParsed: 0, noPdf: 0 },
+            items: [],
+          }),
+        },
+      );
+      assert.include(colOut, "Collection: MIMMC (COL00001) | library 1");
       const hintCases: Array<[MarkdownQueryError["code"], RegExp]> = [
         ["item-not-found", /mineru_search_items and mineru_collection_status/],
         ["pdf-attachment-not-found", /no PDF attachment/],

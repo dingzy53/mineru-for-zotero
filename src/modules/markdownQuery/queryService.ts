@@ -413,9 +413,20 @@ export function createMarkdownQueryService(deps: {
       const parsed = items.filter((item) =>
         item.attachments.some(isReadableAttachment),
       );
+      const resolvedCol = await resolveCollectionMeta(
+        input.libraryID,
+        input.collection,
+        deps.getCollections,
+      );
       return {
         libraryID: input.libraryID,
         collection: input.collection,
+        ...(resolvedCol
+          ? {
+              collectionKey: resolvedCol.key,
+              collectionName: resolvedCol.name,
+            }
+          : {}),
         includeSubcollections,
         totals: {
           items: items.length,
@@ -666,6 +677,38 @@ export function createMarkdownQueryService(deps: {
 /** Whether an attachment has a parse result that can be read now. */
 function isReadableAttachment(attachment: StatusAttachment): boolean {
   return attachment.state === "precise" || attachment.state === "lite";
+}
+
+async function resolveCollectionMeta(
+  libraryID: number,
+  collectionParam: string,
+  getCollections?: (
+    libraryID: number,
+  ) => Promise<CollectionSummary[]> | CollectionSummary[],
+): Promise<{ key: string; name: string } | undefined> {
+  try {
+    let list: Array<{ key?: unknown; name?: unknown }> = [];
+    if (getCollections) {
+      list = await getCollections(libraryID);
+    } else if (
+      typeof Zotero !== "undefined" &&
+      (Zotero as any).Collections?.getByLibrary
+    ) {
+      list = (Zotero as any).Collections.getByLibrary(libraryID) ?? [];
+    }
+    const target = collectionParam.trim().toLowerCase();
+    const match = list.find(
+      (col) =>
+        String(col.key ?? "").toLowerCase() === target ||
+        String(col.name ?? "").toLowerCase() === target,
+    );
+    if (match && match.key && match.name) {
+      return { key: String(match.key), name: String(match.name) };
+    }
+  } catch {
+    // Best-effort metadata lookup.
+  }
+  return undefined;
 }
 
 /** Count whitespace-separated words of a Markdown document. */

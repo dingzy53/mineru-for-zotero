@@ -22,6 +22,7 @@ export const MAX_RESULT_CHARS = 80_000;
 export interface ToolRuntime {
   service: MarkdownQueryService;
   defaultLibraryID(): number;
+  parseSource?(): "online" | "local";
   now?(): number;
   sleep?(ms: number): Promise<void>;
   /** Reports a bug (anything that is not a ToolError or a query error). */
@@ -45,11 +46,13 @@ export async function runTool(
   runtime: ToolRuntime,
 ): Promise<ToolOutcome> {
   const now = runtime.now ?? (() => Date.now());
+  const parseSource = runtime.parseSource?.() ?? "online";
   try {
     const args = prepareArgs(tool.inputSchema, rawArgs);
     const text = await tool.handler(args, {
       service: runtime.service,
       defaultLibraryID: runtime.defaultLibraryID(),
+      parseSource,
       deadline: now() + TOOL_BUDGET_MS,
       now,
       sleep:
@@ -63,7 +66,7 @@ export async function runTool(
       return { ok: false, message: error.message };
     }
     if (error instanceof MarkdownQueryError) {
-      return { ok: false, message: describeQueryError(error) };
+      return { ok: false, message: describeQueryError(error, parseSource) };
     }
     runtime.logError?.(error);
     return { ok: false, message: `Internal error: ${errorMessage(error)}` };

@@ -120,8 +120,12 @@ export function formatCollectionStatus(status: CollectionStatus): string {
     ],
     ["No PDF", status.items.filter((item) => item.attachments.length === 0)],
   ];
+  const label =
+    status.collectionName && status.collectionKey
+      ? `${status.collectionName} (${status.collectionKey})`
+      : status.collection;
   const lines = [
-    `Collection: ${status.collection}${
+    `Collection: ${label}${
       status.includeSubcollections ? " (with subcollections)" : ""
     } | library ${status.libraryID}`,
     `Items: ${status.totals.items} | parsed: ${status.totals.parsed} | not parsed: ${status.totals.notParsed} | no PDF: ${status.totals.noPdf}`,
@@ -322,17 +326,44 @@ const PARSE_NEXT_STEPS: Record<string, string> = {
     "The parse did not start in Zotero. Check mineru_list_tasks or Zotero's MinerU Task Manager before retrying.",
 };
 
+function parseNextStep(
+  status: string,
+  task: TaskSummary | undefined,
+  source: "online" | "local",
+): string | undefined {
+  if (status === "already-parsed" && source === "local") {
+    return "A result for the current PDF exists, so nothing was submitted. Read it with mineru_get_outline. Pass force only if the user asks for a fresh parse.";
+  }
+  if (status === "failed") {
+    const unreachableOrPreFlight =
+      /cannot reach|can't reach|connection refused|unavailable|missing api key|configure the mineru api key|file access|200 mb/i.test(
+        task?.error ?? "",
+      );
+    if (source === "local") {
+      return unreachableOrPreFlight
+        ? "The local MinerU server could not be reached. Ask the user to start it or switch to Online API in Zotero settings."
+        : "The local MinerU parse failed; see the error above. Report it to the user before retrying.";
+    }
+    if (unreachableOrPreFlight) {
+      return "The parse failed before MinerU accepted it; see the error above. Report it to the user.";
+    }
+  }
+  return PARSE_NEXT_STEPS[status];
+}
+
 /** Answer to a parse request, with the next step for each status. */
 export function formatParseResult(
   key: string,
   status: string,
   task?: TaskSummary,
+  source: "online" | "local" = "online",
 ): string {
+  const nextStep = parseNextStep(status, task, source);
   return [
     `PDF: ${key}`,
     `Status: ${status}`,
     ...(task ? formatTaskDetails(task) : []),
-    ...(PARSE_NEXT_STEPS[status] ? ["", PARSE_NEXT_STEPS[status]] : []),
+    ...(nextStep ? ["", nextStep] : []),
   ].join("\n");
 }
 
@@ -376,10 +407,19 @@ const QUERY_ERROR_HINTS: Partial<Record<MarkdownQueryError["code"], string>> = {
 };
 
 /** A query error as one message: what went wrong, candidates, what to do. */
-export function describeQueryError(error: MarkdownQueryError): string {
-  const lines = [`${error.code}: ${error.message}`];
-  const candidates = (error.details as { candidates?: unknown } | undefined)
-    ?.candidates;
+export function describeQueryError(
+  error: MarkdownQueryError,
+  source: "online" | "local" = "online",
+): string {
+  const header =
+    error.message && error.message !== error.code
+      ? `${error.code}: ${error.message}`
+      : error.code;
+  const lines = [header];
+  const details = error.details as
+    | { candidates?: unknown; suggestions?: unknown }
+    | undefined;
+  const candidates = details?.candidates;
   if (Array.isArray(candidates) && error.code === "ambiguous-attachment") {
     for (const candidate of candidates as Array<{
       key: string;
@@ -391,7 +431,27 @@ export function describeQueryError(error: MarkdownQueryError): string {
         `- ${candidate.key} ${candidate.fileName} (${parseState(candidate as AttachmentSummary)})`,
       );
     }
+  } else if (Array.isArray(candidates) && error.code === "ambiguous-section") {
+    for (const candidate of candidates as Array<{ path?: unknown }>) {
+      if (Array.isArray(candidate?.path)) {
+        lines.push(`- ${JSON.stringify(candidate.path)}`);
+      }
+    }
   }
-  const hint = QUERY_ERROR_HINTS[error.code];
+  const suggestions = details?.suggestions;
+  if (
+    Array.isArray(suggestions) &&
+    suggestions.length > 0 &&
+    error.code === "section-not-found"
+  ) {
+    lines.push("Closest headings:");
+    for (const path of suggestions as string[][]) {
+      lines.push(`- ${JSON.stringify(path)}`);
+    }
+  }
+  const hint =
+    error.code === "parse-result-not-found" && source === "local"
+      ? "This PDF has not been parsed yet. mineru_parse_pdf can start a parse using the local MinerU server, or pass attachment_key for another PDF of the item."
+      : QUERY_ERROR_HINTS[error.code];
   return hint ? [...lines, hint].join("\n") : lines.join("\n");
 }

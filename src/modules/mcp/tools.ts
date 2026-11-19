@@ -179,7 +179,10 @@ export const TOOLS: ToolDef[] = [
       properties: {
         title: { type: "string", description: "Words from the title." },
         creator: { type: "string", description: "Part of an author name." },
-        year: { type: "string", description: 'Four-digit year, e.g. "2022".' },
+        year: {
+          type: ["string", "integer"],
+          description: 'Four-digit year, e.g. "2022" or 2022.',
+        },
         collection: collectionRef,
         tag: { type: "string", description: "Exact tag." },
         abstract: { type: "string", description: "Words from the abstract." },
@@ -214,10 +217,11 @@ export const TOOLS: ToolDef[] = [
     },
     annotations: READ_ONLY,
     async handler(args, ctx) {
+      const year = args.year !== undefined ? String(args.year) : undefined;
       const filters: Omit<ItemSearchInput, "libraryID" | "limit"> = {
         title: args.title,
         creator: args.creator,
-        year: args.year,
+        year,
         collection: args.collection,
         tag: args.tag,
         abstract: args.abstract,
@@ -240,7 +244,7 @@ export const TOOLS: ToolDef[] = [
           "Give at least one filter (title, creator, year, collection, tag, …). To list a whole collection use mineru_collection_status.",
         );
       }
-      if (args.year !== undefined && !/^\d{4}$/.test(args.year)) {
+      if (year !== undefined && !/^\d{4}$/.test(year)) {
         throw new ToolError('year must be four digits, e.g. "2022"');
       }
       const libraryID = library(args, ctx);
@@ -489,7 +493,12 @@ export const TOOLS: ToolDef[] = [
         force: args.force,
       });
       if (!args.wait || submitted.status === "already-parsed") {
-        return formatParseResult(submitted.key, submitted.status);
+        return formatParseResult(
+          submitted.key,
+          submitted.status,
+          undefined,
+          ctx.parseSource,
+        );
       }
 
       for (;;) {
@@ -507,7 +516,12 @@ export const TOOLS: ToolDef[] = [
           task !== undefined &&
           (task.updatedAt ?? Infinity) >= (submitted.submittedAt ?? 0);
         if (isCurrent && FINISHED_TASK_STATUSES.has(task.status)) {
-          const text = formatParseResult(submitted.key, task.status, task);
+          const text = formatParseResult(
+            submitted.key,
+            task.status,
+            task,
+            ctx.parseSource,
+          );
           if (task.status === "failed") {
             throw new ToolError(text);
           }
@@ -516,10 +530,20 @@ export const TOOLS: ToolDef[] = [
         if (ctx.now() + PARSE_POLL_MS + DEADLINE_MARGIN_MS > ctx.deadline) {
           if (!isCurrent) {
             throw new ToolError(
-              formatParseResult(submitted.key, "not-started", task),
+              formatParseResult(
+                submitted.key,
+                "not-started",
+                task,
+                ctx.parseSource,
+              ),
             );
           }
-          return formatParseResult(submitted.key, "running", task);
+          return formatParseResult(
+            submitted.key,
+            "running",
+            task,
+            ctx.parseSource,
+          );
         }
         await ctx.sleep(PARSE_POLL_MS);
       }
@@ -529,7 +553,7 @@ export const TOOLS: ToolDef[] = [
     name: "mineru_list_tasks",
     title: "List MinerU parse tasks",
     description:
-      "List MinerU parse tasks, newest first, with status (pending, running, succeeded, failed, cancelled), progress and error text. Use it to follow a parse started with mineru_parse_pdf.",
+      "List MinerU parse tasks, running/pending first and then newest first, with status (pending, running, succeeded, failed, cancelled), progress and error text. Use it to follow a parse started with mineru_parse_pdf.",
     inputSchema: {
       type: "object",
       properties: {
@@ -541,7 +565,14 @@ export const TOOLS: ToolDef[] = [
       const { tasks } = (await ctx.service.getTasks()) as {
         tasks: TaskSummary[];
       };
-      return formatTasks(tasks.slice(0, args.limit), tasks.length);
+      const ordered = [...tasks].sort((a, b) => {
+        const aActive =
+          a.status === "running" || a.status === "pending" ? 0 : 1;
+        const bActive =
+          b.status === "running" || b.status === "pending" ? 0 : 1;
+        return aActive - bActive;
+      });
+      return formatTasks(ordered.slice(0, args.limit), ordered.length);
     },
   },
 ];

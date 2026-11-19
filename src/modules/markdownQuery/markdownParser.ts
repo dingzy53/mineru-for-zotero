@@ -116,10 +116,27 @@ export function readSection(
   const path = normalizeSectionPath(sectionPath);
   const lines = markdown.split(/\r?\n/);
   const headings = parseHeadings(markdown);
-  const matches = headings.filter((heading) => samePath(heading.path, path));
+  let matches = headings.filter((heading) => samePath(heading.path, path));
+
+  // Agents often pass only the leaf heading title (e.g. ["Introduction"]).
+  if (matches.length === 0 && path.length === 1) {
+    matches = headings.filter((heading) => heading.title === path[0]);
+    if (matches.length === 0) {
+      const target = path[0].toLowerCase();
+      matches = headings.filter(
+        (heading) => heading.title.toLowerCase() === target,
+      );
+    }
+  }
 
   if (matches.length === 0) {
-    throw new MarkdownQueryError("section-not-found", 404, "section-not-found");
+    const suggestions = findClosestHeadingPaths(headings, path);
+    throw new MarkdownQueryError(
+      "section-not-found",
+      404,
+      "section-not-found",
+      suggestions.length > 0 ? { suggestions } : undefined,
+    );
   }
   if (matches.length > 1) {
     throw new MarkdownQueryError(
@@ -139,6 +156,34 @@ export function readSection(
     heading,
     content: lines.slice(heading.line, endLine).join("\n").trimEnd(),
   };
+}
+
+function findClosestHeadingPaths(
+  headings: MarkdownHeading[],
+  requested: string[],
+): string[][] {
+  const leaf = (requested[requested.length - 1] ?? "").trim().toLowerCase();
+  if (!leaf) {
+    return headings.slice(0, 5).map((h) => h.path);
+  }
+  const tokens = leaf.split(/\W+/).filter((t) => t.length >= 2);
+  const scored = headings
+    .map((heading) => {
+      const title = heading.title.toLowerCase();
+      let score = 0;
+      if (title.includes(leaf) || leaf.includes(title)) {
+        score += 10;
+      }
+      for (const token of tokens) {
+        if (title.includes(token)) {
+          score += 3;
+        }
+      }
+      return { path: heading.path, score };
+    })
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score);
+  return scored.slice(0, 5).map((entry) => entry.path);
 }
 
 /**
