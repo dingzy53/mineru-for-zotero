@@ -909,6 +909,22 @@ describe("MCP tools", function () {
         },
       );
       assert.include(colOut, "Collection: MIMMC (COL00001) | library 1");
+
+      const strippedMd = await text(
+        "mineru_read_markdown",
+        { key: "ITEM0001" },
+        {
+          queryMarkdown: () => ({
+            ...PAPER,
+            granularity: "full",
+            content:
+              "# Intro\n\n![Fig 1](data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ==)\n\nBody text.",
+          }),
+        },
+      );
+      assert.include(strippedMd, "![Fig 1](embedded image omitted)");
+      assert.notInclude(strippedMd, "data:image/");
+      assert.include(strippedMd, "Body text.");
       const hintCases: Array<[MarkdownQueryError["code"], RegExp]> = [
         ["item-not-found", /mineru_search_items and mineru_collection_status/],
         ["pdf-attachment-not-found", /no PDF attachment/],

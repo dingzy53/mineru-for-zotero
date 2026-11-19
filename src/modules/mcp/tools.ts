@@ -1,3 +1,4 @@
+import { stripInlineDataImages } from "../inlineImages";
 import {
   parseHeadings,
   stripInlineTags,
@@ -280,7 +281,8 @@ export const TOOLS: ToolDef[] = [
         granularity: "full",
         includeFilePath: true,
       })) as PaperHeader & { content: string };
-      return formatOutline(paper, paper.content, parseHeadings(paper.content));
+      const clean = stripInlineDataImages(paper.content);
+      return formatOutline(paper, clean, parseHeadings(clean));
     },
   },
   {
@@ -317,7 +319,7 @@ export const TOOLS: ToolDef[] = [
       return formatSection(
         section,
         section.heading.path,
-        maybePlain(args, section.content),
+        maybePlain(args, stripInlineDataImages(section.content)),
       );
     },
   },
@@ -355,9 +357,13 @@ export const TOOLS: ToolDef[] = [
       })) as PaperHeader & { matches: MarkdownSearchMatch[] };
       const matches = found.matches.slice(0, args.max_matches).map((match) => ({
         ...match,
-        before: match.before.map((text) => maybePlain(args, text)),
-        hit: maybePlain(args, match.hit),
-        after: match.after.map((text) => maybePlain(args, text)),
+        before: match.before.map((text) =>
+          maybePlain(args, stripInlineDataImages(text)),
+        ),
+        hit: maybePlain(args, stripInlineDataImages(match.hit)),
+        after: match.after.map((text) =>
+          maybePlain(args, stripInlineDataImages(text)),
+        ),
       }));
       return formatSearchMatches(
         found,
@@ -433,7 +439,8 @@ export const TOOLS: ToolDef[] = [
         granularity: "full",
         includeFilePath: true,
       })) as PaperHeader & { content: string };
-      const total = paper.content.length;
+      const content = stripInlineDataImages(paper.content);
+      const total = content.length;
       // Reserve room for the formatted header so capResult() never slices off
       // trailing text after `page.end` was already chosen.
       const headerChars = formatMarkdownPage(paper, {
@@ -447,7 +454,7 @@ export const TOOLS: ToolDef[] = [
         Math.min(args.max_chars, MAX_RESULT_CHARS - headerChars - 16),
       );
       // Offsets count characters of the stored text, so tags are removed last.
-      const page = slicePage(paper.content, args.offset, pageLimit);
+      const page = slicePage(content, args.offset, pageLimit);
       return formatMarkdownPage(paper, {
         ...page,
         text: maybePlain(args, page.text),

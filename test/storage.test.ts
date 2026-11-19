@@ -521,6 +521,51 @@ describe("storage", function () {
     assert.isNull(await storage.readImageDataURL(attachment, "../a.png"));
   });
 
+  it("rewrites inline base64 data:image URIs to saved image files on writeResult", async function () {
+    const storage = createStorage(rootDir);
+    const attachment = {
+      id: 1,
+      key: "INLINEIMG",
+      libraryID: 12,
+      fileName: "a.pdf",
+      filePath: "a.pdf",
+      mtime: 1,
+    };
+
+    await writeResultOrFail(storage, {
+      attachment,
+      mineruTaskID: "task-inline-images",
+      rawResult: { ok: true },
+      markdown: [
+        "# Paper",
+        "![Matched](data:image/png;base64,iVBORw==)",
+        "![Extracted](data:image/jpeg;base64,/9j/)",
+      ].join("\n\n"),
+      boxes: normalizedBoxes,
+      images: [
+        {
+          path: "page_0_image_1.png",
+          bytes: new Uint8Array([137, 80, 78, 71]),
+        },
+      ],
+    });
+
+    const storedMarkdown = await storage.readMarkdown(attachment);
+    assert.equal(
+      storedMarkdown,
+      [
+        "# Paper",
+        "![Matched](images/page_0_image_1.png)",
+        "![Extracted](images/inline-1.jpg)",
+      ].join("\n\n"),
+    );
+    const dir = resolveTmpPath(storage.getAttachmentDir(attachment));
+    assert.deepEqual(
+      Array.from(await readBytes(joinPath(dir, "images", "inline-1.jpg"))),
+      [255, 216, 255],
+    );
+  });
+
   it("reports whether a stored result actually contains images and boxes", async function () {
     const storage = createStorage(rootDir);
     const withImages = {

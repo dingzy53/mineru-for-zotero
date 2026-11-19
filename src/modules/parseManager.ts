@@ -2,6 +2,7 @@ import type { AttachmentRef } from "./domain";
 import type { FluentMessageId } from "../../typings/i10n";
 import { config } from "../../package.json";
 import { normalizeMinerUBoxes } from "./boxNormalizer";
+import { stripInlineDataImages } from "./inlineImages";
 import { mergeChunkResults } from "./parseMerge";
 import {
   createMinerUClientForSettings,
@@ -1149,14 +1150,16 @@ async function runParseAttachment(
 
     phase = "write";
     throwIfCancelled(attachmentTaskID);
+    const saveImages = dependencies.getSaveImages?.() !== false;
     await storage.writeResult({
       attachment: attachmentRef,
       mineruTaskID: taskID,
       rawResult: result.rawResult,
-      markdown: result.markdown,
+      markdown: saveImages
+        ? result.markdown
+        : stripInlineDataImages(result.markdown),
       boxes,
-      images:
-        dependencies.getSaveImages?.() !== false ? result.images : undefined,
+      images: saveImages ? result.images : undefined,
     });
     await cleanupTaskResume(String(attachment.id), resume);
 

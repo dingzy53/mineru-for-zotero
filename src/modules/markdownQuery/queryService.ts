@@ -1,4 +1,5 @@
 import { resolveAttachment } from "./attachmentResolver";
+import { stripInlineDataImages } from "../inlineImages";
 import {
   parseHeadings,
   readSection,
@@ -713,7 +714,7 @@ async function resolveCollectionMeta(
 
 /** Count whitespace-separated words of a Markdown document. */
 function countWords(markdown: string): number {
-  return markdown.split(/\s+/).filter(Boolean).length;
+  return stripInlineDataImages(markdown).split(/\s+/).filter(Boolean).length;
 }
 
 /**
