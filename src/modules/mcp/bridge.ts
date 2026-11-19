@@ -1,5 +1,6 @@
 // Adapted from zotero-S2 (src/modules/bridge.ts at c5370a1).
 
+import { config } from "../../../package.json";
 import { joinNativePath } from "../mineruClient/path";
 import { MCP_PATH } from "./endpoint";
 
@@ -36,8 +37,15 @@ export async function installBridge(
 ): Promise<boolean> {
   const source = await (
     options.readSource ??
-    (() =>
-      Zotero.File.getContentsFromURLAsync(`${rootURI}content/bridge/${FILE}`))
+    (() => {
+      const url =
+        typeof rootURI !== "undefined"
+          ? `${rootURI}content/bridge/${FILE}`
+          : `chrome://${config.addonRef}/content/bridge/${FILE}`;
+      // getResourceAsync opens the channel directly; getContentsFromURLAsync
+      // goes through HTTP URI parsing and fails on packed jar:file://… .xpi URIs.
+      return Zotero.File.getResourceAsync(url);
+    })
   )();
   const path = bridgePath(options.dataDirectory);
   try {

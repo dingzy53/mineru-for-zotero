@@ -73,9 +73,15 @@ async function onStartup() {
   ensureMcpToken();
   registerMcpEndpoint();
   // Only the stdio setup needs the file; the plugin works without it.
-  installBridge().catch((error) =>
-    ztoolkit.log("MinerU MCP bridge install failed", error),
-  );
+  installBridge().catch((error) => {
+    ztoolkit.log(
+      "MinerU MCP bridge install failed",
+      error instanceof Error
+        ? `${error.message}\n${error.stack ?? ""}`
+        : String(error),
+    );
+    Zotero.logError(error as Error);
+  });
 
   await Promise.all(
     Zotero.getMainWindows().map((win) => onMainWindowLoad(win)),

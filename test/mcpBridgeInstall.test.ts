@@ -1,4 +1,5 @@
 import { assert } from "chai";
+import { config } from "../package.json";
 import {
   bridgeCommand,
   bridgePath,
@@ -35,6 +36,18 @@ describe("MCP bridge install", function () {
     assert.isFalse(await install("// v1"));
     assert.isTrue(await install("// v2"));
     assert.equal(await IOUtils.readUTF8(path), "// v2");
+  });
+
+  it("reads the packaged bridge via getResourceAsync when readSource is omitted", async function () {
+    const path = bridgePath(dataDirectory);
+    assert.isTrue(await installBridge({ dataDirectory }));
+    const written = await IOUtils.readUTF8(path);
+    const packaged = await Zotero.File.getResourceAsync(
+      `chrome://${config.addonRef}/content/bridge/mineru-for-zotero-mcp.mjs`,
+    );
+    assert.isTrue(written.startsWith("#!/usr/bin/env node"));
+    assert.equal(written, packaged);
+    assert.isFalse(await installBridge({ dataDirectory }));
   });
 
   it("builds the commands a user pastes into a terminal", function () {
