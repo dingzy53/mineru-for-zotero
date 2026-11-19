@@ -103,8 +103,13 @@ export async function scanAllResults(
     const parsedAt =
       preciseManifest?.parsedAt || liteManifest?.parsedAt || undefined;
     const parsedAtMs = parsedAt ? new Date(parsedAt).getTime() : 0;
+    // Item IDs are local to one Zotero database; prefer the item resolved by
+    // libraryID + key so a synced/copied manifest ID cannot hit another item.
     const attachmentID =
-      preciseManifest?.attachmentID || liteManifest?.attachmentID || item?.id;
+      item?.id ??
+      (isOrphan
+        ? preciseManifest?.attachmentID || liteManifest?.attachmentID
+        : undefined);
     const fileName =
       preciseManifest?.fileName ||
       liteManifest?.fileName ||
@@ -291,7 +296,7 @@ export function createResultsManagerService(
       const Zotero = (globalThis as any).Zotero;
       const zp = Zotero?.getActiveZoteroPane?.();
       if (zp) {
-        zp.selectItem(id, true);
+        zp.selectItem(id);
         zp.window?.focus?.();
       }
     },

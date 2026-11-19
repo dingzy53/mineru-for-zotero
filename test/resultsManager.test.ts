@@ -128,6 +128,38 @@ describe("Results Manager", function () {
       assert.isFalse(liteOnly?.hasImages);
       assert.isFalse(liteOnly?.hasBoxes);
     });
+
+    it("prefers the key-resolved item ID over a stale manifest attachmentID", async function () {
+      mockStorage.listParseStatuses = async () =>
+        new Map([["1-SYNCED", { preciseReady: true, liteReady: false }]]);
+      mockStorage.readManifestSafe = async () =>
+        ({
+          attachmentID: 9999,
+          attachmentKey: "SYNCED",
+          libraryID: 1,
+          fileName: "synced.pdf",
+        }) as any;
+      deps.getItemByLibraryAndKey = async (_lib, key) =>
+        key === "SYNCED"
+          ? {
+              id: 101,
+              getField: () => "Synced Paper",
+              getFilename: () => "synced.pdf",
+            }
+          : undefined;
+
+      const results = await scanAllResults(deps);
+      assert.strictEqual(results.length, 1);
+      assert.strictEqual(results[0]?.attachmentID, 101);
+
+      const touchedIDs: number[] = [];
+      deps.removeItemTag = async (id) => {
+        touchedIDs.push(id);
+      };
+      await deleteResultEntry(results[0]!, { removeTags: true }, deps);
+      assert.isTrue(touchedIDs.length > 0);
+      assert.isTrue(touchedIDs.every((id) => id === 101));
+    });
   });
 
   describe("deleteResultEntry", function () {
