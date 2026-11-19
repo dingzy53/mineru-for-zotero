@@ -20,7 +20,16 @@ import { taskStore } from "../src/modules/taskStore";
 describe("parseManager", function () {
   afterEach(async function () {
     // Cancellation state is process-wide; keep the suite order-independent.
-    for (const id of ["7116", "7201", "7202", "7203", "7204", "7205", "7206"]) {
+    for (const id of [
+      "7116",
+      "7201",
+      "7202",
+      "7203",
+      "7204",
+      "7205",
+      "7206",
+      "7208",
+    ]) {
       clearTaskCancelled(id);
     }
     // The task store is a process-wide singleton; drop finished records so the
@@ -2210,6 +2219,28 @@ describe("parseManager", function () {
       "parse-error-file-too-large",
     ]);
     assert.deepEqual(messages, ["parse-error-file-too-large"]);
+  });
+
+  it("records a failed task on pre-flight failure when nonInteractive is set", async function () {
+    const messages: string[] = [];
+    const manager = createParseManager({
+      ...baseDependencies(messages),
+      getApiKey: () => "",
+    });
+
+    await manager.parseAttachment(pdfAttachment({ id: 7208 }), {
+      force: true,
+      nonInteractive: true,
+    });
+
+    const task = taskStore.getTask("7208");
+    assert.isDefined(task);
+    assert.equal(task?.status, "failed");
+    assert.equal(task?.attachment.key, "ABC7208");
+    assert.oneOf(task?.error, [
+      "Please configure the MinerU API Token in settings",
+      "parse-error-missing-api-key",
+    ]);
   });
 
   it("stores the user-facing failure message on the task record", async function () {

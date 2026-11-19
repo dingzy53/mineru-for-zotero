@@ -292,7 +292,7 @@ describe("preferenceScript", function () {
         endpoint: () => endpoint,
         bridgePath: () => "/data/mineru-mcp/mineru-for-zotero-mcp.mjs",
         copyText: (text) => copied.push(text),
-        feedbackMs: 5,
+        feedbackMs: 60,
       });
 
       assert.equal(elements.endpoint.value, endpoint);
@@ -312,12 +312,12 @@ describe("preferenceScript", function () {
         "first-token",
         elements["command-stdio"].value,
       ]);
-      await new Promise((resolve) => setTimeout(resolve, 1));
+      await new Promise((resolve) => setTimeout(resolve, 5));
       assert.equal(
         elements["copy-token"].textContent,
         "mineruForZotero-pref-mcp-copied",
       );
-      await new Promise((resolve) => setTimeout(resolve, 30));
+      await new Promise((resolve) => setTimeout(resolve, 90));
       assert.equal(
         elements["copy-token"].textContent,
         "mineruForZotero-pref-mcp-copy",

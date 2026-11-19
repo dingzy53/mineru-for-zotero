@@ -46,7 +46,8 @@ function timingSafeEqual(a: string, b: string): boolean {
  *
  * Zotero itself already rejects a non-local `Host` (Zotero 10) and binds to
  * loopback, so what is left to keep out is another local program, hence the
- * token: unlike the read-only REST API, this server can start a parse.
+ * token: unlike the opt-in REST API, this server is on by default and returns
+ * stored file paths.
  */
 export function checkAccess(
   headers: Record<string, string | undefined>,

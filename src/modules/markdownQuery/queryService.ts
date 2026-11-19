@@ -101,7 +101,7 @@ function startZoteroParse(attachment: ZoteroItemLike): void {
     attachment.key,
   );
   if (item) {
-    parseAttachment(item, { force: true }).catch((e) =>
+    parseAttachment(item, { force: true, nonInteractive: true }).catch((e) =>
       ztoolkit.log("API Trigger Parse Error", e),
     );
   }

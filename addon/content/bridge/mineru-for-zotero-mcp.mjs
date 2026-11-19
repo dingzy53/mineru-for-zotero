@@ -75,7 +75,13 @@ let cacheWrites = Promise.resolve();
 async function loadCache() {
   try {
     const saved = JSON.parse(await readFile(CACHE_FILE, "utf8"));
-    if (saved && typeof saved.results === "object") cache = saved.results;
+    if (
+      saved?.results &&
+      typeof saved.results === "object" &&
+      !Array.isArray(saved.results)
+    ) {
+      cache = saved.results;
+    }
   } catch {
     // First run, or an unreadable file: start empty
   }
@@ -132,7 +138,7 @@ function headersFor(msg) {
     // The 2026-07-28 revision mirrors these body fields in headers
     headers["MCP-Protocol-Version"] = String(modern);
     headers["Mcp-Method"] = String(msg.method);
-    if (msg.method === "tools/call") {
+    if (msg.method === "tools/call" && msg.params?.name !== undefined) {
       headers["Mcp-Name"] = encodeName(msg.params.name);
     }
   } else if (negotiated && msg?.method !== "initialize") {
@@ -146,19 +152,21 @@ function headersFor(msg) {
  * (`null` for an accepted notification), or `{ problem }` with a sentence for
  * the agent when Zotero or the plugin can't answer.
  */
-async function forward(msg) {
+async function forward(msg, timeoutMs = TIMEOUT_MS) {
   let res;
+  let text;
   try {
     res = await fetch(ENDPOINT, {
       method: "POST",
       headers: headersFor(msg),
       body: JSON.stringify(msg),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
+    text = await res.text();
   } catch (e) {
     if (e?.name === "TimeoutError" || e?.name === "AbortError") {
       return {
-        problem: `Zotero did not answer within ${Math.round(TIMEOUT_MS / 1000)} s. The call may still be running in Zotero, so check what was done before repeating it.`,
+        problem: `Zotero did not answer within ${Math.round(timeoutMs / 1000)} s. The call may still be running in Zotero, so check what was done before repeating it.`,
       };
     }
     return {
@@ -166,8 +174,7 @@ async function forward(msg) {
       problem: `Zotero isn't running (no answer at ${ENDPOINT}). Start Zotero and retry this call; no reconnect is needed.`,
     };
   }
-  const text = await res.text();
-  if (!text && res.ok) return { rpc: null };
+  if (!text && res.status === 202) return { rpc: null };
   let body = null;
   try {
     body = JSON.parse(text);
@@ -182,7 +189,8 @@ async function forward(msg) {
   }
   if (res.status === 503) {
     return {
-      problem: `The MinerU for Zotero MCP server is switched off. Tick "Enable the MCP server" in ${SETTINGS}.`,
+      retryable: true,
+      problem: `The MinerU for Zotero MCP server is switched off. Tick "Enable MCP server" in ${SETTINGS}.`,
     };
   }
   return {
@@ -246,44 +254,47 @@ function live(msg, rpc) {
 }
 
 /** What we can say without Zotero. */
-function offline(msg, problem) {
+function offline(msg, problem, canWatch, isDown) {
   const { id, method, params } = msg;
+  const isModern = params?._meta?.[META_VERSION] !== undefined;
   switch (method) {
     case "initialize": {
+      if (isModern) return error(id, -32601, "Method not found");
       const saved = cache.initialize ?? {};
-      watch();
+      const protocolVersion = LEGACY_VERSIONS.includes(params?.protocolVersion)
+        ? params.protocolVersion
+        : LEGACY_VERSIONS[0];
+      negotiated = protocolVersion;
+      if (canWatch) watch();
+      const note = isDown
+        ? "Zotero was not reachable when this session started. The tools work as soon as Zotero is running; there is no need to reconnect."
+        : problem;
       return result(
         id,
         withListChanged({
           ...saved,
-          protocolVersion: LEGACY_VERSIONS.includes(params?.protocolVersion)
-            ? params.protocolVersion
-            : LEGACY_VERSIONS[0],
+          protocolVersion,
           serverInfo: saved.serverInfo ?? {
             name: "MinerU for Zotero",
             version: "0",
           },
-          instructions: [
-            saved.instructions,
-            "Zotero was not reachable when this session started. The tools work as soon as Zotero is running; there is no need to reconnect.",
-          ]
-            .filter(Boolean)
-            .join(" "),
+          instructions: [saved.instructions, note].filter(Boolean).join(" "),
         }),
       );
     }
     case "ping":
+      if (isModern) return error(id, -32601, "Method not found");
       return result(id, {});
     case "server/discover":
       if (!cache[method]) return error(id, -32603, problem);
-      watch();
+      if (canWatch) watch();
       return result(id, withListChanged(cache[method]));
     case "tools/list": {
       // With nothing saved yet the list is empty until Zotero starts; the
       // client is then told to ask again (notifications/tools/list_changed)
       const saved = cache[method] ?? { tools: [] };
       servedTools = JSON.stringify(saved.tools ?? []);
-      watch();
+      if (canWatch) watch();
       return result(id, saved);
     }
     case "tools/call":
@@ -304,21 +315,36 @@ function watch() {
   stale = true;
   if (watching) return;
   watching = true;
+  let polling = false;
   const timer = setInterval(async () => {
-    const { rpc } = await forward({
-      jsonrpc: "2.0",
-      id: "mineru-for-zotero-bridge",
-      method: "tools/list",
-    });
-    if (!rpc?.result) return;
-    clearInterval(timer);
-    watching = false;
-    remember("tools/list", rpc.result);
-    // A newer request may already have fetched the real list
-    if (!stale) return;
-    stale = false;
-    if (JSON.stringify(rpc.result.tools ?? []) !== servedTools) {
-      send({ jsonrpc: "2.0", method: "notifications/tools/list_changed" });
+    if (polling) return;
+    polling = true;
+    try {
+      const { rpc } = await forward(
+        {
+          jsonrpc: "2.0",
+          id: "mineru-for-zotero-bridge",
+          method: "tools/list",
+        },
+        Math.min(TIMEOUT_MS, 5000),
+      );
+      if (!rpc?.result) return;
+      clearInterval(timer);
+      watching = false;
+      remember("tools/list", rpc.result);
+      // A newer request may already have fetched the real list
+      if (!stale) return;
+      stale = false;
+      if (
+        servedTools !== null &&
+        JSON.stringify(rpc.result.tools ?? []) !== servedTools
+      ) {
+        send({ jsonrpc: "2.0", method: "notifications/tools/list_changed" });
+      }
+    } catch {
+      // Try again on the next tick.
+    } finally {
+      polling = false;
     }
   }, POLL_MS);
   // Don't keep the process alive once the client has closed stdin
@@ -334,17 +360,25 @@ async function handle(line) {
     return;
   }
   const isRequest =
-    msg && !Array.isArray(msg) && "id" in msg && typeof msg.method === "string";
-  const { rpc, problem } = await forward(msg);
+    msg !== null &&
+    typeof msg === "object" &&
+    !Array.isArray(msg) &&
+    "id" in msg &&
+    typeof msg.method === "string";
+  const { rpc, problem, down, retryable } = await forward(msg);
   if (rpc) {
     send(isRequest ? live(msg, rpc) : rpc);
   } else if (isRequest) {
-    send(offline(msg, problem));
+    send(offline(msg, problem, Boolean(down || retryable), Boolean(down)));
   } else if (Array.isArray(msg) && problem) {
     send(error(null, -32600, problem));
   }
   // A notification (or a client's response) gets no reply either way
 }
+
+process.stdout.on("error", (e) => {
+  if (e?.code !== "EPIPE") throw e;
+});
 
 await loadCache();
 

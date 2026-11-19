@@ -252,7 +252,7 @@ Invariants:
 
 - Tool handlers call `MarkdownQueryService` only. The REST endpoints and the tools share one instance (`getMarkdownQueryService()`); there is no second query path.
 - A tool returns **text**, not JSON: papers are Markdown, and there is no `structuredContent`. Build the text in `format.ts`.
-- Add a tool by appending a `ToolDef` to `TOOLS`. Names are snake*case with a `mineru*`prefix. Give accurate`annotations`; a tool that writes or spends quota sets `destructiveHint` explicitly.
+- Add a tool by appending a `ToolDef` to `TOOLS`. Names are `snake_case` with a `mineru_` prefix. Give accurate `annotations`; a tool that writes or spends quota sets `destructiveHint` explicitly.
 - Throw `ToolError` for mistakes the agent can fix; a `MarkdownQueryError` is mapped to a message with the next step. Both become `isError` results. Any other error is a bug and is also logged.
 - Every call has a 50 s budget (`TOOL_BUDGET_MS`, below the ~60 s at which MCP clients give up) and an 80,000-character result cap. A tool that waits must answer with the state it reached before `ctx.deadline`.
 - Keep `checkAccess()` as it is: `mcpEnabled` off → 503, any `Origin` → 403, wrong bearer token → 401. `allowRequestsFromUnsafeWebContent = true` is intentional: Zotero 10 would otherwise drop requests with an `Origin` or a `Mozilla/` user agent without answering.

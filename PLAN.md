@@ -1,6 +1,6 @@
 # PLAN: replace the companion skill with an MCP server
 
-> Branch `feat/mcp-server`, from `fix/agent-usage-findings`. Written 2026-11-14. Steps 0 to 6 are implemented, one commit each, and the scaffold suite passes in Zotero 10.0.8 (510 tests, including the requests through Zotero's real server). Still open: the real-client and bridge-by-hand checks under Verification, and the owner's steps there (release, run the command from settings, delete the installed skill copies).
+> Branch `feat/mcp-server`, from `fix/agent-usage-findings`. Written 2026-11-14. Steps 0 to 6 are implemented, one commit each, plus review fixes (pagination header budget, strict HTML tag matching, non-interactive parse pre-flight handling, bridge hardening, and tests). Still open: the real-client and bridge-by-hand checks under Verification, and the owner's steps there (release, run the command from settings, delete the installed skill copies).
 >
 > This replaces the "fix what agents ran into when reading parsed papers" plan, which is implemented in `dd6b016`…`53bf371` (see git history for its text).
 
@@ -53,7 +53,7 @@ New prefs in `addon/prefs.js`: `mcpEnabled` (default `true`) and `mcpToken` (def
 
 ### Tools
 
-All in one list (`TOOLS`); adding a tool is appending a `ToolDef`. Names are snake*case with a `mineru*`prefix. Every tool takes an optional`library_id`(default: the user library). Each handler calls the existing`MarkdownQueryService` (`src/modules/markdownQuery/queryService.ts`); no second query path.
+All in one list (`TOOLS`); adding a tool is appending a `ToolDef`. Names are `snake_case` with a `mineru_` prefix. Every tool takes an optional `library_id` (except `mineru_list_tasks`). Each handler calls the existing `MarkdownQueryService` (`src/modules/markdownQuery/queryService.ts`); no second query path.
 
 | Tool                       | Replaces CLI                      | Service call                     | Notes                                                                                                                                                                 |
 | -------------------------- | --------------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -71,7 +71,7 @@ All in one list (`TOOLS`); adding a tool is appending a `ToolDef`. Names are sna
 
 Details:
 
-- **`plain` argument** on the four reading tools strips inline tags (`<sub>`, `<sup>`, …). Default false, because `10<sup>3</sup>` → `103` changes meaning. The strip moves from the CLI into `markdownParser.ts` as `stripInlineTags()` next to the existing `INLINE_HTML_TAG`.
+- **`plain` argument** on the three Markdown reading tools (`mineru_read_section`, `mineru_search_in_paper`, `mineru_read_markdown`) strips inline tags (`<sub>`, `<sup>`, …). Default false, because `10<sup>3</sup>` → `103` changes meaning. The strip moves from the CLI into `markdownParser.ts` as `stripInlineTags()` next to the existing `INLINE_HTML_TAG`.
 - **Output cap:** any tool result longer than 80 000 characters is cut with a closing line that says so and how to narrow the request. MCP clients reject or truncate large results on their own otherwise.
 - **Time budget:** `TOOL_BUDGET_MS = 50_000` in `runTool.ts`, below the ~60 s at which MCP clients give up (zotero-S2 finding 3). Only `mineru_parse_pdf` waits; at the deadline it answers `running` and points to `mineru_list_tasks`.
 - **Errors:** `runTool()` never throws. A `MarkdownQueryError` becomes an `isError` result with its message plus the next step (the hint table now in the CLI's `hintForError()`); `ambiguous-attachment` lists the candidate keys. Anything else is a bug and also goes to `Zotero.logError`.

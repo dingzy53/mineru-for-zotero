@@ -74,7 +74,7 @@ export function prepareArgs(
   const args: Record<string, any> = {};
   for (const [key, value] of Object.entries((raw ?? {}) as object)) {
     if (value === "" || value === null || value === undefined) continue;
-    if (!schema.properties?.[key]) {
+    if (!Object.hasOwn(schema.properties ?? {}, key)) {
       throw new ToolError(`Unknown argument "${key}"`);
     }
     args[key] = value;

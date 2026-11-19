@@ -88,6 +88,7 @@ describe("MCP tools", function () {
       assert.match(tool.name, /^mineru_[a-z_]+$/);
       assert.isAbove(tool.description.length, 40, tool.name);
       assert.equal(tool.inputSchema.type, "object", tool.name);
+      assert.isFalse(tool.inputSchema.additionalProperties, tool.name);
       assert.isFalse(
         tool.annotations.openWorldHint && tool.annotations.readOnlyHint,
       );
@@ -287,6 +288,10 @@ describe("MCP tools", function () {
   it("rejects a search without filters or with a malformed year", async function () {
     assert.match(
       await failure("mineru_search_items", { limit: 5, sort_by: "title" }),
+      /Give at least one filter/,
+    );
+    assert.match(
+      await failure("mineru_search_items", { title: "   " }),
       /Give at least one filter/,
     );
     assert.match(
@@ -506,6 +511,58 @@ describe("MCP tools", function () {
       total: 3,
       text: "",
     });
+    // A paragraph break ending after maxChars must not push end past maxChars
+    assert.deepEqual(slicePage("aaaaa\n\nbbb", 0, 6), {
+      start: 0,
+      end: 6,
+      total: 10,
+      text: "aaaaa\n",
+    });
+    assert.deepEqual(slicePage("aaaa\n\nbbbb", 0, 6), {
+      start: 0,
+      end: 6,
+      total: 10,
+      text: "aaaa\n\n",
+    });
+  });
+
+  it("pages documents larger than MAX_RESULT_CHARS at max_chars without data loss", async function () {
+    const paragraphs = Array.from(
+      { length: 105 },
+      (_, i) => `P${String(i).padStart(3, "0")} ${"x".repeat(890)}`,
+    );
+    const content = paragraphs.join("\n\n");
+    assert.isAbove(content.length, MAX_RESULT_CHARS);
+    const overrides = {
+      queryMarkdown: () => ({
+        ...PAPER,
+        result: { mode: "precise", file: "/data/content.md" },
+        content,
+      }),
+    };
+    let offset = 0;
+    let assembled = "";
+    for (let pages = 0; pages < 10; pages++) {
+      const page = await text(
+        "mineru_read_markdown",
+        { key: "ITEM0001", offset, max_chars: MAX_RESULT_CHARS },
+        overrides,
+      );
+      assert.notInclude(page, "[Cut at ");
+      assert.isAtMost(page.length, MAX_RESULT_CHARS);
+      const splitAt = page.indexOf("\n\n");
+      assert.isAbove(splitAt, 0);
+      assembled += page.slice(splitAt + 2);
+      const more = /more: call again with offset (\d+)/.exec(
+        page.slice(0, splitAt),
+      );
+      if (!more) {
+        assert.include(page.slice(0, splitAt), "end of document");
+        break;
+      }
+      offset = Number(more[1]);
+    }
+    assert.equal(assembled, content);
   });
 
   describe("mineru_parse_pdf", function () {
@@ -637,6 +694,29 @@ describe("MCP tools", function () {
       assert.equal(result.polls, 0);
       assert.include(result.text, "Status: submitted");
     });
+
+    it("handles already-running and cancelled parses", async function () {
+      const noWait = await parse({
+        args: { wait: false },
+        submitted: { status: "already-running", itemID: 9, key: "PDF00001" },
+      });
+      assert.equal(noWait.polls, 0);
+      assert.include(noWait.text, "Status: already-running");
+
+      const waited = await parse({
+        submitted: { status: "already-running", itemID: 9, key: "PDF00001" },
+        taskLists: [[{ ...task, status: "succeeded", progress: 100 }]],
+      });
+      assert.equal(waited.polls, 1);
+      assert.include(waited.text, "Status: succeeded");
+
+      const cancelled = await parse({
+        submitted,
+        taskLists: [[{ ...task, status: "cancelled", updatedAt: 2000 }]],
+      });
+      assert.include(cancelled.text, "Status: cancelled");
+      assert.include(cancelled.text, "stopped in Zotero");
+    });
   });
 
   it("lists the newest tasks up to the limit", async function () {
@@ -761,6 +841,25 @@ describe("MCP tools", function () {
         ),
         /Call mineru_get_outline and copy one of its section_path lines exactly/,
       );
+      const hintCases: Array<[MarkdownQueryError["code"], RegExp]> = [
+        ["item-not-found", /mineru_search_items and mineru_collection_status/],
+        ["pdf-attachment-not-found", /no PDF attachment/],
+        ["attachment-not-found", /attachment_key must be one/],
+        ["collection-not-found", /Call mineru_list_collections/],
+        ["ambiguous-section", /Several headings share this path/],
+        ["missing-query", /Pass a non-empty query/],
+      ];
+      for (const [code, pattern] of hintCases) {
+        assert.match(
+          await failure(
+            "mineru_get_outline",
+            { key: "ITEM0001" },
+            throwing(new MarkdownQueryError(code, 400, code)),
+          ),
+          pattern,
+          code,
+        );
+      }
     });
 
     it("reports and logs unexpected errors", async function () {

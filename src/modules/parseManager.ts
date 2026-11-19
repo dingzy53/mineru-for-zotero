@@ -181,6 +181,7 @@ export interface ParseManagerDependencies {
 export interface ParseAttachmentOptions {
   force?: boolean;
   resume?: boolean;
+  nonInteractive?: boolean;
 }
 
 interface ParseManager {
@@ -224,10 +225,11 @@ export async function parseAttachment(
   attachment: Zotero.Item,
   options?: ParseAttachmentOptions,
 ): Promise<void> {
-  await createParseManager(createDefaultDependencies()).parseAttachment(
-    attachment,
-    options,
-  );
+  const deps = createDefaultDependencies();
+  if (options?.nonInteractive) {
+    deps.showMessage = () => {};
+  }
+  await createParseManager(deps).parseAttachment(attachment, options);
 }
 
 export async function parseAttachments(
@@ -577,24 +579,50 @@ async function failEmptyParse(
  * Retry and Resume mark the record `pending`/`running` before the pipeline
  * starts, so a rejected PDF (not an attachment, unreadable, oversized, missing
  * API key) must resolve that record instead of leaving a stuck task in the Task
- * Manager. Records in any other state are left untouched.
+ * Manager. Non-interactive callers (MCP/REST) also record a fresh failed task
+ * so waiting callers see the failure right away instead of timing out.
  */
 async function failPendingTask(
-  taskID: string,
+  attachment: Zotero.Item,
   message: FluentMessageId,
+  options: ParseAttachmentOptions | undefined,
+  dependencies: ParseManagerDependencies,
 ): Promise<void> {
+  const taskID = String(attachment.id);
   const current = taskStore.getTask(taskID);
-  if (!current) {
+  const errorText = getSafeMessageText(message);
+  if (
+    current &&
+    (current.status === "pending" || current.status === "running")
+  ) {
+    await taskStore.updateTaskStatus(taskID, "failed", errorText);
     return;
   }
-  if (current.status !== "pending" && current.status !== "running") {
+  if (options?.nonInteractive !== true) {
     return;
   }
-  await taskStore.updateTaskStatus(
-    taskID,
-    "failed",
-    getSafeMessageText(message),
-  );
+  await taskStore.waitUntilLoaded();
+  const now = Date.now();
+  const title =
+    (await resolveAttachmentTitle(attachment, dependencies)) || "PDF Document";
+  await taskStore.upsertTask({
+    id: taskID,
+    attachment: {
+      id: attachment.id,
+      key: attachment.key,
+      libraryID: attachment.libraryID,
+      fileName:
+        attachment.attachmentFilename || attachment.getDisplayTitle?.() || "",
+      filePath: "",
+      mtime: 0,
+    },
+    title,
+    status: "failed",
+    progress: 0,
+    error: errorText,
+    createdAt: current?.createdAt ?? now,
+    updatedAt: now,
+  });
 }
 
 async function getReadyAttachmentIDs(
@@ -663,7 +691,12 @@ async function runParseAttachment(
   // remote task ids are tracked separately as `taskIDs`.
   const attachmentTaskID = String(attachment.id);
   if (!attachment.isPDFAttachment()) {
-    await failPendingTask(attachmentTaskID, "parse-error-not-pdf");
+    await failPendingTask(
+      attachment,
+      "parse-error-not-pdf",
+      options,
+      dependencies,
+    );
     dependencies.showMessage("parse-error-not-pdf");
     return;
   }
@@ -671,7 +704,12 @@ async function runParseAttachment(
   const rawFilePath = await getAttachmentFilePath(attachment, dependencies);
   if (!rawFilePath) {
     logFileAccessFailure(attachment, "<missing>", dependencies);
-    await failPendingTask(attachmentTaskID, "parse-error-file-access");
+    await failPendingTask(
+      attachment,
+      "parse-error-file-access",
+      options,
+      dependencies,
+    );
     dependencies.showMessage("parse-error-file-access");
     return;
   }
@@ -679,14 +717,24 @@ async function runParseAttachment(
 
   if (!(await dependencies.isFileReadable(filePath))) {
     logFileAccessFailure(attachment, filePath, dependencies);
-    await failPendingTask(attachmentTaskID, "parse-error-file-access");
+    await failPendingTask(
+      attachment,
+      "parse-error-file-access",
+      options,
+      dependencies,
+    );
     dependencies.showMessage("parse-error-file-access");
     return;
   }
 
   if (await isAttachmentTooLarge(filePath, dependencies)) {
     await markAttachmentFailed(attachment, dependencies);
-    await failPendingTask(attachmentTaskID, "parse-error-file-too-large");
+    await failPendingTask(
+      attachment,
+      "parse-error-file-too-large",
+      options,
+      dependencies,
+    );
     dependencies.showMessage("parse-error-file-too-large");
     return;
   }
@@ -696,7 +744,12 @@ async function runParseAttachment(
   const apiKey = dependencies.getApiKey().trim();
   const localApiBaseURL = dependencies.getLocalApiBaseURL?.() ?? "";
   if (requiresApiKey(source) && !apiKey) {
-    await failPendingTask(attachmentTaskID, "parse-error-missing-api-key");
+    await failPendingTask(
+      attachment,
+      "parse-error-missing-api-key",
+      options,
+      dependencies,
+    );
     dependencies.showMessage("parse-error-missing-api-key");
     return;
   }

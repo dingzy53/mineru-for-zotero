@@ -7,7 +7,12 @@ import {
   generateToken,
 } from "../src/modules/mcp/endpoint";
 import type { MarkdownQueryService } from "../src/modules/markdownQuery/queryService";
-import { getMcpToken, setMcpEnabled, setMcpToken } from "../src/utils/prefs";
+import {
+  getMcpEnabled,
+  getMcpToken,
+  setMcpEnabled,
+  setMcpToken,
+} from "../src/utils/prefs";
 
 const TOKEN = "test-token-0123456789";
 const AUTH = { authorization: `Bearer ${TOKEN}` };
@@ -28,6 +33,7 @@ const Endpoint = createMcpEndpointClass(() => service);
 
 describe("MCP endpoint", function () {
   let savedToken: string;
+  let savedEnabled: boolean;
 
   async function init(
     headers: Record<string, string>,
@@ -48,13 +54,14 @@ describe("MCP endpoint", function () {
 
   before(function () {
     savedToken = getMcpToken();
+    savedEnabled = getMcpEnabled();
     setMcpToken(TOKEN);
     setMcpEnabled(true);
   });
 
   after(function () {
     setMcpToken(savedToken);
-    setMcpEnabled(true);
+    setMcpEnabled(savedEnabled);
   });
 
   it("keeps the one-argument init Zotero's server dispatches on", function () {

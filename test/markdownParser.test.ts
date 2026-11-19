@@ -207,6 +207,20 @@ describe("markdownParser", function () {
         ),
         "CO2 and bold <table><tr><td>x</td></tr></table>",
       );
+      assert.equal(
+        stripInlineTags('<span class="x">CO<sub>2</sub></span>'),
+        "CO2",
+      );
+    });
+
+    it("does not corrupt compact LaTeX inequalities as HTML tags", function () {
+      const text =
+        "When $x<i$ and $y>0$, also $x < i + 1$ and $a<b$ and $c>d$, get $z$.";
+      assert.equal(stripInlineTags(text), text);
+      assert.equal(
+        toPlainSearchText(text),
+        "when $x<i$ and $y>0$, also $x < i + 1$ and $a<b$ and $c>d$, get $z$.",
+      );
     });
 
     it("finds a query that spans an inline tag, returning the original text", function () {

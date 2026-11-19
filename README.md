@@ -337,6 +337,7 @@ Common error codes:
 - **Local API:** the PDF goes only to the server address you set.
 - **API key:** stored in your local Zotero preferences and sent only to `mineru.net`.
 - **Files:** results go to the `mineru-copy` folder in your Zotero data directory, and to the sync folder if you set one.
+- **MCP server (for AI agents):** enabled by default on `127.0.0.1` and protected by a 256-bit bearer token stored in Zotero preferences (plus `Origin` header rejection for browser pages). Authenticated callers can read stored Markdown file paths and start parses. The plugin copies the stdio bridge script into `<Zotero data directory>/mineru-mcp/`, and the bridge caches tool metadata (no paper content, no token) in `~/.cache/mineru-for-zotero/`. When Zotero's debug output is enabled, it logs request headers including the bearer token.
 - **Local Markdown query API:** off by default. When on, it answers only on this computer (`127.0.0.1`) and has no token of its own.
 - No telemetry. The plugin contacts nothing else.
 

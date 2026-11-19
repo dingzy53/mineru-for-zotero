@@ -177,12 +177,14 @@ export function registerMcpSettings(
 
   const onCopy = (suffix: string, text: () => string) => {
     const button = element(suffix);
+    let resetTimer: ReturnType<typeof setTimeout> | undefined;
     button?.addEventListener("click", () => {
       deps.copyText(text());
+      clearTimeout(resetTimer);
       void formatL10n(_window, "pref-mcp-copied").then((label) => {
         button.textContent = label;
       });
-      setTimeout(() => {
+      resetTimer = setTimeout(() => {
         void formatL10n(_window, "pref-mcp-copy").then((label) => {
           button.textContent = label;
         });
@@ -431,6 +433,8 @@ async function updateParsedCount(
 
 /** English text used when Fluent cannot format a preferences string. */
 const L10N_FALLBACKS: Record<string, string> = {
+  "pref-mcp-copy": "Copy",
+  "pref-mcp-copied": "Copied",
   "pref-data-folder-path": "Data folder: { $path }",
   "pref-parsed-count": "Parsed PDFs: { $count }",
   "pref-parsed-count-error": "Parsed PDFs: failed to read",

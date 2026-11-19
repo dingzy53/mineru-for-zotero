@@ -144,6 +144,9 @@ function startBridge(port, cacheFile, env = {}) {
         });
       });
     },
+    sendRaw(line) {
+      child.stdin.write(line + "\n");
+    },
     notify(method, params) {
       child.stdin.write(
         JSON.stringify({ jsonrpc: "2.0", method, params }) + "\n",
@@ -392,5 +395,74 @@ describe("stdio bridge", () => {
     });
     assert.equal(await remote.exited, 1);
     assert.match(remote.stderr(), /must be an http:\/\/ URL on 127\.0\.0\.1/);
+  });
+
+  it("survives a null-results cache file and primitive stdin values", async () => {
+    const cacheFile = cachePath();
+    await writeFile(cacheFile, JSON.stringify({ results: null }));
+    const port = await freePort();
+    const zotero = stubZotero();
+    const bridge = startBridge(port, cacheFile);
+    try {
+      const init = await bridge.initialize();
+      assert.equal(init.result.serverInfo.name, "MinerU for Zotero");
+      // A JSON primitive on stdin must not crash the process
+      bridge.sendRaw("42");
+      const list = await bridge.request("tools/list");
+      assert.deepEqual(list.result.tools, []);
+      await zotero.listen(port);
+      await bridge.waitFor(
+        (m) => m.method === "notifications/tools/list_changed",
+      );
+      const liveList = await bridge.request("tools/list");
+      assert.deepEqual(liveList.result.tools, zotero.tools);
+    } finally {
+      await bridge.stop();
+      await zotero.close();
+    }
+  });
+
+  it("keeps the offline-negotiated protocol version once Zotero starts", async () => {
+    const port = await freePort();
+    const zotero = stubZotero();
+    const bridge = startBridge(port, cachePath());
+    try {
+      const init = await bridge.initialize();
+      assert.equal(init.result.protocolVersion, "2025-06-18");
+      await bridge.request("tools/list");
+      await zotero.listen(port);
+      await bridge.waitFor(
+        (m) => m.method === "notifications/tools/list_changed",
+      );
+      await bridge.request("tools/call", {
+        name: "mineru_list_collections",
+        arguments: {},
+      });
+      assert.equal(
+        zotero.seen.at(-1).headers["mcp-protocol-version"],
+        "2025-06-18",
+      );
+    } finally {
+      await bridge.stop();
+      await zotero.close();
+    }
+  });
+
+  it("reports a rejected token honestly at initialize without polling forever", async () => {
+    const zotero = await stubZotero().listen();
+    const wrong = startBridge(zotero.port, cachePath(), {
+      MINERU_ZOTERO_TOKEN: "stale",
+    });
+    try {
+      const init = await wrong.initialize();
+      assert.match(init.result.instructions, /rejected the bearer token/);
+      assert.doesNotMatch(init.result.instructions, /not reachable/);
+      const seenAfterInit = zotero.seen.length;
+      await new Promise((r) => setTimeout(r, 150));
+      assert.equal(zotero.seen.length, seenAfterInit);
+    } finally {
+      await wrong.stop();
+      await zotero.close();
+    }
   });
 });

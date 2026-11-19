@@ -9,6 +9,7 @@ import type {
   MarkdownSearchMatch,
 } from "../markdownQuery/types";
 import { ToolError } from "./errors";
+import { MAX_RESULT_CHARS } from "./runTool";
 import {
   PaperHeader,
   TaskSummary,
@@ -91,8 +92,8 @@ export function slicePage(
 ): { start: number; end: number; total: number; text: string } {
   const start = Math.min(offset, text.length);
   let end = Math.min(start + maxChars, text.length);
-  if (end < text.length) {
-    const paragraphBreak = text.lastIndexOf("\n\n", end);
+  if (end < text.length && end - start >= 2) {
+    const paragraphBreak = text.lastIndexOf("\n\n", end - 2);
     if (paragraphBreak > start + maxChars / 2) {
       end = paragraphBreak + 2;
     }
@@ -231,7 +232,10 @@ export const TOOLS: ToolDef[] = [
         sortOrder: args.sort_order,
       };
       const { sortBy: _sortBy, sortOrder: _sortOrder, ...criteria } = filters;
-      if (!Object.values(criteria).some(Boolean)) {
+      const hasCriteria = Object.values(criteria).some((value) =>
+        typeof value === "string" ? value.trim().length > 0 : Boolean(value),
+      );
+      if (!hasCriteria) {
         throw new ToolError(
           "Give at least one filter (title, creator, year, collection, tag, …). To list a whole collection use mineru_collection_status.",
         );
@@ -425,8 +429,21 @@ export const TOOLS: ToolDef[] = [
         granularity: "full",
         includeFilePath: true,
       })) as PaperHeader & { content: string };
+      const total = paper.content.length;
+      // Reserve room for the formatted header so capResult() never slices off
+      // trailing text after `page.end` was already chosen.
+      const headerChars = formatMarkdownPage(paper, {
+        start: total,
+        end: Math.max(0, total - 1),
+        total,
+        text: "",
+      }).length;
+      const pageLimit = Math.max(
+        1,
+        Math.min(args.max_chars, MAX_RESULT_CHARS - headerChars - 16),
+      );
       // Offsets count characters of the stored text, so tags are removed last.
-      const page = slicePage(paper.content, args.offset, args.max_chars);
+      const page = slicePage(paper.content, args.offset, pageLimit);
       return formatMarkdownPage(paper, {
         ...page,
         text: maybePlain(args, page.text),
@@ -523,5 +540,10 @@ export const TOOLS: ToolDef[] = [
     },
   },
 ];
+
+// prepareArgs() rejects unknown arguments; advertise that to clients.
+for (const tool of TOOLS) {
+  tool.inputSchema.additionalProperties = false;
+}
 
 export const TOOLS_BY_NAME = new Map(TOOLS.map((tool) => [tool.name, tool]));

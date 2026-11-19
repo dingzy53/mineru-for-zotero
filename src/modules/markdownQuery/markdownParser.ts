@@ -10,11 +10,15 @@ import type { NormalizedBox } from "../domain";
 const ATX_HEADING = /^(#{1,6})\s+(.+?)\s*#*\s*$/;
 const TOP_LEVEL_TITLE = /^#\s+.+$/;
 
+const HTML_ATTRS =
+  "(?:\\s+[a-z_:][a-z0-9_.:-]*(?:\\s*=\\s*(?:\"[^\"]*\"|'[^']*'|[^\\s\"'=<>`]+))?)*";
 /** Tags MinerU writes inside running text; removing them joins the text. */
-const INLINE_HTML_TAG =
-  /<\/?(?:sub|sup|i|b|em|strong|u|s|span|small|mark|font)\b[^>]*>/gi;
+const INLINE_HTML_TAG = new RegExp(
+  `</?(?:sub|sup|i|b|em|strong|u|s|span|small|mark|font)${HTML_ATTRS}\\s*/?>`,
+  "gi",
+);
 /** Any other tag (table cells, line breaks) separates text. */
-const HTML_TAG = /<\/?[a-z][^>]*>/gi;
+const HTML_TAG = new RegExp(`</?[a-z][a-z0-9-]*${HTML_ATTRS}\\s*/?>`, "gi");
 /** A word hyphenated across a line break of the PDF. */
 const HYPHENATED_LINE_BREAK = /(\p{L})-[ \t]*\r?\n\s*(\p{Ll})/gu;
 
