@@ -129,6 +129,53 @@ describe("Results Manager", function () {
       assert.isFalse(liteOnly?.hasBoxes);
     });
 
+    it("migrates inline images of ready results before measuring them", async function () {
+      mockStorage.listParseStatuses = async () =>
+        new Map([
+          ["1-LEGACY", { preciseReady: true, liteReady: false }],
+          ["1-LITEONLY", { preciseReady: false, liteReady: true }],
+          ["1-NOTREADY", { preciseReady: false, liteReady: false }],
+        ]);
+      const calls: string[] = [];
+      const migrated = new Set<string>();
+      mockStorage.migrateInlineImages = async (ref) => {
+        calls.push(`migrate:${ref.key}`);
+        migrated.add(ref.key);
+      };
+      mockStorage.getAttachmentDirSize = async (ref) => {
+        calls.push(`size:${ref.key}`);
+        return migrated.has(ref.key) ? 100 : 5000;
+      };
+      mockStorage.readResultContentFlags = async (ref) => {
+        calls.push(`flags:${ref.key}`);
+        return { hasImages: migrated.has(ref.key), hasBoxes: true };
+      };
+
+      const results = await scanAllResults(deps);
+      const legacy = results.find((entry) => entry.key === "LEGACY");
+
+      assert.strictEqual(legacy?.sizeBytes, 100);
+      assert.isTrue(legacy?.hasImages);
+      assert.deepEqual(
+        calls.filter((call) => call.endsWith(":LEGACY")),
+        ["migrate:LEGACY", "size:LEGACY", "flags:LEGACY"],
+      );
+      assert.include(calls, "migrate:LITEONLY");
+      assert.notInclude(calls, "migrate:NOTREADY");
+    });
+
+    it("still lists a result when its migration fails", async function () {
+      mockStorage.listParseStatuses = async () =>
+        new Map([["1-BROKEN", { preciseReady: true, liteReady: false }]]);
+      mockStorage.migrateInlineImages = async () => {
+        throw new Error("read-only");
+      };
+
+      const results = await scanAllResults(deps);
+      assert.strictEqual(results.length, 1);
+      assert.strictEqual(results[0]?.key, "BROKEN");
+    });
+
     it("prefers the key-resolved item ID over a stale manifest attachmentID", async function () {
       mockStorage.listParseStatuses = async () =>
         new Map([["1-SYNCED", { preciseReady: true, liteReady: false }]]);

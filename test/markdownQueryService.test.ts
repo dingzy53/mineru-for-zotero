@@ -23,6 +23,40 @@ describe("markdownQueryService", function () {
     assert.include(JSON.stringify(response), "# Precise");
   });
 
+  it("describes the parent item when queried with a child attachment key", async function () {
+    const parent = fakeItem({
+      id: 2,
+      key: "ITEM1",
+      regular: true,
+      title: "Parent Paper",
+      attachments: [1],
+    });
+    const pdf = fakeItem({
+      id: 1,
+      key: "PDF1",
+      pdf: true,
+      fileName: "Si et al. - 2010 - Parent Paper.pdf",
+      parentItemID: 2,
+    });
+    const service = createMarkdownQueryService(
+      fakeDeps({ markdown: "# Paper", items: [parent, pdf] }),
+    );
+
+    const response = (await service.queryMarkdown({
+      libraryID: 1,
+      key: "PDF1",
+      granularity: "headings",
+    })) as {
+      item: { key: string; type: string; title: string };
+      attachment: { key: string };
+    };
+
+    assert.equal(response.item.key, "ITEM1");
+    assert.equal(response.item.type, "regular");
+    assert.equal(response.item.title, "Parent Paper");
+    assert.equal(response.attachment.key, "PDF1");
+  });
+
   it("reports precise mode when precise and lite results are both ready", async function () {
     const service = createMarkdownQueryService(
       fakeDeps({

@@ -17,6 +17,28 @@ describe("attachmentResolver", function () {
     });
 
     assert.equal(result.attachment.key, "PDF1");
+    assert.equal(result.item.key, "PDF1");
+  });
+
+  it("reports the parent item when given a child PDF attachment key", async function () {
+    const pdf = fakeItem({ id: 2, key: "PDF2", pdf: true, parentItemID: 1 });
+    const parent = fakeItem({
+      id: 1,
+      key: "ITEM1",
+      regular: true,
+      attachments: [2],
+      bestAttachments: [pdf],
+      title: "Example Paper",
+    });
+    const result = await resolveAttachment({
+      libraryID: 1,
+      key: "PDF2",
+      items: fakeItems([parent, pdf]),
+      storage: fakeStatus(),
+    });
+
+    assert.equal(result.item.key, "ITEM1");
+    assert.equal(result.attachment.key, "PDF2");
   });
 
   it("selects the only PDF attachment under a regular item", async function () {

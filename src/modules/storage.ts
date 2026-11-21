@@ -85,6 +85,11 @@ export interface StorageAdapter {
     options?: { preciseOnly?: boolean; liteOnly?: boolean },
   ): Promise<void>;
   getAttachmentDirSize(ref: AttachmentKeyRef): Promise<number>;
+  /**
+   * Move inline `data:image/...;base64` images out of a stored result written
+   * before 0.12.0. Idempotent and best-effort; clean results are not touched.
+   */
+  migrateInlineImages(ref: AttachmentKeyRef): Promise<void>;
   readManifestSafe(ref: AttachmentKeyRef): Promise<ParseManifest | null>;
   readLiteManifestSafe(
     ref: AttachmentKeyRef,
@@ -344,6 +349,21 @@ export function createStorage(rootDir: string): StorageAdapter {
       return computeDirSize(dir);
     },
 
+    async migrateInlineImages(ref) {
+      // Reading a ready result migrates it; the content itself is not needed.
+      const dir = getAttachmentDir(fsRoot, ref);
+      try {
+        if (await hasReadyPreciseResultInDir(dir)) {
+          await readReadyMarkdown(fsRoot, ref);
+        }
+        if (await hasReadyLiteResultInDir(dir)) {
+          await readReadyLiteMarkdown(fsRoot, ref);
+        }
+      } catch {
+        // A broken result folder is reported elsewhere; nothing to migrate.
+      }
+    },
+
     async readManifestSafe(ref) {
       try {
         return await readManifestFile(getAttachmentDir(fsRoot, ref));
@@ -433,7 +453,74 @@ async function readReadyMarkdown(
   if (manifest.status !== "ready") {
     throw new Error(`MinerU result is not ready: ${manifest.status}`);
   }
-  return readText(joinPath(dir, CONTENT_FILE));
+  const raw = await readText(joinPath(dir, CONTENT_FILE));
+  if (!/data:image\//i.test(raw)) {
+    return raw;
+  }
+  return migrateLegacyInlineImages(dir, raw);
+}
+
+/**
+ * Externalize inline base64 images in a `content.md` written before 0.12.0.
+ *
+ * Inline images that match a file already in `images/` link to it; the rest
+ * are saved as `images/inline-N.<ext>`. The rewritten Markdown is written back
+ * on a best-effort basis, like `readBoxes()` does for stale boxes. Anything
+ * still inline (an unsupported format, or a failed write) is stripped from the
+ * returned Markdown.
+ */
+async function migrateLegacyInlineImages(
+  dir: string,
+  raw: string,
+): Promise<string> {
+  try {
+    const imagesDir = joinPath(dir, IMAGES_DIR);
+    const existingImages = (await exists(imagesDir))
+      ? await readImageFiles(imagesDir)
+      : [];
+    const normalized = extractInlineImages(raw, existingImages);
+    const existingPaths = new Set(existingImages.map((image) => image.path));
+    await writeImages(
+      imagesDir,
+      normalized.images.filter((image) => !existingPaths.has(image.path)),
+    );
+    if (normalized.markdown !== raw) {
+      await writeText(joinPath(dir, CONTENT_FILE), normalized.markdown);
+    }
+    return stripInlineDataImages(normalized.markdown);
+  } catch (error) {
+    ztoolkit.log("failed to migrate inline images", dir, error);
+    return stripInlineDataImages(raw);
+  }
+}
+
+/** Read every file under `imagesDir`, with paths relative to it. */
+async function readImageFiles(
+  imagesDir: string,
+  prefix = "",
+  depth = 0,
+): Promise<MinerUImageFile[]> {
+  const images: MinerUImageFile[] = [];
+  for (const name of await readDir(joinPath(imagesDir, prefix))) {
+    if (name.endsWith(".tmp")) {
+      continue;
+    }
+    const relativePath = prefix ? `${prefix}/${name}` : name;
+    try {
+      images.push({
+        path: relativePath,
+        bytes: await readBytes(joinPath(imagesDir, relativePath)),
+      });
+    } catch {
+      // Not a readable file: treat it as a subdirectory.
+      if (depth < 4) {
+        images.push(
+          ...(await readImageFiles(imagesDir, relativePath, depth + 1)),
+        );
+      }
+    }
+  }
+  return images;
 }
 
 async function hasReadyPreciseResult(
@@ -503,7 +590,17 @@ async function readReadyLiteMarkdown(
   if (!(await hasReadyLiteResultInDir(dir))) {
     throw new Error("MinerU lite result is not ready");
   }
-  return readText(joinPath(dir, LITE_CONTENT_FILE));
+  const raw = await readText(joinPath(dir, LITE_CONTENT_FILE));
+  if (!/data:image\//i.test(raw)) {
+    return raw;
+  }
+  const cleaned = stripInlineDataImages(raw);
+  try {
+    await writeText(joinPath(dir, LITE_CONTENT_FILE), cleaned);
+  } catch {
+    // A read-only result folder is cleaned again on the next read.
+  }
+  return cleaned;
 }
 
 async function readImageDataURLFromDir(
