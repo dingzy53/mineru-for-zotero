@@ -98,6 +98,16 @@ export async function scanAllResults(
     const preciseManifest = await deps.storage.readManifestSafe(ref);
     const liteManifest = await deps.storage.readLiteManifestSafe(ref);
 
+    // Results stored before 0.12.0 may still embed base64 images in their
+    // Markdown. Migrate them first so the size and Images badge are current.
+    if (status.preciseReady || status.liteReady) {
+      try {
+        await deps.storage.migrateInlineImages?.(ref);
+      } catch {
+        // Best-effort: list the result as it is on disk.
+      }
+    }
+
     const sizeBytes = await deps.storage.getAttachmentDirSize(ref);
 
     const parsedAt =

@@ -566,6 +566,147 @@ describe("storage", function () {
     );
   });
 
+  it("migrates inline base64 images in a content.md stored before 0.12.0 on read", async function () {
+    const storage = createStorage(rootDir);
+    const attachment = {
+      id: 1,
+      key: "LEGACYIMG",
+      libraryID: 12,
+      fileName: "a.pdf",
+      filePath: "a.pdf",
+      mtime: 1,
+    };
+
+    await writeResultOrFail(storage, {
+      attachment,
+      mineruTaskID: "task-legacy-images",
+      rawResult: { ok: true },
+      markdown: "# Paper",
+      boxes: normalizedBoxes,
+      images: [
+        {
+          path: "page_0_image_1.png",
+          bytes: new Uint8Array([137, 80, 78, 71]),
+        },
+      ],
+    });
+    const dir = resolveTmpPath(storage.getAttachmentDir(attachment));
+    // Simulate a result written by 0.11.x: base64 left inline in content.md.
+    await writeText(
+      joinPath(dir, "content.md"),
+      [
+        "# Paper",
+        "![Matched](data:image/png;base64,iVBORw==)",
+        "![Extracted](data:image/jpeg;base64,/9j/)",
+        "![Unsupported](data:image/svg+xml;base64,PHN2Zz4=)",
+      ].join("\n\n"),
+    );
+
+    const expectedOnDisk = [
+      "# Paper",
+      "![Matched](images/page_0_image_1.png)",
+      "![Extracted](images/inline-1.jpg)",
+      "![Unsupported](data:image/svg+xml;base64,PHN2Zz4=)",
+    ].join("\n\n");
+    const expectedRead = [
+      "# Paper",
+      "![Matched](images/page_0_image_1.png)",
+      "![Extracted](images/inline-1.jpg)",
+      "![Unsupported](embedded image omitted)",
+    ].join("\n\n");
+
+    assert.equal(await storage.readMarkdown(attachment), expectedRead);
+    assert.equal(await readText(joinPath(dir, "content.md")), expectedOnDisk);
+    assert.deepEqual(
+      Array.from(await readBytes(joinPath(dir, "images", "inline-1.jpg"))),
+      [255, 216, 255],
+    );
+    assert.isFalse(await exists(joinPath(dir, "images", "inline-2.png")));
+    // A second read finds nothing new to migrate.
+    assert.equal(await storage.readPreferredMarkdown(attachment), expectedRead);
+    assert.isFalse(await exists(joinPath(dir, "images", "inline-2.jpg")));
+  });
+
+  it("strips inline base64 images from a stored lite-content.md on read", async function () {
+    const storage = createStorage(rootDir);
+    const attachment = {
+      id: 1,
+      key: "LEGACYLITE",
+      libraryID: 12,
+      fileName: "a.pdf",
+      filePath: "a.pdf",
+      mtime: 1,
+    };
+
+    await storage.writeLiteResult({
+      attachment,
+      mineruTaskID: "lite-legacy",
+      source: "local",
+      markdown: "# Lite",
+    });
+    const dir = resolveTmpPath(storage.getAttachmentDir(attachment));
+    await writeText(
+      joinPath(dir, "lite-content.md"),
+      "# Lite\n\n![Fig](data:image/png;base64,iVBORw==)",
+    );
+
+    const expected = "# Lite\n\n![Fig](embedded image omitted)";
+    assert.equal(await storage.readPreferredMarkdown(attachment), expected);
+    assert.equal(await readText(joinPath(dir, "lite-content.md")), expected);
+  });
+
+  it("migrates precise and lite Markdown with migrateInlineImages", async function () {
+    const storage = createStorage(rootDir);
+    const attachment = {
+      id: 1,
+      key: "MIGRATEBOTH",
+      libraryID: 12,
+      fileName: "a.pdf",
+      filePath: "a.pdf",
+      mtime: 1,
+    };
+
+    await writeResultOrFail(storage, {
+      attachment,
+      mineruTaskID: "task-migrate-both",
+      rawResult: { ok: true },
+      markdown: "# Paper",
+      boxes: normalizedBoxes,
+    });
+    await storage.writeLiteResult({
+      attachment,
+      mineruTaskID: "lite-migrate-both",
+      source: "local",
+      markdown: "# Lite",
+    });
+    const dir = resolveTmpPath(storage.getAttachmentDir(attachment));
+    await writeText(
+      joinPath(dir, "content.md"),
+      "![A](data:image/png;base64,iVBORw==)",
+    );
+    await writeText(
+      joinPath(dir, "lite-content.md"),
+      "![B](data:image/png;base64,iVBORw==)",
+    );
+    assert.isFalse(
+      (await storage.readResultContentFlags(attachment)).hasImages,
+    );
+
+    await storage.migrateInlineImages(attachment);
+
+    assert.equal(
+      await readText(joinPath(dir, "content.md")),
+      "![A](images/inline-1.png)",
+    );
+    assert.equal(
+      await readText(joinPath(dir, "lite-content.md")),
+      "![B](embedded image omitted)",
+    );
+    assert.isTrue((await storage.readResultContentFlags(attachment)).hasImages);
+    // Missing results are ignored.
+    await storage.migrateInlineImages({ libraryID: 12, key: "NOSUCHRESULT" });
+  });
+
   it("reports whether a stored result actually contains images and boxes", async function () {
     const storage = createStorage(rootDir);
     const withImages = {
