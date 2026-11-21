@@ -1,3 +1,161 @@
+# PLAN: 2026-11-20 test report fixes (legacy base64 images, attachment-key parent title, reader Esc)
+
+> Branch: `fix/legacy-base64-images` (from `main` at `8f927e2`, tag `v0.12.0`) · Date: 2026-11-20 · Status: Steps 1–4 implemented on this branch, one commit each. Still open: the in-Zotero checks under Verification (the unit tests run only inside Zotero via `npm test`) and the open question below.
+>
+> Earlier plans and deferred testing notes (including why `strict_max_version` is kept at `"10.*"`) are preserved below the separator.
+
+## Context
+
+In the 2026-11-20 hands-on test report on macOS 14 (Zotero 10.0.9):
+
+- Zotero's built-in auto-updater updated `0.11.0` → `0.12.0` cleanly and reinstalled the stdio bridge; the MinerU column/tag, "Use existing / Reparse" dialog, reader overlay boxes/copy, Task Manager, all 11 MCP tools, and HTTP 401/403 checks **passed**.
+- Three issues were reported:
+  1. **Old stored results still contain inline base64 images:** 4 of 53 stored `content.md` files (e.g. `1-GGMIDBGT/content.md`, 420 KB) still have `data:image/...;base64,...`, so **Task Manager → Parsed Results → Preview** shows a wall of base64 (while the MCP tools strip it).
+  2. **Minor:** `mineru_read_markdown` called with an attachment key titles the result with the PDF attachment's title (`"Si et al. - 2010 - …"`) instead of the parent item's title.
+  3. **Minor:** the reader's mode popover doesn't close on `Esc`.
+
+---
+
+## 1. Old stored `content.md` files still contain inline `data:image/...;base64` images
+
+### Symptom
+
+For results parsed by a local MinerU 4.0.x server before `0.12.0` (4 of 53 items on the test machine), `content.md` on disk still embeds `![](data:image/...;base64,...)`.
+
+- **Task Manager → Parsed Results → Preview** (`addon/content/taskManager.html:1964-1968`) displays raw `content.md`, producing a 420 KB wall of base64.
+- **Reader → Copy Full Markdown** (`src/modules/readerOverlay/copy.ts:22`) copies raw `storage.readPreferredMarkdown(attachment)` with the base64 wall.
+- **Agent Sync folder** (`src/modules/agentSync.ts:101-133`) copies the un-migrated `content.md` into `<syncFolder>/`.
+- Only the MCP tools (`src/modules/mcp/tools.ts:284, 322, 361, 442`) and `countWords` (`src/modules/markdownQuery/queryService.ts:717`) call `stripInlineDataImages()`.
+
+### Cause (verified in `src/modules/storage.ts:163-172, 224-250, 427-437`)
+
+In `0.12.0`, `extractInlineImages(input.markdown, input.images ?? [])` (`src/modules/inlineImages.ts:77-138`) was wired only into `storage.writeResult()` (`src/modules/storage.ts:225`) and `stripInlineDataImages()` into `storage.writeLiteResult()` (`src/modules/storage.ts:275`).
+Results already on disk under `<storageRoot>/attachments/<libraryID>-<key>/content.md` (and `lite-content.md`) are read directly by `readReadyMarkdown()` (`src/modules/storage.ts:436`) without migration or stripping.
+
+### Fix
+
+1. **Lazy, idempotent on-read migration in `storage.ts` (`readReadyMarkdown` and `readReadyLiteMarkdown`):**
+   - Just like `storage.readBoxes()` (`src/modules/storage.ts:195-210`) already self-heals stale `boxes.normalized.json` on first read and writes the repaired file back on a best-effort basis:
+   - In `readReadyMarkdown(root, ref)` (`src/modules/storage.ts:427-437`):
+     - Read `const raw = await readText(joinPath(dir, CONTENT_FILE))`.
+     - Fast check: `if (!/data:image\//i.test(raw)) return raw;` (zero overhead for the 49/53 already-clean results!).
+     - When `data:image/` is present, read existing files in `joinPath(dir, IMAGES_DIR)` (if any) into `existingImages: MinerUImageFile[]`, run `const normalized = extractInlineImages(raw, existingImages)`, write any newly decoded `inline-N.<ext>` images to `joinPath(dir, IMAGES_DIR)` and write `normalized.markdown` back to `joinPath(dir, CONTENT_FILE)` (best-effort `try/catch`), then return `stripInlineDataImages(normalized.markdown)`.
+   - In `readReadyLiteMarkdown(root, ref)` (`src/modules/storage.ts:498-507`):
+     - If `/data:image\//i.test(raw)`, run `const cleaned = stripInlineDataImages(raw)`, write it back to `LITE_CONTENT_FILE` (best-effort), and return `cleaned`.
+
+2. **Batch migration during `scanAllResults()` / "Scan & Clean Orphans" (`src/modules/resultsManager.ts:79-166`):**
+   - In `scanAllResults()` (which already runs when opening the **Task Manager → Parsed Results** tab or clicking **Refresh** / **Scan & Clean Orphans**), or inside a helper called by `scanAllResults()`, touch `storage.readPreferredMarkdown(ref)` (or a dedicated `storage.migrateInlineImagesIfNeeded(ref)`) before computing `sizeBytes = await deps.storage.getAttachmentDirSize(ref)` and `readResultContentFlags(ref)`.
+   - Consequence: opening **Task Manager → Parsed Results** (or clicking **Refresh** / **Scan & Clean Orphans**) automatically migrates all 4 legacy `content.md` files on disk, updates their `hasImages` badge and disk size, and ensures **Preview**, **Copy Full Markdown**, **Sync to Agent Folder**, and direct file reads of `content.md` by subagents never see base64 walls again!
+
+---
+
+## 2. `mineru_read_markdown` with an attachment key uses the attachment title instead of the parent item title
+
+### Symptom
+
+Calling `mineru_read_markdown` (or `mineru_get_outline`, `mineru_read_section`, `mineru_search_in_paper`, `mineru_locate_in_pdf`) with `key` set to a child PDF attachment's key (e.g. from `mineru_collection_status`) formats the paper header with the attachment's display title (`"Si et al. - 2010 - ….pdf"`) and omits the parent item's authors, year, DOI, citekey, and BibTeX.
+
+### Cause (verified in `src/modules/markdownQuery/attachmentResolver.ts:27-37`)
+
+```ts
+const item = await input.items.getByLibraryAndKeyAsync(
+  input.libraryID,
+  input.key,
+);
+if (!item) {
+  throw new MarkdownQueryError("item-not-found", 404, "Item was not found");
+}
+
+if (item.isPDFAttachment()) {
+  return { item, attachment: item };
+}
+```
+
+When `input.key` is a PDF attachment, `resolveAttachment` returns `{ item, attachment: item }` even when `item.parentItemID` is set!
+Then `queryService.ts:596` calls `summarizeItem(resolved.item)`, which summarizes the attachment object (`type: "attachment"`, `title: item.getDisplayTitle()`) instead of its parent regular item.
+
+### Fix
+
+In `resolveAttachment()` (`src/modules/markdownQuery/attachmentResolver.ts:35-37`):
+
+```ts
+if (item.isPDFAttachment()) {
+  if (item.parentItemID) {
+    const [parent] = await input.items.getAsync([item.parentItemID]);
+    if (parent && parent.isRegularItem()) {
+      return { item: parent, attachment: item };
+    }
+  }
+  return { item, attachment: item };
+}
+```
+
+- If the PDF attachment has a parent regular item, `resolved.item` becomes that parent item while `resolved.attachment` remains the requested PDF attachment.
+- If it is a standalone PDF attachment (no `parentItemID`), `resolved.item` remains `item` as before.
+
+---
+
+## 3. Reader's mode popover doesn't close on `Esc`
+
+### Symptom
+
+In Zotero's PDF reader, clicking the MinerU toolbar icon opens the mode popover (`All` / `Hover` / `Off`, selection count, copy/clear buttons), and pressing `Escape` does not close it (only clicking outside or clicking the toolbar icon again closes it).
+
+### Cause (verified in `src/modules/readerToolbar/binding.ts:122-172`)
+
+`ensureButtonBinding()` registers outside-click listeners:
+
+```ts
+doc.addEventListener("pointerdown", onDocumentPointerDown, true);
+win.document.addEventListener("pointerdown", onMainWindowPointerDown, true);
+```
+
+but never registers a `keydown` listener for `event.key === "Escape"` on `doc` or `win.document`!
+
+### Fix
+
+In `ensureButtonBinding()` (`src/modules/readerToolbar/binding.ts:122-172`):
+
+- Add `onKeyDown`:
+  ```ts
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key === "Escape" && menuState.isOpen()) {
+      event.preventDefault();
+      event.stopPropagation();
+      menuState.close();
+      sync();
+    }
+  };
+  ```
+- Register `doc.addEventListener("keydown", onKeyDown, true)` and `win.document.addEventListener("keydown", onKeyDown, true)` (and remove both in `cleanup()`).
+
+---
+
+## Order of work
+
+1. Done: `Migrate inline base64 images in legacy stored content.md files on read and scan` (`src/modules/storage.ts`, `src/modules/resultsManager.ts`, `test/storage.test.ts`, `test/resultsManager.test.ts`).
+2. Done: `Resolve the parent item when an MCP tool is called with a child attachment key` (`src/modules/markdownQuery/attachmentResolver.ts`, `test/attachmentResolver.test.ts`; the end-to-end test went into `test/markdownQueryService.test.ts`, since `mcpTools` tests stub the query service).
+3. Done: `Close the reader toolbar popover on Escape` (`src/modules/readerToolbar/binding.ts`, `test/readerToolbar.test.ts`).
+4. Done: `npx prettier --write .`, `npm run lint:check` and `npm run build` pass.
+
+Implementation notes:
+
+- Storage adds `migrateInlineImages(ref)`, which reads the ready precise and lite Markdown (reading migrates). `scanAllResults()` calls it for every ready result before `getAttachmentDirSize()` and `readResultContentFlags()`.
+- A failed write-back leaves `content.md` unchanged and returns the original Markdown with inline images stripped, so no link points at a missing file.
+- Inline formats `extractInlineImages()` does not decode (for example SVG) stay in `content.md` and are stripped on every read; such a file is re-checked on each read.
+
+## Verification
+
+- `npm run build`, `npm run lint:check`, `npx prettier --check .`.
+- Pure unit tests for storage on-read migration, `attachmentResolver` parent lookup, and reader toolbar `Escape` key handling.
+- In Zotero 10.0.9 on macOS: open **Task Manager → Parsed Results**, click **Preview** on `1-GGMIDBGT` → base64 is externalized into `images/inline-*.jpg` (or matched to existing `images/page_*`) and Preview shows clean Markdown; call `mineru_read_markdown` with an attachment key → header shows the parent paper title; press `Esc` with the reader mode popover open → popover closes.
+
+## Open questions for the owner
+
+1. Should we also add the `images/page_${page - 1}_${type}_${sourceIndex}.jpg` fallback to `copyBoxImageFromStorage` in `src/modules/readerOverlay/copy.ts` (matching the fix planned for `obsidian-mineru-view`)?
+
+---
+
 # PLAN: replace the companion skill with an MCP server
 
 > Branch `feat/mcp-server`, from `fix/agent-usage-findings`. Written 2026-11-14. Steps 0 to 6 are implemented, one commit each, plus review fixes (pagination header budget, strict HTML tag matching, non-interactive parse pre-flight handling, bridge hardening, and tests). Still open: the real-client and bridge-by-hand checks under Verification, and the owner's steps there (release, run the command from settings, delete the installed skill copies).
