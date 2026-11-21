@@ -133,6 +133,17 @@ export function ensureButtonBinding(
       sync();
     }
   };
+  /** Closes the open menu when Escape is pressed in the reader or main window. */
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key === "Escape" && menuState.isOpen()) {
+      event.preventDefault();
+      event.stopPropagation();
+      menuState.close();
+      sync();
+    }
+  };
+  // The reader document and the main window document can be the same one.
+  const keyDocuments = doc === win.document ? [doc] : [doc, win.document];
 
   button.addEventListener(
     "mouseenter",
@@ -147,6 +158,9 @@ export function ensureButtonBinding(
   button.addEventListener("click", onClick);
   doc.addEventListener("pointerdown", onDocumentPointerDown, true);
   win.document.addEventListener("pointerdown", onMainWindowPointerDown, true);
+  for (const keyDocument of keyDocuments) {
+    keyDocument.addEventListener("keydown", onKeyDown, true);
+  }
 
   const root = doc.documentElement;
   if (!root) {
@@ -167,6 +181,9 @@ export function ensureButtonBinding(
       onMainWindowPointerDown,
       true,
     );
+    for (const keyDocument of keyDocuments) {
+      keyDocument.removeEventListener("keydown", onKeyDown, true);
+    }
     button.remove();
     menu.remove();
   };

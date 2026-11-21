@@ -16,9 +16,71 @@ import {
   getReaderOverlayStateForReader,
   setReaderOverlayModeForReader,
 } from "../src/modules/readerOverlay";
+import {
+  destroyButtonBinding,
+  ensureButtonBinding,
+} from "../src/modules/readerToolbar/binding";
 import { updateMenu } from "../src/modules/readerToolbar/panel";
 
 describe("readerToolbar", function () {
+  it("closes the open menu on Escape in the reader or main window", function () {
+    const zoteroWin = Zotero.getMainWindow();
+    const restoreLocale = installReaderToolbarLocale();
+    const readerDoc = createReaderToolbarTestDocument(zoteroWin);
+    const mainDoc =
+      zoteroWin.document.implementation.createHTMLDocument("main");
+    const win = { document: mainDoc } as unknown as Window;
+    const reader = {
+      _instanceID: "reader-escape",
+      _iframeWindow: { document: readerDoc },
+      _item: {
+        key: "ESCPDF",
+        isAttachment: () => true,
+        isPDFAttachment: () => true,
+      },
+    } as unknown as _ZoteroTypes.ReaderInstance;
+    const store = createReaderToolbarPanelStore();
+    const pressEscape = (target: Document) => {
+      const event = new zoteroWin.KeyboardEvent("keydown", {
+        key: "Escape",
+        bubbles: true,
+        cancelable: true,
+      });
+      target.documentElement?.dispatchEvent(event);
+      return event;
+    };
+
+    try {
+      const binding = ensureButtonBinding(win, reader, store);
+      assert.ok(binding);
+      const menuState = store.ensure("reader-escape");
+
+      // Escape with a closed menu is left alone for the reader.
+      assert.isFalse(pressEscape(readerDoc).defaultPrevented);
+
+      menuState.open();
+      binding.menu.hidden = false;
+      assert.isTrue(pressEscape(readerDoc).defaultPrevented);
+      assert.isFalse(menuState.isOpen());
+      assert.isTrue(binding.menu.hidden);
+
+      menuState.open();
+      binding.menu.hidden = false;
+      pressEscape(mainDoc);
+      assert.isFalse(menuState.isOpen());
+      assert.isTrue(binding.menu.hidden);
+
+      destroyButtonBinding("reader-escape");
+      menuState.open();
+      pressEscape(readerDoc);
+      pressEscape(mainDoc);
+      assert.isTrue(menuState.isOpen());
+    } finally {
+      destroyButtonBinding("reader-escape");
+      restoreLocale();
+    }
+  });
+
   it("opens and closes the menu with explicit state", function () {
     const menu = createReaderToolbarMenuState();
 
@@ -589,6 +651,16 @@ function createToolbarReader(
       libraryID: 1,
     },
   } as unknown as _ZoteroTypes.ReaderInstance;
+}
+
+function createReaderToolbarTestDocument(win: Window): Document {
+  const doc = win.document.implementation.createHTMLDocument("reader");
+  const toolbar = doc.createElement("div");
+  const next = doc.createElement("button");
+  next.id = "next";
+  toolbar.append(next);
+  doc.body?.append(toolbar);
+  return doc;
 }
 
 function createToolbarDocumentStub(): Document {
