@@ -33,6 +33,14 @@ export async function resolveAttachment(input: {
   }
 
   if (item.isPDFAttachment()) {
+    // A child attachment key (e.g. from mineru_collection_status) should still
+    // describe the paper: report its parent item with the requested PDF.
+    if (item.parentItemID) {
+      const [parent] = await input.items.getAsync([item.parentItemID]);
+      if (parent?.isRegularItem()) {
+        return { item: parent, attachment: item };
+      }
+    }
     return { item, attachment: item };
   }
 
